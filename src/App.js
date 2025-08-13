@@ -3,6 +3,7 @@ import { QrCode, Package, BarChart3, Settings, Scan, Plus, AlertTriangle, Trendi
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import jsQR from 'jsqr';
 import './App.css';
 
 // Hook para localStorage
@@ -570,6 +571,7 @@ const EstoqueFFApp = () => {
   const [success, setSuccess] = useState('');
   const [cameraStream, setCameraStream] = useState(null);
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
 
   // Estados para movimentação manual
   const [showManualMovement, setShowManualMovement] = useState(false);
@@ -689,22 +691,36 @@ const EstoqueFFApp = () => {
       
       setLoading(false);
       
-      // Simulação para ambiente que não suporta scanner QR real
-      setTimeout(() => {
-        const randomProduct = products[Math.floor(Math.random() * products.length)];
-        const foundProduct = findProductByQR(randomProduct.qrCode);
-        
-        if (foundProduct) {
-          setScannedProduct(foundProduct);
-          stopCamera();
-          setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
-          setTimeout(() => setSuccess(''), 3000);
-        } else {
-          setErrors({ general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.' });
-          stopCamera();
-          setTimeout(() => setErrors({}), 3000);
+      // Função para escanear QR code em tempo real
+      const scanQR = () => {
+        if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+          canvasRef.current.height = videoRef.current.videoHeight;
+          canvasRef.current.width = videoRef.current.videoWidth;
+          canvasRef.current.getContext('2d').drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+          const imageData = canvasRef.current.getContext('2d').getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "dontInvert",
+          });
+
+          if (code) {
+            const foundProduct = findProductByQR(code.data);
+            if (foundProduct) {
+              setScannedProduct(foundProduct);
+              stopCamera();
+              setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
+              setTimeout(() => setSuccess(''), 3000);
+            } else {
+              setErrors({ general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.' });
+              setTimeout(() => setErrors({}), 3000);
+            }
+          }
         }
-      }, 3000);
+        if (scannerActive) {
+          requestAnimationFrame(scanQR);
+        }
+      };
+
+      requestAnimationFrame(scanQR);
       
     } catch (error) {
       console.error('Erro ao acessar câmera:', error);
@@ -739,19 +755,17 @@ const EstoqueFFApp = () => {
   };
 
   useEffect(() => {
-    const currentVideoRef = videoRef.current; // Armazena o valor atual
     return () => {
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
       }
-      if (currentVideoRef) {
-        currentVideoRef.pause();
-        currentVideoRef.srcObject = null;
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.srcObject = null;
       }
     };
   }, [cameraStream]);
 
-  // Validação de produtos
   const validateProduct = (product, isEdit = false) => {
     const newErrors = {};
     
@@ -789,7 +803,6 @@ const EstoqueFFApp = () => {
     return newErrors;
   };
 
-  // Adicionar produto
   const addProduct = () => {
     setLoading(true);
     setErrors({});
@@ -804,7 +817,7 @@ const EstoqueFFApp = () => {
     
     try {
       const productId = 'P' + String(Date.now()).slice(-6);
-      const qrCode = `ESTOQUEFF_${productId}_${newProduct.name.replace(/\s+/g, '_').toUpperCase()}`;
+      const qrCode = `STOCKQR_${productId}_${newProduct.name.replace(/\s+/g, '_').toUpperCase()}`;
       
       const product = {
         ...newProduct,
@@ -832,7 +845,6 @@ const EstoqueFFApp = () => {
     setLoading(false);
   };
 
-  // Atualizar produto
   const updateProduct = () => {
     setLoading(true);
     setErrors({});
@@ -870,7 +882,6 @@ const EstoqueFFApp = () => {
     setLoading(false);
   };
 
-  // Processar movimentação
   const processMovement = (product = null) => {
     const targetProduct = product || scannedProduct;
     if (!targetProduct) return;
@@ -937,12 +948,10 @@ const EstoqueFFApp = () => {
     setLoading(false);
   };
 
-  // Exportação para PDF
   const exportToPDF = (type, data, title) => {
     const pdf = new jsPDF();
     const timestamp = new Date().toLocaleString('pt-BR');
     
-    // Cabeçalho
     pdf.setFontSize(18);
     pdf.setFont('helvetica', 'bold');
     pdf.text(title, 14, 22);
@@ -1028,7 +1037,6 @@ const EstoqueFFApp = () => {
       }
     });
     
-    // Rodapé
     const estimatedRowHeight = 12;
     const headerHeight = 15;
     const startY = 55;
@@ -1042,7 +1050,6 @@ const EstoqueFFApp = () => {
     pdf.save(filename);
   };
 
-  // Exportação para Excel
   const exportToExcel = (type, data, title) => {
     let worksheetData = [];
     let filename = '';
@@ -1300,7 +1307,7 @@ const EstoqueFFApp = () => {
     return allProducts.sort((a, b) => a.totalMovements - b.totalMovements);
   }, [movements, products]);
 
-  // Gerar QR Code e etiquetas
+  // Gerar QR Code real usando API
   const generateQRCode = async (data, size = 200) => {
     try {
       const qrData = encodeURIComponent(JSON.stringify({
@@ -1329,6 +1336,7 @@ const EstoqueFFApp = () => {
     }
   };
 
+  // PNG CORRIGIDO: usar pontos (pt) para pixels de alta resolução + layout dinâmico
   const generateA4Label = async () => {
     if (!selectedProduct) {
       setErrors({ general: 'Selecione um produto' });
@@ -1347,15 +1355,18 @@ const EstoqueFFApp = () => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       
-      const dpi = 300;
-      canvas.width = 2480;
-      canvas.height = 3508;
+      // Canvas A4 em alta resolução (300 DPI)
+      canvas.width = 2480; // A4 width em 300 DPI  
+      canvas.height = 3508; // A4 height em 300 DPI
       
+      // Fundo branco
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      const ptToPx = dpi / 72;
-      const mmToPx = dpi / 25.4;
+      // Conversões precisas
+      const dpi = 300; // 300 DPI para alta resolução
+      const ptToPx = dpi / 72; // pt → px alta resolução
+      const mmToPx = dpi / 25.4; // mm → px alta resolução
       
       let qrImage = null;
       if (currentLabelConfig.showQRCode) {
@@ -1364,30 +1375,38 @@ const EstoqueFFApp = () => {
       }
       
       const drawLabel = async (x, y, width, height) => {
+        // Background
         ctx.fillStyle = currentLabelConfig.backgroundColor;
         ctx.fillRect(x, y, width, height);
         
+        // Borda
         if (currentLabelConfig.showBorder) {
           ctx.strokeStyle = currentLabelConfig.borderColor;
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 2; // Borda fina
           ctx.strokeRect(x, y, width, height);
         }
         
+        // Cor do texto
         ctx.fillStyle = currentLabelConfig.textColor;
         const centerX = x + width / 2;
-        const padding = 5 * mmToPx;
-        const fontScaleA4 = 4.5;
+        const padding = 5 * mmToPx; // 5mm em px
         
+        // ESCALA DE FONTE PARA A4: etiquetas A4 são ~4x maiores que preview
+        const fontScaleA4 = 4.5; // Fator de escala para fontes em A4
+        
+        // LAYOUT CORRIGIDO: posições exatas para evitar sobreposição
         let currentY = y + padding;
         
+        // MARCA: topo da etiqueta
         if (currentLabelConfig.showBrand && product.brand) {
           const brandSizeCanvas = (currentLabelConfig.brandFontSize * fontScaleA4) * ptToPx;
           ctx.font = `bold ${brandSizeCanvas}px Arial`;
           ctx.textAlign = 'center';
           ctx.fillText(product.brand, centerX, currentY + brandSizeCanvas);
-          currentY += brandSizeCanvas + (15 * mmToPx);
+          currentY += brandSizeCanvas + (15 * mmToPx); // Espaço após marca
         }
         
+        // PRODUTO: meio da etiqueta
         let productText = '';
         if (currentLabelConfig.showCode && currentLabelConfig.showDescription) {
           productText = `${product.code || ''} - ${product.name}`;
@@ -1402,6 +1421,7 @@ const EstoqueFFApp = () => {
           ctx.font = `${productSizeCanvas}px Arial`;
           ctx.textAlign = 'center';
           
+          // Quebrar texto
           const maxWidth = width - (padding * 2);
           const words = productText.split(' ');
           const lines = [];
@@ -1422,15 +1442,17 @@ const EstoqueFFApp = () => {
             lines.push(currentLine);
           }
           
+          // Mostrar até 2 linhas
           const displayLines = lines.slice(0, 2);
           
           displayLines.forEach((line) => {
             ctx.fillText(line, centerX, currentY + productSizeCanvas);
-            currentY += productSizeCanvas + (8 * mmToPx);
+            currentY += productSizeCanvas + (8 * mmToPx); // Espaço entre linhas
           });
-          currentY += (10 * mmToPx);
+          currentY += (10 * mmToPx); // Espaço após produto
         }
         
+        // QUANTIDADE: canto inferior esquerdo (posição absoluta)
         if (currentLabelConfig.showQuantity) {
           const quantitySizeCanvas = (currentLabelConfig.quantityFontSize * fontScaleA4) * ptToPx;
           ctx.font = `bold ${quantitySizeCanvas}px Arial`;
@@ -1440,30 +1462,49 @@ const EstoqueFFApp = () => {
           ctx.fillText(quantityText, x + padding, y + height - padding);
         }
         
+        // QR CODE: usar mm → px
         if (currentLabelConfig.showQRCode && qrImage) {
           const qrSizePx = currentLabelConfig.qrSize * mmToPx;
+          
           const qrX = x + width - padding - qrSizePx;
           const qrY = y + height - padding - qrSizePx;
+          
           ctx.drawImage(qrImage, qrX, qrY, qrSizePx, qrSizePx);
         }
       };
       
-      const marginPx = 3 * mmToPx;
-      const labelWidthPx = 200 * mmToPx;
-      const labelHeightPx = 145 * mmToPx;
-      const centerX = (canvas.width - labelWidthPx) / 2;
-      const halfPageHeight = canvas.height / 2;
+      // LAYOUT A4 OTIMIZADO: MEIA FOLHA PARA CADA ETIQUETA
+      const marginPx = 3 * mmToPx; // 3mm → px (margens mínimas)
       
+      // ETIQUETAS MAIORES: aproveitando meia folha A4 cada uma
+      const labelWidthPx = 200 * mmToPx; // 200mm → px (quase toda largura A4)
+      const labelHeightPx = 145 * mmToPx; // 145mm → px (meia altura A4 - margens)
+      
+      // Calcular posições para MEIA FOLHA cada etiqueta
+      const centerX = (canvas.width - labelWidthPx) / 2;
+      const halfPageHeight = canvas.height / 2; // Dividir A4 ao meio
+      
+      // POSIÇÕES PARA MEIA FOLHA: uma no topo, outra no fundo
       const positions = [
-        { x: centerX, y: marginPx },
-        { x: centerX, y: halfPageHeight + marginPx }
+        { 
+          x: centerX, 
+          y: marginPx // Primeira etiqueta: início da primeira metade
+        },
+        { 
+          x: centerX, 
+          y: halfPageHeight + marginPx // Segunda etiqueta: início da segunda metade
+        }
       ];
       
+      console.log(`PNG Layout MEIA FOLHA: 2 etiquetas ${Math.round(labelWidthPx/mmToPx)}x${Math.round(labelHeightPx/mmToPx)}mm, margem ${Math.round(marginPx/mmToPx)}mm`);
+      
+      // Gerar as 2 etiquetas IDÊNTICAS AO PDF
       for (let i = 0; i < positions.length; i++) {
         const pos = positions[i];
         await drawLabel(pos.x, pos.y, labelWidthPx, labelHeightPx);
       }
       
+      // Salvar como PNG
       const timestamp = new Date().toISOString().slice(0, 10);
       const fileName = `etiquetas_${product.name.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.png`;
       
@@ -1519,7 +1560,7 @@ const EstoqueFFApp = () => {
         <div className="flex justify-around md:flex-col md:space-y-2">
           {[
             { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
-            { id: 'scanner', icon: Scan, label: 'Movimentação' },
+            { id: 'scanner', icon: Scan, label: 'Movimento' },
             { id: 'products', icon: Package, label: 'Produtos' },
             { id: 'labels', icon: QrCode, label: 'Etiquetas' },
             { id: 'reports', icon: TrendingUp, label: 'Relatórios' },
