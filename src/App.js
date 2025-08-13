@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { QrCode, Package, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload, Filter, Eye } from 'lucide-react';
+import { QrCode, Package, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -509,6 +509,27 @@ const LabelPreview = React.memo(({ product, labelTemplate, companySettings }) =>
   );
 });
 
+// Mova defaultLabelConfig para fora do componente
+const defaultLabelConfig = {
+  showBrand: true,
+  showCode: false, 
+  showDescription: true,
+  showQuantity: true,
+  showQRCode: true,
+  customQuantity: '',
+  brandFontSize: 18,
+  codeFontSize: 12,
+  descriptionFontSize: 10,
+  quantityFontSize: 14,
+  qrSize: 20,
+  backgroundColor: '#ffffff',
+  textColor: '#000000',
+  borderColor: '#cccccc',
+  showBorder: true,
+  labelWidth: 85,
+  labelHeight: 60
+};
+
 const EstoqueFFApp = () => {
   const [currentScreen, setCurrentScreen] = useState('dashboard');
   
@@ -534,27 +555,6 @@ const EstoqueFFApp = () => {
 
   const [productLabelConfigs, setProductLabelConfigs] = useStoredState('estoqueff_product_label_configs', {});
   
-  // Template padrão para etiquetas
-  const defaultLabelConfig = {
-    showBrand: true,
-    showCode: false, 
-    showDescription: true,
-    showQuantity: true,
-    showQRCode: true,
-    customQuantity: '',
-    brandFontSize: 18,
-    codeFontSize: 12,
-    descriptionFontSize: 10,
-    quantityFontSize: 14,
-    qrSize: 20,
-    backgroundColor: '#ffffff',
-    textColor: '#000000',
-    borderColor: '#cccccc',
-    showBorder: true,
-    labelWidth: 85,
-    labelHeight: 60
-  };
-
   // Estados gerais
   const [scannerActive, setScannerActive] = useState(false);
   const [scannedProduct, setScannedProduct] = useState(null);
@@ -636,7 +636,7 @@ const EstoqueFFApp = () => {
   // Funções para configurações de etiquetas
   const getProductLabelConfig = useCallback((productId) => {
     return productLabelConfigs[productId] || defaultLabelConfig;
-  }, [productLabelConfigs, defaultLabelConfig]);
+  }, [productLabelConfigs]);
 
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
     setProductLabelConfigs(prevConfigs => ({
@@ -647,7 +647,7 @@ const EstoqueFFApp = () => {
         ...newConfig
       }
     }));
-  }, [setProductLabelConfigs, defaultLabelConfig]);
+  }, [setProductLabelConfigs]);
 
   const openLabelEditorForProduct = useCallback((productId) => {
     setEditingLabelForProduct(productId);
@@ -739,13 +739,14 @@ const EstoqueFFApp = () => {
   };
 
   useEffect(() => {
+    const currentVideoRef = videoRef.current; // Armazena o valor atual
     return () => {
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
       }
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.srcObject = null;
+      if (currentVideoRef) {
+        currentVideoRef.pause();
+        currentVideoRef.srcObject = null;
       }
     };
   }, [cameraStream]);
@@ -2079,6 +2080,55 @@ const EstoqueFFApp = () => {
               </p>
             </div>
           )}
+
+          {/* Lista de produtos disponíveis com busca */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="font-semibold text-gray-800 mb-4">Produtos Disponíveis</h3>
+            
+            <ProductSearch onSearchChange={handleLabelSearchChange} searchTerm={labelSearchTerm} />
+            
+            <div className="space-y-3">
+              {products.filter(product => {
+                if (!labelSearchTerm.trim()) return true;
+                const term = labelSearchTerm.toLowerCase().trim();
+                return product.name.toLowerCase().includes(term) ||
+                       product.id.toLowerCase().includes(term) ||
+                       (product.brand && product.brand.toLowerCase().includes(term)) ||
+                       product.category.toLowerCase().includes(term) ||
+                       (product.code && product.code.toLowerCase().includes(term));
+              }).map(product => (
+                <div key={product.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-800">{product.name}</p>
+                    <p className="text-sm text-gray-600">
+                      {product.brand && `${product.brand} • `}Código: {product.code || 'N/A'} • Estoque: {product.stock}
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setSelectedProduct(product.id)}
+                      className={`px-3 py-2 rounded text-sm transition-colors ${
+                        selectedProduct === product.id 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {selectedProduct === product.id ? '✓ Selecionado' : 'Selecionar'}
+                    </button>
+                    
+                    <button 
+                      onClick={() => openLabelEditorForProduct(product.id)}
+                      className="p-2 bg-purple-100 text-purple-600 rounded hover:bg-purple-200 transition-colors"
+                      title="Configurar etiqueta"
+                    >
+                      <Settings size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
