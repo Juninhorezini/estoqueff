@@ -1,14 +1,35 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { QrCode, Package, Users, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Filter, Eye, Edit, Trash2, Camera, CheckCircle, Save, Upload, X, Check, Loader2, FileText, FileSpreadsheet } from 'lucide-react';
+import { QrCode, Package, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload, Filter, Eye } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import './App.css';
 
-// SOLUÇÃO 1: Declarar hatch como global
-/* global hatch */
-const { useStoredState } = hatch;
+// Hook para localStorage
+const useStoredState = (key, initialValue) => {
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.log(error);
+      return initialValue;
+    }
+  });
 
-// SOLUÇÃO: Componente de pesquisa isolado para evitar re-renders do componente pai
+  const setValue = (value) => {
+    try {
+      setStoredValue(value);
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  return [storedValue, setValue];
+};
+
+// Componente de pesquisa
 const ProductSearch = React.memo(({ onSearchChange, searchTerm }) => {
   const handleChange = useCallback((e) => {
     onSearchChange(e.target.value);
@@ -49,7 +70,7 @@ const ProductSearch = React.memo(({ onSearchChange, searchTerm }) => {
   );
 });
 
-// SOLUÇÃO: Componente de lista de produtos isolado e memoizado
+// Componente de lista de produtos
 const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
   const filteredProducts = useMemo(() => {
     if (!searchTerm.trim()) return products;
@@ -134,11 +155,10 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
   );
 });
 
-// NOVO: Editor de etiquetas individual por produto - CORRIGIDO
+// Editor de etiquetas individual por produto
 const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpdate, onClose, companySettings }) => {
   const [localConfig, setLocalConfig] = useState(currentConfig);
   
-  // Garantir que o estado local seja atualizado quando currentConfig mudar
   useEffect(() => {
     setLocalConfig(currentConfig);
   }, [currentConfig]);
@@ -259,7 +279,7 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
         </div>
       )}
       
-      {/* Tamanhos de fonte - AGORA EM PONTOS (pt) para impressão */}
+      {/* Tamanhos de fonte */}
       <div>
         <h4 className="font-medium mb-3">Tamanhos de Fonte (pontos)</h4>
         <div className="space-y-3">
@@ -389,22 +409,20 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
   );
 });
 
-// Preview CORRIGIDO: conversão de pontos (pt) para pixels (px) para preview
+// Preview da etiqueta
 const LabelPreview = React.memo(({ product, labelTemplate, companySettings }) => {
   if (!product || !labelTemplate) return null;
   
-  // Conversão: pontos (pt) para pixels (px) para preview - 1pt ≈ 1.33px
   const ptToPx = 1.33;
-  // AJUSTADO: QR Code no preview muito menor para tela pequena
-  const mmToPxPreview = 1.2; // mm → px para preview (bem menor para tela pequena)
+  const mmToPxPreview = 1.2;
   
   return (
     <div 
       className="border rounded-lg bg-white mx-auto relative" 
       style={{ 
         backgroundColor: labelTemplate.backgroundColor,
-        width: '200px', // Largura fixa para preview
-        height: '140px', // Altura fixa para preview  
+        width: '200px',
+        height: '140px',  
         padding: '12px',
         boxSizing: 'border-box'
       }}
@@ -426,7 +444,7 @@ const LabelPreview = React.memo(({ product, labelTemplate, companySettings }) =>
             <div 
               className="font-bold" 
               style={{ 
-                fontSize: (labelTemplate.brandFontSize * ptToPx) + 'px', // pt → px
+                fontSize: (labelTemplate.brandFontSize * ptToPx) + 'px',
                 marginBottom: '6px'
               }}
             >
@@ -437,7 +455,7 @@ const LabelPreview = React.memo(({ product, labelTemplate, companySettings }) =>
           <div 
             className="text-center" 
             style={{ 
-              fontSize: (labelTemplate.codeFontSize * ptToPx) + 'px', // pt → px
+              fontSize: (labelTemplate.codeFontSize * ptToPx) + 'px',
               wordWrap: 'break-word',
               lineHeight: '1.3',
               marginBottom: '4px'
@@ -449,14 +467,14 @@ const LabelPreview = React.memo(({ product, labelTemplate, companySettings }) =>
           </div>
         </div>
         
-        {/* Área inferior - Quantidade e QR Code */}
+        {/* Área inferior */}
         <div className="flex justify-between items-end" style={{ height: '32px', marginTop: '8px' }}>
           {labelTemplate.showQuantity && (
             <div className="flex items-end">
               <div 
                 className="font-bold" 
                 style={{ 
-                  fontSize: (labelTemplate.quantityFontSize * ptToPx) + 'px' // pt → px
+                  fontSize: (labelTemplate.quantityFontSize * ptToPx) + 'px'
                 }}
               >
                 {labelTemplate.customQuantity.trim() || `${product.stock}`}
@@ -468,7 +486,7 @@ const LabelPreview = React.memo(({ product, labelTemplate, companySettings }) =>
             <div 
               className="bg-black flex items-center justify-center rounded"
               style={{ 
-                width: (labelTemplate.qrSize * mmToPxPreview) + 'px', // QR para preview pequeno
+                width: (labelTemplate.qrSize * mmToPxPreview) + 'px',
                 height: (labelTemplate.qrSize * mmToPxPreview) + 'px',
                 flexShrink: 0
               }}
@@ -491,33 +509,32 @@ const LabelPreview = React.memo(({ product, labelTemplate, companySettings }) =>
   );
 });
 
-const StockQRApp = () => {
+const EstoqueFFApp = () => {
   const [currentScreen, setCurrentScreen] = useState('dashboard');
   
-  // Usando persistência local do Hatch
-  const [products, setProducts] = useStoredState('stockqr_products', [
+  // Estados usando localStorage
+  const [products, setProducts] = useStoredState('estoqueff_products', [
     { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
     { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'Acessórios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
     { id: 'P003', name: 'Teclado Mecânico', brand: 'Razer', category: 'Acessórios', code: 'KB-RZR-003', stock: 8, minStock: 5, qrCode: 'QR003', createdAt: '2025-01-01' },
     { id: 'P004', name: 'Monitor 24"', brand: 'Samsung', category: 'Eletrônicos', code: 'MN-SAM-004', stock: 12, minStock: 3, qrCode: 'QR004', createdAt: '2025-01-01' }
   ]);
   
-  const [movements, setMovements] = useStoredState('stockqr_movements', [
+  const [movements, setMovements] = useStoredState('estoqueff_movements', [
     { id: '1', product: 'Notebook Dell', type: 'saída', quantity: 2, user: 'João Silva', date: '2025-08-04 14:30' },
     { id: '2', product: 'Mouse Logitech', type: 'entrada', quantity: 5, user: 'Maria Santos', date: '2025-08-04 12:15' },
     { id: '3', product: 'Monitor 24"', type: 'saída', quantity: 1, user: 'Pedro Costa', date: '2025-08-04 10:45' }
   ]);
 
-  const [companySettings, setCompanySettings] = useStoredState('stockqr_settings', {
+  const [companySettings, setCompanySettings] = useStoredState('estoqueff_settings', {
     companyName: 'Minha Empresa',
     responsibleName: 'Juninho Rezini',
     lowStockAlert: true
   });
 
-  // NOVO: Configurações individuais por produto
-  const [productLabelConfigs, setProductLabelConfigs] = useStoredState('stockqr_product_label_configs', {});
+  const [productLabelConfigs, setProductLabelConfigs] = useStoredState('estoqueff_product_label_configs', {});
   
-  // Template padrão - AGORA EM PONTOS (pt) para impressão precisa
+  // Template padrão para etiquetas
   const defaultLabelConfig = {
     showBrand: true,
     showCode: false, 
@@ -525,24 +542,24 @@ const StockQRApp = () => {
     showQuantity: true,
     showQRCode: true,
     customQuantity: '',
-    brandFontSize: 18, // pt (pontos - padrão impressão)
-    codeFontSize: 12, // pt
-    descriptionFontSize: 10, // pt
-    quantityFontSize: 14, // pt
-    qrSize: 20, // mm (QR Code continua em mm)
+    brandFontSize: 18,
+    codeFontSize: 12,
+    descriptionFontSize: 10,
+    quantityFontSize: 14,
+    qrSize: 20,
     backgroundColor: '#ffffff',
     textColor: '#000000',
     borderColor: '#cccccc',
     showBorder: true,
-    labelWidth: 85, // mm
-    labelHeight: 60 // mm
+    labelWidth: 85,
+    labelHeight: 60
   };
 
+  // Estados gerais
   const [scannerActive, setScannerActive] = useState(false);
   const [scannedProduct, setScannedProduct] = useState(null);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [showSettings, setShowSettings] = useState(false);
   const [movementType, setMovementType] = useState('');
   const [movementQuantity, setMovementQuantity] = useState(1);
   const [selectedProduct, setSelectedProduct] = useState('');
@@ -559,7 +576,7 @@ const StockQRApp = () => {
   const [manualSearchTerm, setManualSearchTerm] = useState('');
   const [manualSelectedProduct, setManualSelectedProduct] = useState(null);
 
-  // SOLUÇÃO: Estado de pesquisa isolado para evitar re-renders do componente principal
+  // Estados de pesquisa
   const [searchTerm, setSearchTerm] = useState('');
   const [labelSearchTerm, setLabelSearchTerm] = useState('');
 
@@ -573,7 +590,7 @@ const StockQRApp = () => {
     minStock: 1
   });
 
-  // Estados para relatórios expandidos - FASE 1
+  // Estados para relatórios
   const [reportsTab, setReportsTab] = useState('movements');
   const [movementsPeriodFilter, setMovementsPeriodFilter] = useState('all');
   const [productsFilter, setProductsFilter] = useState('all');
@@ -588,7 +605,7 @@ const StockQRApp = () => {
     }
   }, []);
 
-  // SOLUÇÃO: Handler estável para pesquisa que não causa re-renders
+  // Handlers estáveis
   const handleSearchChange = useCallback((newSearchTerm) => {
     setSearchTerm(newSearchTerm);
   }, []);
@@ -601,16 +618,13 @@ const StockQRApp = () => {
     setManualSearchTerm(newSearchTerm);
   }, []);
 
-  // SOLUÇÃO: Handlers estáveis para edição de produtos
   const handleEditProduct = useCallback((product) => {
     setEditingProduct(product);
   }, []);
 
-  // SOLUÇÃO 2: Substituir confirm por window.confirm
   const handleDeleteProduct = useCallback((productId) => {
     if (window.confirm('Tem certeza que deseja excluir este produto?')) {
       setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
-      // Remove as configurações de etiqueta do produto deletado
       setProductLabelConfigs(prevConfigs => {
         const newConfigs = { ...prevConfigs };
         delete newConfigs[productId];
@@ -619,10 +633,10 @@ const StockQRApp = () => {
     }
   }, [setProducts, setProductLabelConfigs]);
 
-// NOVO: Funções para gerenciar configurações individuais por produto - CORRIGIDA
+  // Funções para configurações de etiquetas
   const getProductLabelConfig = useCallback((productId) => {
     return productLabelConfigs[productId] || defaultLabelConfig;
-  }, [productLabelConfigs]);
+  }, [productLabelConfigs, defaultLabelConfig]);
 
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
     setProductLabelConfigs(prevConfigs => ({
@@ -633,7 +647,7 @@ const StockQRApp = () => {
         ...newConfig
       }
     }));
-  }, [setProductLabelConfigs]);
+  }, [setProductLabelConfigs, defaultLabelConfig]);
 
   const openLabelEditorForProduct = useCallback((productId) => {
     setEditingLabelForProduct(productId);
@@ -645,13 +659,13 @@ const StockQRApp = () => {
     setShowLabelEditor(false);
   }, []);
 
-  // Scanner QR Code real usando câmera
+  // Scanner QR Code com câmera real
   const startRealQRScanner = async () => {
     try {
       setLoading(true);
       setScannerActive(true);
       setErrors({});
-      setMovementType(''); // Reset tipo de movimentação ao iniciar scanner
+      setMovementType('');
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
@@ -675,6 +689,7 @@ const StockQRApp = () => {
       
       setLoading(false);
       
+      // Simulação para ambiente que não suporta scanner QR real
       setTimeout(() => {
         const randomProduct = products[Math.floor(Math.random() * products.length)];
         const foundProduct = findProductByQR(randomProduct.qrCode);
@@ -697,6 +712,7 @@ const StockQRApp = () => {
       setScannerActive(false);
       setLoading(false);
       
+      // Fallback para simulação
       setTimeout(() => {
         const randomProduct = products[Math.floor(Math.random() * products.length)];
         setScannedProduct(randomProduct);
@@ -734,6 +750,7 @@ const StockQRApp = () => {
     };
   }, [cameraStream]);
 
+  // Validação de produtos
   const validateProduct = (product, isEdit = false) => {
     const newErrors = {};
     
@@ -771,6 +788,7 @@ const StockQRApp = () => {
     return newErrors;
   };
 
+  // Adicionar produto
   const addProduct = () => {
     setLoading(true);
     setErrors({});
@@ -785,7 +803,7 @@ const StockQRApp = () => {
     
     try {
       const productId = 'P' + String(Date.now()).slice(-6);
-      const qrCode = `STOCKQR_${productId}_${newProduct.name.replace(/\s+/g, '_').toUpperCase()}`;
+      const qrCode = `ESTOQUEFF_${productId}_${newProduct.name.replace(/\s+/g, '_').toUpperCase()}`;
       
       const product = {
         ...newProduct,
@@ -813,6 +831,7 @@ const StockQRApp = () => {
     setLoading(false);
   };
 
+  // Atualizar produto
   const updateProduct = () => {
     setLoading(true);
     setErrors({});
@@ -850,6 +869,7 @@ const StockQRApp = () => {
     setLoading(false);
   };
 
+  // Processar movimentação
   const processMovement = (product = null) => {
     const targetProduct = product || scannedProduct;
     if (!targetProduct) return;
@@ -899,13 +919,13 @@ const StockQRApp = () => {
           : p
       ));
       
-      // Reset todos os estados
+      // Reset estados
       setScannedProduct(null);
       setManualSelectedProduct(null);
       setShowManualMovement(false);
       setManualSearchTerm('');
       setMovementQuantity(1);
-      setMovementType(''); // Reset para nenhuma opção selecionada
+      setMovementType('');
       setSuccess(`✅ ${movementType === 'entrada' ? 'Entrada' : 'Saída'} de ${quantity} unidades registrada com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
       
@@ -916,15 +936,12 @@ const StockQRApp = () => {
     setLoading(false);
   };
 
-  // Resto do código continua igual...
-  // [Todo o resto das funções e o return JSX permanecem iguais]
-
-  // NOVO: Exportação em PDF e Excel com layout profissional
+  // Exportação para PDF
   const exportToPDF = (type, data, title) => {
     const pdf = new jsPDF();
     const timestamp = new Date().toLocaleString('pt-BR');
     
-    // Cabeçalho do documento
+    // Cabeçalho
     pdf.setFontSize(18);
     pdf.setFont('helvetica', 'bold');
     pdf.text(title, 14, 22);
@@ -935,7 +952,6 @@ const StockQRApp = () => {
     pdf.text(`Responsável: ${companySettings.responsibleName}`, 14, 38);
     pdf.text(`Gerado em: ${timestamp}`, 14, 44);
     
-    // Linha separadora
     pdf.setLineWidth(0.5);
     pdf.line(14, 48, 196, 48);
     
@@ -977,18 +993,17 @@ const StockQRApp = () => {
         type: m.type === 'entrada' ? 'Entrada' : 'Saída',
         quantity: m.quantity.toString(),
         user: m.user.length > 15 ? m.user.substring(0, 15) + '...' : m.user,
-        date: m.date.split(' ')[0] // Apenas data, sem hora
+        date: m.date.split(' ')[0]
       }));
     }
     
-    // Tabela com autoTable
     autoTable(pdf, {
       columns: columns,
       body: rows,
       startY: 55,
       theme: 'grid',
       headStyles: {
-        fillColor: [59, 130, 246], // Azul
+        fillColor: [59, 130, 246],
         textColor: 255,
         fontStyle: 'bold',
         fontSize: 9
@@ -998,7 +1013,7 @@ const StockQRApp = () => {
         cellPadding: 3
       },
       alternateRowStyles: {
-        fillColor: [248, 250, 252] // Cinza claro
+        fillColor: [248, 250, 252]
       },
       margin: { left: 14, right: 14 },
       tableWidth: 'auto',
@@ -1012,7 +1027,7 @@ const StockQRApp = () => {
       }
     });
     
-    // Rodapé - posição calculada manualmente sem dependência do jsPDF
+    // Rodapé
     const estimatedRowHeight = 12;
     const headerHeight = 15;
     const startY = 55;
@@ -1020,28 +1035,27 @@ const StockQRApp = () => {
     const finalY = startY + headerHeight + (rows.length * estimatedRowHeight) + padding;
     pdf.setFontSize(8);
     pdf.text(`Total de registros: ${data.length}`, 14, finalY + 15);
-    pdf.text(`StockQR - Sistema de Controle de Estoque`, 14, finalY + 25);
+    pdf.text(`EstoqueFF - Sistema de Controle de Estoque`, 14, finalY + 25);
     
     const filename = `${type === 'products' ? 'produtos' : 'movimentacoes'}_${new Date().toISOString().slice(0, 10)}.pdf`;
     pdf.save(filename);
   };
 
+  // Exportação para Excel
   const exportToExcel = (type, data, title) => {
     let worksheetData = [];
     let filename = '';
     
     if (type === 'products') {
-      // Cabeçalho
       worksheetData = [
         [title],
         [`${companySettings.companyName}`],
         [`Responsável: ${companySettings.responsibleName}`],
         [`Gerado em: ${new Date().toLocaleString('pt-BR')}`],
-        [], // Linha vazia
+        [],
         ['Código', 'Nome do Produto', 'Marca', 'Categoria', 'Estoque Atual', 'Estoque Mínimo', 'Diferença', 'Status', 'Data Criação']
       ];
       
-      // Dados
       data.forEach(p => {
         const diferenca = p.stock - p.minStock;
         const status = p.stock <= 0 ? 'SEM ESTOQUE' : p.stock <= p.minStock ? 'ESTOQUE BAIXO' : 'NORMAL';
@@ -1062,17 +1076,15 @@ const StockQRApp = () => {
       filename = `relatorio_produtos_${new Date().toISOString().slice(0, 10)}.xlsx`;
       
     } else if (type === 'movements') {
-      // Cabeçalho
       worksheetData = [
         [title],
         [`${companySettings.companyName}`],
         [`Responsável: ${companySettings.responsibleName}`],
         [`Gerado em: ${new Date().toLocaleString('pt-BR')}`],
-        [], // Linha vazia
+        [],
         ['ID', 'Produto', 'Tipo de Movimentação', 'Quantidade', 'Usuário', 'Data e Hora']
       ];
       
-      // Dados
       data.forEach(m => {
         worksheetData.push([
           m.id,
@@ -1087,7 +1099,6 @@ const StockQRApp = () => {
       filename = `relatorio_movimentacoes_${new Date().toISOString().slice(0, 10)}.xlsx`;
     }
     
-    // Estatísticas no final
     worksheetData.push([]);
     worksheetData.push(['=== ESTATÍSTICAS ===']);
     worksheetData.push([`Total de registros: ${data.length}`]);
@@ -1110,39 +1121,24 @@ const StockQRApp = () => {
       worksheetData.push([`Total de saídas: ${saidas} movimentações (${totalSaidas} itens)`]);
     }
     
-    // Criar workbook e worksheet
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(worksheetData);
     
-    // Larguras das colunas
     if (type === 'products') {
       ws['!cols'] = [
-        { wch: 12 }, // Código
-        { wch: 30 }, // Nome
-        { wch: 15 }, // Marca
-        { wch: 15 }, // Categoria
-        { wch: 12 }, // Estoque
-        { wch: 12 }, // Mín
-        { wch: 10 }, // Diferença
-        { wch: 15 }, // Status
-        { wch: 12 }  // Data
+        { wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 15 },
+        { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 12 }
       ];
     } else {
       ws['!cols'] = [
-        { wch: 8 },  // ID
-        { wch: 35 }, // Produto
-        { wch: 18 }, // Tipo
-        { wch: 12 }, // Quantidade
-        { wch: 20 }, // Usuário
-        { wch: 18 }  // Data
+        { wch: 8 }, { wch: 35 }, { wch: 18 }, { wch: 12 }, { wch: 20 }, { wch: 18 }
       ];
     }
     
-    // Estilos para cabeçalho (células A1:F1)
-    ws['A1'].s = { font: { bold: true, sz: 14 } };
-    ws['A2'].s = { font: { bold: true } };
-    ws['A3'].s = { font: { italic: true } };
-    ws['A4'].s = { font: { italic: true } };
+    if (ws['A1']) ws['A1'].s = { font: { bold: true, sz: 14 } };
+    if (ws['A2']) ws['A2'].s = { font: { bold: true } };
+    if (ws['A3']) ws['A3'].s = { font: { italic: true } };
+    if (ws['A4']) ws['A4'].s = { font: { italic: true } };
     
     XLSX.utils.book_append_sheet(wb, ws, type === 'products' ? 'Produtos' : 'Movimentações');
     XLSX.writeFile(wb, filename);
@@ -1154,10 +1150,10 @@ const StockQRApp = () => {
     
     if (type === 'products') {
       data = filteredProducts.length > 0 ? filteredProducts : products;
-      title = 'Relatório de Produtos - StockQR';
+      title = 'Relatório de Produtos - EstoqueFF';
     } else if (type === 'movements') {
       data = filteredMovements.length > 0 ? filteredMovements : movements;
-      title = 'Relatório de Movimentações - StockQR';
+      title = 'Relatório de Movimentações - EstoqueFF';
     }
     
     if (format === 'pdf') {
@@ -1184,7 +1180,7 @@ const StockQRApp = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `stockqr_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `estoqueff_backup_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -1206,26 +1202,27 @@ const StockQRApp = () => {
           if (backup.productLabelConfigs) {
             setProductLabelConfigs(backup.productLabelConfigs);
           }
-          window.alert('Backup restaurado com sucesso!');
+          setSuccess('✅ Backup restaurado com sucesso!');
+          setTimeout(() => setSuccess(''), 3000);
         } else {
-          window.alert('Arquivo de backup inválido!');
+          setErrors({ general: 'Arquivo de backup inválido!' });
+          setTimeout(() => setErrors({}), 3000);
         }
       } catch (error) {
-        window.alert('Erro ao restaurar backup!');
+        setErrors({ general: 'Erro ao restaurar backup!' });
+        setTimeout(() => setErrors({}), 3000);
       }
     };
     reader.readAsText(file);
     event.target.value = '';
   };
 
-  // Calcular estatísticas - MEMOIZADO
+  // Calcular estatísticas
   const stats = useMemo(() => {
-    // Data atual no formato brasileiro DD/MM/YYYY
     const today = new Date();
-    const todayBR = today.toLocaleDateString('pt-BR'); // Ex: "11/08/2025"
-    const todayISO = today.toISOString().slice(0, 10); // Ex: "2025-08-11"
+    const todayBR = today.toLocaleDateString('pt-BR');
+    const todayISO = today.toISOString().slice(0, 10);
     
-    // Contar movimentações de hoje
     const todayMovements = movements.filter(movement => {
       return movement.date.includes(todayBR) || movement.date.includes(todayISO);
     }).length;
@@ -1238,7 +1235,7 @@ const StockQRApp = () => {
     };
   }, [products, movements]);
 
-  // FASE 1: Relatórios expandidos - MEMOIZADOS para performance  
+  // Relatórios expandidos
   const filteredMovements = useMemo(() => {
     if (movementsPeriodFilter === 'all') return movements;
     
@@ -1248,11 +1245,9 @@ const StockQRApp = () => {
     
     return movements.filter(m => {
       try {
-        // Tentar diferentes formatos de data
         const movementDate = new Date(m.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
         return movementDate >= filterDate;
       } catch {
-        // Se der erro, incluir na lista (fallback)
         return true;
       }
     });
@@ -1269,7 +1264,6 @@ const StockQRApp = () => {
     }
   }, [products, productsFilter]);
 
-  // Análise de produtos mais/menos movimentados
   const topMovedProducts = useMemo(() => {
     const productStats = {};
     
@@ -1291,7 +1285,6 @@ const StockQRApp = () => {
   }, [movements, products]);
 
   const leastMovedProducts = useMemo(() => {
-    // Produtos com poucas ou nenhuma movimentação
     const allProducts = products.map(product => {
       const productMovements = movements.filter(m => m.productId === product.id);
       return {
@@ -1306,7 +1299,7 @@ const StockQRApp = () => {
     return allProducts.sort((a, b) => a.totalMovements - b.totalMovements);
   }, [movements, products]);
 
-  // Gerar QR Code real usando API
+  // Gerar QR Code e etiquetas
   const generateQRCode = async (data, size = 200) => {
     try {
       const qrData = encodeURIComponent(JSON.stringify({
@@ -1335,9 +1328,6 @@ const StockQRApp = () => {
     }
   };
 
-  // PDF removido - usando apenas PNG que está mais fiel ao preview
-
-  // PNG CORRIGIDO: usar pontos (pt) para pixels de alta resolução + layout dinâmico
   const generateA4Label = async () => {
     if (!selectedProduct) {
       setErrors({ general: 'Selecione um produto' });
@@ -1356,18 +1346,15 @@ const StockQRApp = () => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       
-      // Canvas A4 em alta resolução (300 DPI)
-      canvas.width = 2480; // A4 width em 300 DPI  
-      canvas.height = 3508; // A4 height em 300 DPI
+      const dpi = 300;
+      canvas.width = 2480;
+      canvas.height = 3508;
       
-      // Fundo branco
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Conversões precisas
-      const dpi = 300; // 300 DPI para alta resolução
-      const ptToPx = dpi / 72; // pt → px alta resolução
-      const mmToPx = dpi / 25.4; // mm → px alta resolução
+      const ptToPx = dpi / 72;
+      const mmToPx = dpi / 25.4;
       
       let qrImage = null;
       if (currentLabelConfig.showQRCode) {
@@ -1376,38 +1363,30 @@ const StockQRApp = () => {
       }
       
       const drawLabel = async (x, y, width, height) => {
-        // Background
         ctx.fillStyle = currentLabelConfig.backgroundColor;
         ctx.fillRect(x, y, width, height);
         
-        // Borda
         if (currentLabelConfig.showBorder) {
           ctx.strokeStyle = currentLabelConfig.borderColor;
-          ctx.lineWidth = 2; // Borda fina
+          ctx.lineWidth = 2;
           ctx.strokeRect(x, y, width, height);
         }
         
-        // Cor do texto
         ctx.fillStyle = currentLabelConfig.textColor;
         const centerX = x + width / 2;
-        const padding = 5 * mmToPx; // 5mm em px
+        const padding = 5 * mmToPx;
+        const fontScaleA4 = 4.5;
         
-        // ESCALA DE FONTE PARA A4: etiquetas A4 são ~4x maiores que preview
-        const fontScaleA4 = 4.5; // Fator de escala para fontes em A4
-        
-        // LAYOUT CORRIGIDO: posições exatas para evitar sobreposição
         let currentY = y + padding;
         
-        // MARCA: topo da etiqueta
         if (currentLabelConfig.showBrand && product.brand) {
           const brandSizeCanvas = (currentLabelConfig.brandFontSize * fontScaleA4) * ptToPx;
           ctx.font = `bold ${brandSizeCanvas}px Arial`;
           ctx.textAlign = 'center';
           ctx.fillText(product.brand, centerX, currentY + brandSizeCanvas);
-          currentY += brandSizeCanvas + (15 * mmToPx); // Espaço após marca
+          currentY += brandSizeCanvas + (15 * mmToPx);
         }
         
-        // PRODUTO: meio da etiqueta
         let productText = '';
         if (currentLabelConfig.showCode && currentLabelConfig.showDescription) {
           productText = `${product.code || ''} - ${product.name}`;
@@ -1422,7 +1401,6 @@ const StockQRApp = () => {
           ctx.font = `${productSizeCanvas}px Arial`;
           ctx.textAlign = 'center';
           
-          // Quebrar texto
           const maxWidth = width - (padding * 2);
           const words = productText.split(' ');
           const lines = [];
@@ -1443,17 +1421,15 @@ const StockQRApp = () => {
             lines.push(currentLine);
           }
           
-          // Mostrar até 2 linhas
           const displayLines = lines.slice(0, 2);
           
           displayLines.forEach((line) => {
             ctx.fillText(line, centerX, currentY + productSizeCanvas);
-            currentY += productSizeCanvas + (8 * mmToPx); // Espaço entre linhas
+            currentY += productSizeCanvas + (8 * mmToPx);
           });
-          currentY += (10 * mmToPx); // Espaço após produto
+          currentY += (10 * mmToPx);
         }
         
-        // QUANTIDADE: canto inferior esquerdo (posição absoluta)
         if (currentLabelConfig.showQuantity) {
           const quantitySizeCanvas = (currentLabelConfig.quantityFontSize * fontScaleA4) * ptToPx;
           ctx.font = `bold ${quantitySizeCanvas}px Arial`;
@@ -1463,43 +1439,25 @@ const StockQRApp = () => {
           ctx.fillText(quantityText, x + padding, y + height - padding);
         }
         
-        // QR CODE: usar mm → px
         if (currentLabelConfig.showQRCode && qrImage) {
           const qrSizePx = currentLabelConfig.qrSize * mmToPx;
-          
           const qrX = x + width - padding - qrSizePx;
           const qrY = y + height - padding - qrSizePx;
-          
           ctx.drawImage(qrImage, qrX, qrY, qrSizePx, qrSizePx);
         }
       };
       
-      // LAYOUT A4 OTIMIZADO: MEIA FOLHA PARA CADA ETIQUETA
-      const marginPx = 3 * mmToPx; // 3mm → px (margens mínimas)
-      
-      // ETIQUETAS MAIORES: aproveitando meia folha A4 cada uma
-      const labelWidthPx = 200 * mmToPx; // 200mm → px (quase toda largura A4)
-      const labelHeightPx = 145 * mmToPx; // 145mm → px (meia altura A4 - margens)
-      
-      // Calcular posições para MEIA FOLHA cada etiqueta
+      const marginPx = 3 * mmToPx;
+      const labelWidthPx = 200 * mmToPx;
+      const labelHeightPx = 145 * mmToPx;
       const centerX = (canvas.width - labelWidthPx) / 2;
-      const halfPageHeight = canvas.height / 2; // Dividir A4 ao meio
+      const halfPageHeight = canvas.height / 2;
       
-      // POSIÇÕES PARA MEIA FOLHA: uma no topo, outra no fundo
       const positions = [
-        { 
-          x: centerX, 
-          y: marginPx // Primeira etiqueta: início da primeira metade
-        },
-        { 
-          x: centerX, 
-          y: halfPageHeight + marginPx // Segunda etiqueta: início da segunda metade
-        }
+        { x: centerX, y: marginPx },
+        { x: centerX, y: halfPageHeight + marginPx }
       ];
       
-      console.log(`PNG Layout MEIA FOLHA: 2 etiquetas ${Math.round(labelWidthPx/mmToPx)}x${Math.round(labelHeightPx/mmToPx)}mm, margem ${Math.round(marginPx/mmToPx)}mm`);
-      
-      // Gerar as 2 etiquetas IDÊNTICAS AO PDF
       for (let i = 0; i < positions.length; i++) {
         const pos = positions[i];
         await drawLabel(pos.x, pos.y, labelWidthPx, labelHeightPx);
@@ -1513,38 +1471,19 @@ const StockQRApp = () => {
       link.href = canvas.toDataURL('image/png', 1.0);
       link.click();
       
-      setSuccess(`✅ Etiquetas PNG geradas com sucesso! Layout A4 otimizado para impressão.`);
+      setSuccess(`✅ Etiquetas PNG geradas com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
       
     } catch (error) {
       console.error('Erro ao gerar PNG:', error);
-      setErrors({ general: 'Erro ao gerar PNG.' });
+      setErrors({ general: 'Erro ao gerar etiquetas.' });
     }
     
     setLoading(false);
   };
 
-  // [Resto do JSX return continua como estava antes - sem alterações]
-  
   return (
     <div className="max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-gray-50 min-h-screen relative">
-      {/* Resto do JSX sem alterações... */}
-      <style jsx>{`
-        @keyframes slide-down {
-          from {
-            opacity: 0;
-            transform: translateY(-20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-slide-down {
-          animation: slide-down 0.3s ease-out;
-        }
-      `}</style>
-      
       {/* Toast notifications */}
       {success && (
         <div className="fixed top-4 left-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg z-50 animate-slide-down">
@@ -1574,10 +1513,1234 @@ const StockQRApp = () => {
         </div>
       )}
       
-      {/* Resto do JSX continua igual - todo o conteúdo das telas permanece sem alterações */}
-      {/* [Este é apenas um placeholder - na implementação real, todo o resto do JSX continuaria igual] */}
+      {/* Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-auto md:left-0 md:w-64 md:h-full bg-white border-t md:border-t-0 md:border-r border-gray-200 px-4 py-2 md:py-4">
+        <div className="flex justify-around md:flex-col md:space-y-2">
+          {[
+            { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
+            { id: 'scanner', icon: Scan, label: 'Movimentação' },
+            { id: 'products', icon: Package, label: 'Produtos' },
+            { id: 'labels', icon: QrCode, label: 'Etiquetas' },
+            { id: 'reports', icon: TrendingUp, label: 'Relatórios' },
+            { id: 'settings', icon: Settings, label: 'Config' }
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={() => setCurrentScreen(item.id)}
+              className={`flex flex-col md:flex-row items-center py-1 px-2 md:py-3 md:px-4 rounded-lg transition-colors ${
+                currentScreen === item.id ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <item.icon size={18} />
+              <span className="text-xs md:text-sm mt-1 md:mt-0 md:ml-3">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      {/* Dashboard Screen */}
+      {currentScreen === 'dashboard' && (
+        <div className="p-4 pb-20 md:ml-64 md:pb-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">EstoqueFF Dashboard</h1>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                {companySettings.responsibleName.split(' ').map(n => n[0]).join('')}
+              </div>
+              <span className="text-sm text-gray-600">{companySettings.responsibleName}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-600 text-sm font-medium">Total Produtos</p>
+                  <p className="text-2xl font-bold text-blue-800">{stats.totalProducts}</p>
+                </div>
+                <Package className="text-blue-500" size={32} />
+              </div>
+            </div>
+            
+            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-red-600 text-sm font-medium">Estoque Baixo</p>
+                  <p className="text-2xl font-bold text-red-800">{stats.lowStockProducts}</p>
+                </div>
+                <AlertTriangle className="text-red-500" size={32} />
+              </div>
+            </div>
+            
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-green-600 text-sm font-medium">Total Itens</p>
+                  <p className="text-2xl font-bold text-green-800">{stats.totalItems}</p>
+                </div>
+                <TrendingUp className="text-green-500" size={32} />
+              </div>
+            </div>
+            
+            <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-purple-600 text-sm font-medium">Movimentações Hoje</p>
+                  <p className="text-2xl font-bold text-purple-800">{stats.todayMovements}</p>
+                </div>
+                <BarChart3 className="text-purple-500" size={32} />
+              </div>
+            </div>
+          </div>
+
+          {stats.lowStockProducts > 0 && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center mb-2">
+                <AlertTriangle className="text-orange-500 mr-2" size={20} />
+                <h3 className="font-semibold text-orange-800">Produtos com Estoque Baixo</h3>
+              </div>
+              {products.filter(p => p.stock <= p.minStock).map(product => (
+                <div key={product.id} className="flex justify-between items-center py-2 border-b border-orange-200 last:border-b-0">
+                  <span className="text-orange-700">{product.name}</span>
+                  <span className="text-orange-600 font-medium">{product.stock} unidades</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="font-semibold text-gray-800 mb-3">Últimas Movimentações</h3>
+            {movements.slice(0, 5).map(movement => (
+              <div key={movement.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
+                <div>
+                  <p className="font-medium text-gray-800">{movement.product}</p>
+                  <p className="text-sm text-gray-600">{movement.user} • {movement.date}</p>
+                </div>
+                <div className={`px-2 py-1 rounded text-xs font-medium ${
+                  movement.type === 'entrada' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Scanner Screen - Sistema Completo */}
+      {currentScreen === 'scanner' && (
+        <div className="p-4 pb-20 md:ml-64 md:pb-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Movimentação de Estoque</h1>
+            {scannerActive && (
+              <button
+                onClick={stopCamera}
+                className="bg-red-500 text-white p-2 rounded-lg hover:bg-red-600 transition-colors"
+                title="Parar Scanner"
+              >
+                <X size={20} />
+              </button>
+            )}
+          </div>
+
+          {/* Botões de opção */}
+          {!scannerActive && !scannedProduct && !showManualMovement && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <button
+                onClick={startRealQRScanner}
+                disabled={loading}
+                className="bg-blue-500 text-white p-6 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex flex-col items-center gap-3"
+              >
+                <Camera size={32} />
+                <div className="text-center">
+                  <p className="font-medium">Scanner QR Code</p>
+                  <p className="text-xs opacity-80">Use a câmera</p>
+                </div>
+              </button>
+              
+              <button
+                onClick={() => {
+                  setShowManualMovement(true);
+                  setMovementType('');
+                }}
+                className="bg-green-500 text-white p-6 rounded-lg hover:bg-green-600 transition-colors flex flex-col items-center gap-3"
+              >
+                <Search size={32} />
+                <div className="text-center">
+                  <p className="font-medium">Busca Manual</p>
+                  <p className="text-xs opacity-80">Pesquisar produto</p>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+              <p className="text-green-800 text-sm">{success}</p>
+            </div>
+          )}
+          
+          {errors.camera && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-red-800 text-sm">{errors.camera}</p>
+            </div>
+          )}
+          
+          {/* Scanner Ativo */}
+          {scannerActive && (
+            <div className="text-center">
+              <div className="bg-black rounded-lg overflow-hidden mb-6 relative">
+                {cameraStream ? (
+                  <div className="relative">
+                    <video 
+                      ref={videoRef}
+                      className="w-full h-64 object-cover"
+                      autoPlay 
+                      playsInline 
+                      muted
+                    />
+                    
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-48 h-48 border-2 border-green-400 rounded-lg relative">
+                        <div className="absolute -top-2 -left-2 w-6 h-6 border-l-4 border-t-4 border-green-400"></div>
+                        <div className="absolute -top-2 -right-2 w-6 h-6 border-r-4 border-t-4 border-green-400"></div>
+                        <div className="absolute -bottom-2 -left-2 w-6 h-6 border-l-4 border-b-4 border-green-400"></div>
+                        <div className="absolute -bottom-2 -right-2 w-6 h-6 border-r-4 border-b-4 border-green-400"></div>
+                        
+                        <div className="absolute inset-4 border border-green-400 rounded animate-pulse opacity-50"></div>
+                        
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                          <div className="w-2 h-2 bg-green-400 rounded-full animate-ping"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8">
+                    <div className="animate-pulse flex items-center justify-center">
+                      <Loader2 size={48} className="text-green-400 animate-spin" />
+                    </div>
+                  </div>
+                )}
+                
+                <div className="bg-black bg-opacity-75 p-4">
+                  <p className="text-white text-sm">🔍 Posicione o QR Code dentro da área marcada</p>
+                  <p className="text-green-400 text-xs mt-1">Aguarde a detecção automática...</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Movimentação Manual */}
+          {showManualMovement && !manualSelectedProduct && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Busca Manual de Produto</h3>
+                <button
+                  onClick={() => {
+                    setShowManualMovement(false);
+                    setManualSearchTerm('');
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="relative mb-4">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search size={20} className="text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  inputMode="text"
+                  placeholder="Pesquisar produto por nome, código, marca..."
+                  value={manualSearchTerm}
+                  onChange={(e) => handleManualSearchChange(e.target.value)}
+                  className="w-full pl-10 pr-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  style={{ fontSize: '16px' }}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck="false"
+                />
+              </div>
+
+              <div className="space-y-2">
+                {products.filter(product => {
+                  if (!manualSearchTerm.trim()) return true;
+                  const term = manualSearchTerm.toLowerCase().trim();
+                  return product.name.toLowerCase().includes(term) ||
+                         (product.code && product.code.toLowerCase().includes(term)) ||
+                         (product.brand && product.brand.toLowerCase().includes(term)) ||
+                         product.category.toLowerCase().includes(term);
+                }).slice(0, 10).map(product => (
+                  <div 
+                    key={product.id} 
+                    className="bg-white border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => setManualSelectedProduct(product)}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-800">{product.name}</h4>
+                        <p className="text-sm text-gray-600">
+                          {product.brand && `${product.brand} • `}
+                          Código: {product.code || 'N/A'}
+                        </p>
+                        <p className="text-sm text-gray-600">Categoria: {product.category}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-600">Estoque:</p>
+                        <p className={`font-medium ${product.stock <= product.minStock ? 'text-red-600' : 'text-green-600'}`}>
+                          {product.stock} unid.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Formulário de Movimentação */}
+          {(scannedProduct || manualSelectedProduct) && (
+            <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+              <div className="flex items-center mb-4">
+                <CheckCircle className="text-green-500 mr-2" size={24} />
+                <h3 className="font-semibold text-green-800">
+                  {scannedProduct ? 'Produto Escaneado!' : 'Produto Selecionado!'}
+                </h3>
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <h4 className="font-semibold text-gray-800 mb-2">
+                  {(scannedProduct || manualSelectedProduct).name}
+                </h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Código:</span>
+                    <span className="ml-2 font-medium">
+                      {(scannedProduct || manualSelectedProduct).code || '-'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Marca:</span>
+                    <span className="ml-2 font-medium">
+                      {(scannedProduct || manualSelectedProduct).brand || '-'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Estoque:</span>
+                    <span className="ml-2 font-medium">
+                      {(scannedProduct || manualSelectedProduct).stock} unidades
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Categoria:</span>
+                    <span className="ml-2 font-medium">
+                      {(scannedProduct || manualSelectedProduct).category}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    {scannedProduct ? (
+                      <>
+                        <Camera size={12} />
+                        Produto encontrado via Scanner QR Code
+                      </>
+                    ) : (
+                      <>
+                        <Search size={12} />
+                        Produto encontrado via Busca Manual
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {(errors.quantity || errors.movement) && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                  {errors.quantity && <p className="text-red-800 text-sm">{errors.quantity}</p>}
+                  {errors.movement && <p className="text-red-800 text-sm">{errors.movement}</p>}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tipo de Movimentação *
+                    {!movementType && <span className="text-red-500 text-xs ml-1">(Obrigatório)</span>}
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setMovementType('entrada');
+                        if (errors.movement) setErrors({...errors, movement: ''});
+                      }}
+                      className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors border-2 ${
+                        movementType === 'entrada' 
+                          ? 'bg-green-500 text-white border-green-500' 
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:bg-green-50'
+                      }`}
+                    >
+                      ↗️ Entrada
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMovementType('saída');
+                        if (errors.movement) setErrors({...errors, movement: ''});
+                      }}
+                      className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors border-2 ${
+                        movementType === 'saída' 
+                          ? 'bg-red-500 text-white border-red-500' 
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:bg-red-50'
+                      }`}
+                    >
+                      ↙️ Saída
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={movementQuantity}
+                    onChange={(e) => {
+                      setMovementQuantity(e.target.value);
+                      if (errors.quantity) setErrors({...errors, quantity: ''});
+                    }}
+                    className={`w-full px-4 py-4 border rounded-lg focus:ring-2 focus:border-blue-500 ${
+                      errors.quantity ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    placeholder="Digite a quantidade"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setScannedProduct(null);
+                      setManualSelectedProduct(null);
+                      setShowManualMovement(false);
+                      setManualSearchTerm('');
+                      setMovementType('');
+                      setErrors({});
+                    }}
+                    className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => processMovement(scannedProduct || manualSelectedProduct)}
+                    disabled={loading || !movementType}
+                    className={`flex-1 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                      !movementType 
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                        : loading 
+                          ? 'bg-gray-400 text-white cursor-not-allowed'
+                          : 'bg-blue-500 text-white hover:bg-blue-600'
+                    }`}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Processando...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={16} />
+                        Confirmar Movimentação
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Products Screen */}
+      {currentScreen === 'products' && (
+        <div className="p-4 pb-20 md:ml-64 md:pb-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Gestão de Produtos</h1>
+            <button
+              onClick={() => setShowAddProduct(true)}
+              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+            >
+              <Plus size={16} />
+              Novo Produto
+            </button>
+          </div>
+
+          <ProductSearch onSearchChange={handleSearchChange} searchTerm={searchTerm} />
+          <ProductList 
+            products={products} 
+            searchTerm={searchTerm} 
+            onEdit={handleEditProduct} 
+            onDelete={handleDeleteProduct} 
+          />
+        </div>
+      )}
+
+      {/* Labels Screen - Gerador de Etiquetas */}
+      {currentScreen === 'labels' && (
+        <div className="p-4 pb-20 md:ml-64 md:pb-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Gerador de Etiquetas</h1>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+            <h3 className="font-semibold text-gray-800 mb-4">Selecionar Produto para Etiquetas</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Produto</label>
+                <select
+                  value={selectedProduct}
+                  onChange={(e) => setSelectedProduct(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  style={{ fontSize: '16px' }}
+                >
+                  <option value="">Selecione um produto</option>
+                  {products.map(product => (
+                    <option key={product.id} value={product.id}>
+                      {product.name} - {product.code || 'S/Código'} (Estoque: {product.stock})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedProduct && (
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => openLabelEditorForProduct(selectedProduct)}
+                    className="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                  >
+                    <Settings size={16} />
+                    Configurar Etiqueta
+                  </button>
+                  
+                  <button
+                    onClick={generateA4Label}
+                    disabled={loading}
+                    className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex items-center gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Gerando...
+                      </>
+                    ) : (
+                      <>
+                        <Download size={16} />
+                        Gerar Etiquetas A4
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            {!selectedProduct && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center mt-4">
+                <QrCode size={48} className="mx-auto text-gray-300 mb-4" />
+                <h3 className="text-lg font-medium text-gray-600 mb-2">Selecione um Produto</h3>
+                <p className="text-gray-500">
+                  Escolha um produto acima para configurar e gerar suas etiquetas com QR Code.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Preview das últimas etiquetas geradas */}
+          {selectedProduct && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h3 className="font-semibold text-gray-800 mb-4">Preview da Etiqueta</h3>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <LabelPreview 
+                  product={products.find(p => p.id === selectedProduct)}
+                  labelTemplate={getProductLabelConfig(selectedProduct)}
+                  companySettings={companySettings}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                * Esta é uma prévia da etiqueta que será gerada
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Reports Screen - Relatórios Completos */}
+      {currentScreen === 'reports' && (
+        <div className="p-4 pb-20 md:ml-64 md:pb-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Relatórios</h1>
+            <div className="flex gap-2">
+              <button
+                onClick={createBackup}
+                className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
+              >
+                <Download size={16} />
+                Backup
+              </button>
+              <label className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 cursor-pointer">
+                <Upload size={16} />
+                Restaurar
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={restoreBackup}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Abas de relatórios */}
+          <div className="flex mb-6 border-b border-gray-200">
+            <button
+              onClick={() => setReportsTab('movements')}
+              className={`py-2 px-4 font-medium border-b-2 ${
+                reportsTab === 'movements' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Movimentações
+            </button>
+            <button
+              onClick={() => setReportsTab('products')}
+              className={`py-2 px-4 font-medium border-b-2 ${
+                reportsTab === 'products' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Produtos
+            </button>
+            <button
+              onClick={() => setReportsTab('analytics')}
+              className={`py-2 px-4 font-medium border-b-2 ${
+                reportsTab === 'analytics' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Análises
+            </button>
+          </div>
+
+          {/* Relatório de Movimentações */}
+          {reportsTab === 'movements' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-800">Relatório de Movimentações</h3>
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={movementsPeriodFilter}
+                      onChange={(e) => setMovementsPeriodFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    >
+                      <option value="all">Todas</option>
+                      <option value="7days">Últimos 7 dias</option>
+                      <option value="30days">Últimos 30 dias</option>
+                    </select>
+                    
+                    <button
+                      onClick={() => exportData('movements', 'excel')}
+                      className="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 text-sm"
+                    >
+                      <FileSpreadsheet size={14} />
+                      Excel
+                    </button>
+                    
+                    <button
+                      onClick={() => exportData('movements', 'pdf')}
+                      className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 text-sm"
+                    >
+                      <FileText size={14} />
+                      PDF
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {filteredMovements.slice(0, 10).map(movement => (
+                    <div key={movement.id} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
+                      <div>
+                        <p className="font-medium text-gray-800">{movement.product}</p>
+                        <p className="text-sm text-gray-600">{movement.user} • {movement.date}</p>
+                      </div>
+                      <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        movement.type === 'entrada' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-xs text-gray-500 mt-4 text-center">
+                  Mostrando {Math.min(10, filteredMovements.length)} de {filteredMovements.length} movimentações
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Relatório de Produtos */}
+          {reportsTab === 'products' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-800">Relatório de Produtos</h3>
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={productsFilter}
+                      onChange={(e) => setProductsFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    >
+                      <option value="all">Todos</option>
+                      <option value="low_stock">Estoque Baixo</option>
+                      <option value="no_stock">Sem Estoque</option>
+                    </select>
+                    
+                    <button
+                      onClick={() => exportData('products', 'excel')}
+                      className="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 text-sm"
+                    >
+                      <FileSpreadsheet size={14} />
+                      Excel
+                    </button>
+                    
+                    <button
+                      onClick={() => exportData('products', 'pdf')}
+                      className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 text-sm"
+                    >
+                      <FileText size={14} />
+                      PDF
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredProducts.slice(0, 12).map(product => (
+                    <div key={product.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h4 className="font-semibold text-gray-800">{product.name}</h4>
+                          <p className="text-sm text-gray-600">{product.brand || 'Sem marca'} • {product.category}</p>
+                        </div>
+                        <div className={`px-2 py-1 rounded text-xs font-medium ${
+                          product.stock <= 0 
+                            ? 'bg-red-100 text-red-800' 
+                            : product.stock <= product.minStock 
+                              ? 'bg-orange-100 text-orange-800'
+                              : 'bg-green-100 text-green-800'
+                        }`}>
+                          {product.stock <= 0 ? 'Sem estoque' : product.stock <= product.minStock ? 'Baixo' : 'Normal'}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-gray-600">Atual:</span>
+                          <span className="ml-1 font-medium">{product.stock}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Mín:</span>
+                          <span className="ml-1 font-medium">{product.minStock}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Análises */}
+          {reportsTab === 'analytics' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-800 mb-4">Produtos Mais Movimentados</h3>
+                <div className="space-y-3">
+                  {topMovedProducts.slice(0, 5).map((product, index) => (
+                    <div key={product.productId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                          index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-orange-600' : 'bg-blue-500'
+                        }`}>
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-800">{product.productName}</p>
+                          <p className="text-sm text-gray-600">Estoque atual: {product.currentStock}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-blue-600">{product.totalMovements}</p>
+                        <p className="text-xs text-gray-500">movimentações</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-800 mb-4">Produtos Menos Movimentados</h3>
+                <div className="space-y-3">
+                  {leastMovedProducts.slice(0, 5).map((product, index) => (
+                    <div key={product.productId} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-gray-800">{product.productName}</p>
+                        <p className="text-sm text-gray-600">Estoque atual: {product.currentStock}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-red-600">{product.totalMovements}</p>
+                        <p className="text-xs text-gray-500">movimentações</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Settings Screen */}
+      {currentScreen === 'settings' && (
+        <div className="p-4 pb-20 md:ml-64 md:pb-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Configurações</h1>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Dados da Empresa</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nome da Empresa</label>
+                <input
+                  type="text"
+                  value={companySettings.companyName}
+                  onChange={(e) => setCompanySettings({...companySettings, companyName: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  style={{ fontSize: '16px' }}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Responsável</label>
+                <input
+                  type="text"
+                  value={companySettings.responsibleName}
+                  onChange={(e) => setCompanySettings({...companySettings, responsibleName: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  style={{ fontSize: '16px' }}
+                />
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="lowStockAlert"
+                  checked={companySettings.lowStockAlert}
+                  onChange={(e) => setCompanySettings({...companySettings, lowStockAlert: e.target.checked})}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="lowStockAlert" className="ml-2 text-sm text-gray-700">
+                  Alertas de estoque baixo
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h4 className="text-md font-medium text-gray-800 mb-2">Informações do Sistema</h4>
+              <div className="text-sm text-gray-600 space-y-1">
+                <p>📦 Total de produtos: {stats.totalProducts}</p>
+                <p>📊 Total de movimentações: {movements.length}</p>
+                <p>🔄 Versão: EstoqueFF v2.0.0</p>
+                <p>✅ Status: Sistema funcionando com todas as funcionalidades</p>
+              </div>
+              
+              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <h5 className="font-medium text-green-800 mb-2">🎉 Funcionalidades Ativas:</h5>
+                <div className="text-sm text-green-700 space-y-1">
+                  <p>✅ Scanner QR Code com câmera real</p>
+                  <p>✅ Sistema completo de movimentações</p>
+                  <p>✅ Gerador de etiquetas personalizadas</p>
+                  <p>✅ Relatórios avançados (PDF/Excel)</p>
+                  <p>✅ Backup e restauração de dados</p>
+                  <p>✅ Análise de produtos e estatísticas</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Novo Produto */}
+      {showAddProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Novo Produto</h3>
+                <button
+                  onClick={() => {
+                    setShowAddProduct(false);
+                    setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
+                    setErrors({});
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Produto *</label>
+                  <input
+                    type="text"
+                    value={newProduct.name}
+                    onChange={(e) => {
+                      setNewProduct({...newProduct, name: e.target.value});
+                      if (errors.name) setErrors({...errors, name: ''});
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
+                    placeholder="Ex: Notebook Dell Inspiron"
+                  />
+                  {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Marca</label>
+                  <input
+                    type="text"
+                    value={newProduct.brand}
+                    onChange={(e) => setNewProduct({...newProduct, brand: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    style={{ fontSize: '16px' }}
+                    placeholder="Ex: Dell"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Categoria *</label>
+                  <input
+                    type="text"
+                    value={newProduct.category}
+                    onChange={(e) => {
+                      setNewProduct({...newProduct, category: e.target.value});
+                      if (errors.category) setErrors({...errors, category: ''});
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.category ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
+                    placeholder="Ex: Eletrônicos"
+                  />
+                  {errors.category && <p className="text-red-600 text-xs mt-1">{errors.category}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Código do Produto *</label>
+                  <input
+                    type="text"
+                    value={newProduct.code}
+                    onChange={(e) => {
+                      setNewProduct({...newProduct, code: e.target.value});
+                      if (errors.code) setErrors({...errors, code: ''});
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.code ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
+                    placeholder="Ex: NB-DELL-001"
+                  />
+                  {errors.code && <p className="text-red-600 text-xs mt-1">{errors.code}</p>}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Atual *</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={newProduct.stock}
+                      onChange={(e) => {
+                        setNewProduct({...newProduct, stock: e.target.value});
+                        if (errors.stock) setErrors({...errors, stock: ''});
+                      }}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.stock ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                      }`}
+                      style={{ fontSize: '16px' }}
+                      placeholder="0"
+                    />
+                    {errors.stock && <p className="text-red-600 text-xs mt-1">{errors.stock}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Mínimo *</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={newProduct.minStock}
+                      onChange={(e) => {
+                        setNewProduct({...newProduct, minStock: e.target.value});
+                        if (errors.minStock) setErrors({...errors, minStock: ''});
+                      }}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.minStock ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                      }`}
+                      style={{ fontSize: '16px' }}
+                      placeholder="1"
+                    />
+                    {errors.minStock && <p className="text-red-600 text-xs mt-1">{errors.minStock}</p>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowAddProduct(false);
+                    setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
+                    setErrors({});
+                  }}
+                  className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={addProduct}
+                  disabled={loading}
+                  className="flex-1 bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={16} />
+                      Salvar Produto
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Produto */}
+      {editingProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Editar Produto</h3>
+                <button
+                  onClick={() => {
+                    setEditingProduct(null);
+                    setErrors({});
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Produto *</label>
+                  <input
+                    type="text"
+                    value={editingProduct.name}
+                    onChange={(e) => {
+                      setEditingProduct({...editingProduct, name: e.target.value});
+                      if (errors.name) setErrors({...errors, name: ''});
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
+                  />
+                  {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Marca</label>
+                  <input
+                    type="text"
+                    value={editingProduct.brand || ''}
+                    onChange={(e) => setEditingProduct({...editingProduct, brand: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    style={{ fontSize: '16px' }}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Categoria *</label>
+                  <input
+                    type="text"
+                    value={editingProduct.category}
+                    onChange={(e) => {
+                      setEditingProduct({...editingProduct, category: e.target.value});
+                      if (errors.category) setErrors({...errors, category: ''});
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.category ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
+                  />
+                  {errors.category && <p className="text-red-600 text-xs mt-1">{errors.category}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Código do Produto *</label>
+                  <input
+                    type="text"
+                    value={editingProduct.code}
+                    onChange={(e) => {
+                      setEditingProduct({...editingProduct, code: e.target.value});
+                      if (errors.code) setErrors({...errors, code: ''});
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.code ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
+                  />
+                  {errors.code && <p className="text-red-600 text-xs mt-1">{errors.code}</p>}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Atual *</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={editingProduct.stock}
+                      onChange={(e) => {
+                        setEditingProduct({...editingProduct, stock: e.target.value});
+                        if (errors.stock) setErrors({...errors, stock: ''});
+                      }}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.stock ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                      }`}
+                      style={{ fontSize: '16px' }}
+                    />
+                    {errors.stock && <p className="text-red-600 text-xs mt-1">{errors.stock}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Mínimo *</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={editingProduct.minStock}
+                      onChange={(e) => {
+                        setEditingProduct({...editingProduct, minStock: e.target.value});
+                        if (errors.minStock) setErrors({...errors, minStock: ''});
+                      }}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.minStock ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                      }`}
+                      style={{ fontSize: '16px' }}
+                    />
+                    {errors.minStock && <p className="text-red-600 text-xs mt-1">{errors.minStock}</p>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setEditingProduct(null);
+                    setErrors({});
+                  }}
+                  className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={updateProduct}
+                  disabled={loading}
+                  className="flex-1 bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={16} />
+                      Salvar Alterações
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editor de Etiquetas */}
+      {showLabelEditor && editingLabelForProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Configurar Etiqueta</h3>
+                <button
+                  onClick={closeLabelEditor}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <LabelEditor
+                productId={editingLabelForProduct}
+                product={products.find(p => p.id === editingLabelForProduct)}
+                currentConfig={getProductLabelConfig(editingLabelForProduct)}
+                onConfigUpdate={updateProductLabelConfig}
+                onClose={closeLabelEditor}
+                companySettings={companySettings}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default StockQRApp;  
+export default EstoqueFFApp;
