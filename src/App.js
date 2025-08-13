@@ -739,32 +739,33 @@ const EstoqueFFApp = () => {
   };
 
   const stopCamera = () => {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(track => track.stop());
+    setCameraStream(null);
+  }
+  setScannerActive(false);
+  if (videoRef.current) {
+    videoRef.current.pause();
+    videoRef.current.srcObject = null;
+  }
+};
+
+const findProductByQR = (qrCode) => {
+  return products.find(p => p.qrCode === qrCode || p.id === qrCode);
+};
+
+useEffect(() => {
+  const video = videoRef.current; // Copie videoRef.current para uma variável
+  return () => {
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
     }
-    setScannerActive(false);
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.srcObject = null;
+    if (video) {
+      video.pause();
+      video.srcObject = null;
     }
   };
-
-  const findProductByQR = (qrCode) => {
-    return products.find(p => p.qrCode === qrCode || p.id === qrCode);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-      }
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.srcObject = null;
-      }
-    };
-  }, [cameraStream]);
+}, [cameraStream]);
 
   const validateProduct = (product, isEdit = false) => {
     const newErrors = {};
