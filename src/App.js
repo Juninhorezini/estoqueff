@@ -571,7 +571,7 @@ const EstoqueFFApp = () => {
   const [success, setSuccess] = useState('');
   const [cameraStream, setCameraStream] = useState(null);
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
+  const canvasRef = useRef(null); // Para capturar frames da câmera
 
   // Estados para movimentação manual
   const [showManualMovement, setShowManualMovement] = useState(false);
@@ -691,37 +691,6 @@ const EstoqueFFApp = () => {
       
       setLoading(false);
       
-      // Função para escanear QR code em tempo real
-      const scanQR = () => {
-        if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-          canvasRef.current.height = videoRef.current.videoHeight;
-          canvasRef.current.width = videoRef.current.videoWidth;
-          canvasRef.current.getContext('2d').drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-          const imageData = canvasRef.current.getContext('2d').getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: "dontInvert",
-          });
-
-          if (code) {
-            const foundProduct = findProductByQR(code.data);
-            if (foundProduct) {
-              setScannedProduct(foundProduct);
-              stopCamera();
-              setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
-              setTimeout(() => setSuccess(''), 3000);
-            } else {
-              setErrors({ general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.' });
-              setTimeout(() => setErrors({}), 3000);
-            }
-          }
-        }
-        if (scannerActive) {
-          requestAnimationFrame(scanQR);
-        }
-      };
-
-      requestAnimationFrame(scanQR);
-      
     } catch (error) {
       console.error('Erro ao acessar câmera:', error);
       setErrors({ camera: 'Não foi possível acessar a câmera. Verifique as permissões.' });
@@ -739,34 +708,34 @@ const EstoqueFFApp = () => {
   };
 
   const stopCamera = () => {
-  if (cameraStream) {
-    cameraStream.getTracks().forEach(track => track.stop());
-    setCameraStream(null);
-  }
-  setScannerActive(false);
-  if (videoRef.current) {
-    videoRef.current.pause();
-    videoRef.current.srcObject = null;
-  }
-};
-
-const findProductByQR = (qrCode) => {
-  return products.find(p => p.qrCode === qrCode || p.id === qrCode);
-};
-
-useEffect(() => {
-  const video = videoRef.current; // Copie videoRef.current para uma variável
-  return () => {
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
     }
-    if (video) {
-      video.pause();
-      video.srcObject = null;
+    setScannerActive(false);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
     }
   };
-}, [cameraStream]);
 
+  const findProductByQR = (qrCode) => {
+    return products.find(p => p.qrCode === qrCode || p.id === qrCode);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.srcObject = null;
+      }
+    };
+  }, [cameraStream]);
+
+  // Validação de produtos
   const validateProduct = (product, isEdit = false) => {
     const newErrors = {};
     
@@ -804,6 +773,7 @@ useEffect(() => {
     return newErrors;
   };
 
+  // Adicionar produto
   const addProduct = () => {
     setLoading(true);
     setErrors({});
@@ -818,7 +788,7 @@ useEffect(() => {
     
     try {
       const productId = 'P' + String(Date.now()).slice(-6);
-      const qrCode = `STOCKQR_${productId}_${newProduct.name.replace(/\s+/g, '_').toUpperCase()}`;
+      const qrCode = `ESTOQUEFF_${productId}_${newProduct.name.replace(/\s+/g, '_').toUpperCase()}`;
       
       const product = {
         ...newProduct,
@@ -846,6 +816,7 @@ useEffect(() => {
     setLoading(false);
   };
 
+  // Atualizar produto
   const updateProduct = () => {
     setLoading(true);
     setErrors({});
@@ -883,6 +854,7 @@ useEffect(() => {
     setLoading(false);
   };
 
+  // Processar movimentação
   const processMovement = (product = null) => {
     const targetProduct = product || scannedProduct;
     if (!targetProduct) return;
@@ -949,10 +921,12 @@ useEffect(() => {
     setLoading(false);
   };
 
+  // Exportação para PDF
   const exportToPDF = (type, data, title) => {
     const pdf = new jsPDF();
     const timestamp = new Date().toLocaleString('pt-BR');
     
+    // Cabeçalho
     pdf.setFontSize(18);
     pdf.setFont('helvetica', 'bold');
     pdf.text(title, 14, 22);
@@ -1038,6 +1012,7 @@ useEffect(() => {
       }
     });
     
+    // Rodapé
     const estimatedRowHeight = 12;
     const headerHeight = 15;
     const startY = 55;
@@ -1051,6 +1026,7 @@ useEffect(() => {
     pdf.save(filename);
   };
 
+  // Exportação para Excel
   const exportToExcel = (type, data, title) => {
     let worksheetData = [];
     let filename = '';
@@ -1308,7 +1284,7 @@ useEffect(() => {
     return allProducts.sort((a, b) => a.totalMovements - b.totalMovements);
   }, [movements, products]);
 
-  // Gerar QR Code real usando API
+  // Gerar QR Code e etiquetas
   const generateQRCode = async (data, size = 200) => {
     try {
       const qrData = encodeURIComponent(JSON.stringify({
@@ -1337,7 +1313,6 @@ useEffect(() => {
     }
   };
 
-  // PNG CORRIGIDO: usar pontos (pt) para pixels de alta resolução + layout dinâmico
   const generateA4Label = async () => {
     if (!selectedProduct) {
       setErrors({ general: 'Selecione um produto' });
@@ -1356,18 +1331,15 @@ useEffect(() => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       
-      // Canvas A4 em alta resolução (300 DPI)
-      canvas.width = 2480; // A4 width em 300 DPI  
-      canvas.height = 3508; // A4 height em 300 DPI
+      const dpi = 300;
+      canvas.width = 2480;
+      canvas.height = 3508;
       
-      // Fundo branco
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Conversões precisas
-      const dpi = 300; // 300 DPI para alta resolução
-      const ptToPx = dpi / 72; // pt → px alta resolução
-      const mmToPx = dpi / 25.4; // mm → px alta resolução
+      const ptToPx = dpi / 72;
+      const mmToPx = dpi / 25.4;
       
       let qrImage = null;
       if (currentLabelConfig.showQRCode) {
@@ -1376,38 +1348,30 @@ useEffect(() => {
       }
       
       const drawLabel = async (x, y, width, height) => {
-        // Background
         ctx.fillStyle = currentLabelConfig.backgroundColor;
         ctx.fillRect(x, y, width, height);
         
-        // Borda
         if (currentLabelConfig.showBorder) {
           ctx.strokeStyle = currentLabelConfig.borderColor;
-          ctx.lineWidth = 2; // Borda fina
+          ctx.lineWidth = 2;
           ctx.strokeRect(x, y, width, height);
         }
         
-        // Cor do texto
         ctx.fillStyle = currentLabelConfig.textColor;
         const centerX = x + width / 2;
-        const padding = 5 * mmToPx; // 5mm em px
+        const padding = 5 * mmToPx;
+        const fontScaleA4 = 4.5;
         
-        // ESCALA DE FONTE PARA A4: etiquetas A4 são ~4x maiores que preview
-        const fontScaleA4 = 4.5; // Fator de escala para fontes em A4
-        
-        // LAYOUT CORRIGIDO: posições exatas para evitar sobreposição
         let currentY = y + padding;
         
-        // MARCA: topo da etiqueta
         if (currentLabelConfig.showBrand && product.brand) {
           const brandSizeCanvas = (currentLabelConfig.brandFontSize * fontScaleA4) * ptToPx;
           ctx.font = `bold ${brandSizeCanvas}px Arial`;
           ctx.textAlign = 'center';
           ctx.fillText(product.brand, centerX, currentY + brandSizeCanvas);
-          currentY += brandSizeCanvas + (15 * mmToPx); // Espaço após marca
+          currentY += brandSizeCanvas + (15 * mmToPx);
         }
         
-        // PRODUTO: meio da etiqueta
         let productText = '';
         if (currentLabelConfig.showCode && currentLabelConfig.showDescription) {
           productText = `${product.code || ''} - ${product.name}`;
@@ -1422,7 +1386,6 @@ useEffect(() => {
           ctx.font = `${productSizeCanvas}px Arial`;
           ctx.textAlign = 'center';
           
-          // Quebrar texto
           const maxWidth = width - (padding * 2);
           const words = productText.split(' ');
           const lines = [];
@@ -1443,17 +1406,15 @@ useEffect(() => {
             lines.push(currentLine);
           }
           
-          // Mostrar até 2 linhas
           const displayLines = lines.slice(0, 2);
           
           displayLines.forEach((line) => {
             ctx.fillText(line, centerX, currentY + productSizeCanvas);
-            currentY += productSizeCanvas + (8 * mmToPx); // Espaço entre linhas
+            currentY += productSizeCanvas + (8 * mmToPx);
           });
-          currentY += (10 * mmToPx); // Espaço após produto
+          currentY += (10 * mmToPx);
         }
         
-        // QUANTIDADE: canto inferior esquerdo (posição absoluta)
         if (currentLabelConfig.showQuantity) {
           const quantitySizeCanvas = (currentLabelConfig.quantityFontSize * fontScaleA4) * ptToPx;
           ctx.font = `bold ${quantitySizeCanvas}px Arial`;
@@ -1463,49 +1424,30 @@ useEffect(() => {
           ctx.fillText(quantityText, x + padding, y + height - padding);
         }
         
-        // QR CODE: usar mm → px
         if (currentLabelConfig.showQRCode && qrImage) {
           const qrSizePx = currentLabelConfig.qrSize * mmToPx;
-          
           const qrX = x + width - padding - qrSizePx;
           const qrY = y + height - padding - qrSizePx;
-          
           ctx.drawImage(qrImage, qrX, qrY, qrSizePx, qrSizePx);
         }
       };
       
-      // LAYOUT A4 OTIMIZADO: MEIA FOLHA PARA CADA ETIQUETA
-      const marginPx = 3 * mmToPx; // 3mm → px (margens mínimas)
-      
-      // ETIQUETAS MAIORES: aproveitando meia folha A4 cada uma
-      const labelWidthPx = 200 * mmToPx; // 200mm → px (quase toda largura A4)
-      const labelHeightPx = 145 * mmToPx; // 145mm → px (meia altura A4 - margens)
-      
-      // Calcular posições para MEIA FOLHA cada etiqueta
+      const marginPx = 3 * mmToPx;
+      const labelWidthPx = 200 * mmToPx;
+      const labelHeightPx = 145 * mmToPx;
       const centerX = (canvas.width - labelWidthPx) / 2;
-      const halfPageHeight = canvas.height / 2; // Dividir A4 ao meio
+      const halfPageHeight = canvas.height / 2;
       
-      // POSIÇÕES PARA MEIA FOLHA: uma no topo, outra no fundo
       const positions = [
-        { 
-          x: centerX, 
-          y: marginPx // Primeira etiqueta: início da primeira metade
-        },
-        { 
-          x: centerX, 
-          y: halfPageHeight + marginPx // Segunda etiqueta: início da segunda metade
-        }
+        { x: centerX, y: marginPx },
+        { x: centerX, y: halfPageHeight + marginPx }
       ];
       
-      console.log(`PNG Layout MEIA FOLHA: 2 etiquetas ${Math.round(labelWidthPx/mmToPx)}x${Math.round(labelHeightPx/mmToPx)}mm, margem ${Math.round(marginPx/mmToPx)}mm`);
-      
-      // Gerar as 2 etiquetas IDÊNTICAS AO PDF
       for (let i = 0; i < positions.length; i++) {
         const pos = positions[i];
         await drawLabel(pos.x, pos.y, labelWidthPx, labelHeightPx);
       }
       
-      // Salvar como PNG
       const timestamp = new Date().toISOString().slice(0, 10);
       const fileName = `etiquetas_${product.name.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.png`;
       
@@ -1737,10 +1679,9 @@ useEffect(() => {
                   <div className="relative">
                     <video 
                       ref={videoRef}
+                      autoPlay
+                      playsInline
                       className="w-full h-64 object-cover"
-                      autoPlay 
-                      playsInline 
-                      muted
                     />
                     
                     <div className="absolute inset-0 flex items-center justify-center">
