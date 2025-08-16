@@ -555,7 +555,7 @@ const EstoqueFFApp = () => {
   });
 
   const [productLabelConfigs, setProductLabelConfigs] = useStoredState('estoqueff_product_label_configs', {});
-  
+
   // Estados gerais
   const [scannerActive, setScannerActive] = useState(false);
   const [scannedProduct, setScannedProduct] = useState(null);
@@ -571,7 +571,7 @@ const EstoqueFFApp = () => {
   const [success, setSuccess] = useState('');
   const [cameraStream, setCameraStream] = useState(null);
   const videoRef = useRef(null);
-  const canvasRef = useRef(null); // Para capturar frames da câmera
+  const canvasRef = useRef(null);
 
   // Estados para movimentação manual
   const [showManualMovement, setShowManualMovement] = useState(false);
@@ -762,12 +762,12 @@ const EstoqueFFApp = () => {
         cameraStream.getTracks().forEach(track => track.stop());
       }
       if (videoRef.current) {
-        const videoElement = videoRef.current;
+        const videoElement = videoRef.current; // Copiar ref para variável local
         videoElement.pause();
         videoElement.srcObject = null;
       }
     };
-  }, [scannerActive, cameraStream, products]);
+  }, [scannerActive, cameraStream, findProductByQR, stopCamera, setScannedProduct, setSuccess]);
 
   // Validação de produtos
   const validateProduct = (product, isEdit = false) => {
@@ -1175,12 +1175,12 @@ const EstoqueFFApp = () => {
       title = 'Relatório de Movimentações - EstoqueFF';
     }
     
-    if (format === 'pdf') {
-      exportToPDF(type, data, title);
-      setSuccess(`✅ Relatório PDF gerado com sucesso! (${data.length} registros)`);
-    } else {
+    if (format === 'excel') {
       exportToExcel(type, data, title);
       setSuccess(`✅ Relatório Excel gerado com sucesso! (${data.length} registros)`);
+    } else {
+      exportToPDF(type, data, title);
+      setSuccess(`✅ Relatório PDF gerado com sucesso! (${data.length} registros)`);
     }
     
     setTimeout(() => setSuccess(''), 3000);
@@ -1480,7 +1480,7 @@ const EstoqueFFApp = () => {
       for (let i = 0; i < positions.length; i++) {
         const pos = positions[i];
         await drawLabel(pos.x, pos.y, labelWidthPx, labelHeightPx);
-      };
+      }
       
       const timestamp = new Date().toISOString().slice(0, 10);
       const fileName = `etiquetas_${product.name.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.png`;
@@ -1722,7 +1722,7 @@ const EstoqueFFApp = () => {
                     
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className="w-48 h-48 border-2 border-green-400 rounded-lg relative">
-                        <div className="absolute -top-2 -left-2 w-6 h-6 border-l-4 border-t-4 border-green-400"></div>
+                        <div className="absolute -top-2 -left-2 w-6 h-6 w-6 border-l-4 border-t-4 border-green-400"></div>
                         <div className="absolute -top-2 -right-2 w-6 h-6 border-r-4 border-t-4 border-green-400"></div>
                         <div className="absolute -bottom-2 -left-2 w-6 h-6 border-l-4 border-b-4 border-green-400"></div>
                         <div className="absolute -bottom-2 -right-2 w-6 h-6 border-r-4 border-b-4 border-green-400"></div>
@@ -1825,8 +1825,8 @@ const EstoqueFFApp = () => {
           {/* Formulário de Movimentação */}
           {(scannedProduct || manualSelectedProduct) && (
             <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-              <div className="flex items-center mb-4">
-                <CheckCircle className="text-green-500 mr-2" size={24} />
+              <div className="flex items-center gap-3 mb-4">
+                <CheckCircle className="text-green-500" size={24} />
                 <h3 className="font-semibold text-green-800">
                   {scannedProduct ? 'Produto Escaneado!' : 'Produto Selecionado!'}
                 </h3>
