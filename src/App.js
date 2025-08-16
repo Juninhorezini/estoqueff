@@ -724,16 +724,50 @@ const EstoqueFFApp = () => {
   };
 
   useEffect(() => {
+    let animationFrameId;
+
+    const scanQRCode = () => {
+      if (videoRef.current && canvasRef.current && scannerActive) {
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d');
+        canvas.width = videoRef.current.videoWidth;
+        canvas.height = videoRef.current.videoHeight;
+
+        context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+        if (code) {
+          const product = findProductByQR(code.data);
+          if (product) {
+            setScannedProduct(product);
+            setSuccess(`✅ Produto ${product.name} encontrado!`);
+            setTimeout(() => setSuccess(''), 3000);
+            stopCamera();
+          }
+        }
+        animationFrameId = requestAnimationFrame(scanQRCode);
+      }
+    };
+
+    if (scannerActive) {
+      scanQRCode();
+    }
+
     return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
       }
       if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.srcObject = null;
+        const videoElement = videoRef.current;
+        videoElement.pause();
+        videoElement.srcObject = null;
       }
     };
-  }, [cameraStream]);
+  }, [scannerActive, cameraStream, products]);
 
   // Validação de produtos
   const validateProduct = (product, isEdit = false) => {
@@ -1446,7 +1480,7 @@ const EstoqueFFApp = () => {
       for (let i = 0; i < positions.length; i++) {
         const pos = positions[i];
         await drawLabel(pos.x, pos.y, labelWidthPx, labelHeightPx);
-      }
+      };
       
       const timestamp = new Date().toISOString().slice(0, 10);
       const fileName = `etiquetas_${product.name.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.png`;
@@ -1601,8 +1635,10 @@ const EstoqueFFApp = () => {
                   <p className="font-medium text-gray-800">{movement.product}</p>
                   <p className="text-sm text-gray-600">{movement.user} • {movement.date}</p>
                 </div>
-                <div className={`px-2 py-1 rounded text-xs font-medium ${
-                  movement.type === 'entrada' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  movement.type === 'entrada' 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-red-100 text-red-800'
                 }`}>
                   {movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
                 </div>
