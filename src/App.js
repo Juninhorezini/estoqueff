@@ -662,7 +662,7 @@ const EstoqueFFApp = () => {
   }, []);
 
   // Scanner QR Code com câmera real
-  const startRealQRScanner = async () => {
+  async function startRealQRScanner() {
   try {
     setLoading(true);
     setScannerActive(true);
@@ -681,88 +681,35 @@ const EstoqueFFApp = () => {
 
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
-      
-      // ✅ TIMEOUT DE SEGURANÇA para evitar travamento
+
       const loadTimeout = setTimeout(() => {
         setLoading(false);
         setErrors({ camera: 'Tempo limite para carregar câmera excedido.' });
+        stopCamera();
       }, 5000);
 
-      // ✅ AGUARDA vídeo carregar E inicia play
-      videoRef.current.addEventListener('loadedmetadata', async () => {
+      const startVideo = async () => {
         try {
+          await videoRef.current.play();
           clearTimeout(loadTimeout);
-          
-          // ✅ PLAY com timeout próprio
-          const playPromise = videoRef.current.play();
-          
-          // ✅ FORÇA resolução após 2 segundos se não resolver
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Play timeout')), 2000);
-          });
-          
-          await Promise.race([playPromise, timeoutPromise]);
-          
-          // ✅ SE chegou aqui, vídeo está funcionando
           setLoading(false);
-          
-          // ✅ INICIA scanning
-          const scanQRCode = () => {
-            if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-              const canvas = document.createElement('canvas');
-              const ctx = canvas.getContext('2d');
-              
-              canvas.width = videoRef.current.videoWidth;
-              canvas.height = videoRef.current.videoHeight;
-              
-              if (canvas.width > 0 && canvas.height > 0) {
-                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-                
-                if (code) {
-                  clearInterval(scanIntervalRef.current);
-                  const foundProduct = findProductByQR(code.data);
-                  
-                  if (foundProduct) {
-                    setScannedProduct(foundProduct);
-                    stopCamera();
-                    setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
-                    setTimeout(() => setSuccess(''), 3000);
-                  } else {
-                    setErrors({
-                      general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.',
-                    });
-                    stopCamera();
-                    setTimeout(() => setErrors({}), 3000);
-                  }
-                }
-              }
-            }
-          };
-
           scanIntervalRef.current = setInterval(scanQRCode, 100);
-          
         } catch (error) {
           clearTimeout(loadTimeout);
-          console.error('Erro no play:', error);
-          setErrors({ camera: `Erro ao iniciar vídeo: ${error.message}` });
           setLoading(false);
+          setErrors({ camera: 'Erro ao iniciar a câmera: ' + error.message });
           stopCamera();
         }
-      }, { once: true }); // ✅ Remove listener após primeira execução
-      
+      };
+
+      videoRef.current.addEventListener('loadedmetadata', startVideo, { once: true });
+      videoRef.current.load();
     }
   } catch (error) {
-    console.error('Erro ao acessar câmera:', error);
-    setErrors({
-      camera: 'Não foi possível acessar a câmera. Verifique as permissões.',
-    });
-    setScannerActive(false);
     setLoading(false);
-    }
-  };
-
+    setErrors({ camera: 'Erro ao acessar a câmera: ' + error.message });
+  }
+}
   const stopCamera = () => {
   // ✅ LIMPAR interval primeiro
   if (scanIntervalRef.current) {
