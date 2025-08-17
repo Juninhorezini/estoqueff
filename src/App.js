@@ -3,6 +3,7 @@ import { QrCode, Package, BarChart3, Settings, Scan, Plus, AlertTriangle, Trendi
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import jsQR from 'jsqr';
 import './App.css';
 
 // Hook para localStorage
