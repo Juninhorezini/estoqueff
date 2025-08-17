@@ -571,6 +571,8 @@ const EstoqueFFApp = () => {
   const [success, setSuccess] = useState('');
   const [cameraStream, setCameraStream] = useState(null);
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const scanIntervalRef = useRef(null);
 
   // Estados para movimentação manual
   const [showManualMovement, setShowManualMovement] = useState(false);
@@ -662,77 +664,81 @@ const EstoqueFFApp = () => {
 
   // Scanner QR Code com câmera real
   const startRealQRScanner = async () => {
-    try {
-      setLoading(true);
-      setScannerActive(true);
-      setErrors({});
-      setMovementType('');
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      });
-      
-      setCameraStream(stream);
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        const playPromise = videoRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(error => {
-            console.log('Video play interrupted:', error.message);
-          });
-        }
-      }
-      
-      setLoading(false);
-      
-    // ✅ ADICIONAR ESTA PARTE (detecção real):
-  const scanQRCode = () => {
-  if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    
-    if (canvas.width > 0 && canvas.height > 0) {
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
-      
-      if (code) {
-        // Para o scanning ANTES de processar
-        stopCamera(); // ✅ Usa stopCamera() ao invés de clearInterval
-        
-        const foundProduct = findProductByQR(code.data);
-        
-        if (foundProduct) {
-          setScannedProduct(foundProduct);
-          setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
-          setTimeout(() => setSuccess(''), 3000);
-        } else {
-          setErrors({
-            general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.',
-          });
-          setTimeout(() => setErrors({}), 3000);
-        }
-      }
-    }
-  }
-};
+  try {
+    setLoading(true);
+    setScannerActive(true);
+    setErrors({});
+    setMovementType('');
 
-setInterval(scanQRCode, 100); // ✅ Simples e funcional
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    });
+
+    setCameraStream(stream);
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
       
-    } catch (error) {
-      console.error('Erro ao acessar câmera:', error);
-      setErrors({ camera: 'Não foi possível acessar a câmera. Verifique as permissões.' });
-      setScannerActive(false);
-      setLoading(false);
+      // ✅ AGUARDA o vídeo estar pronto ANTES de iniciar scanning
+      videoRef.current.onloadedmetadata = () => {
+        videoRef.current.play().then(() => {
+          setLoading(false);
+          
+          // ✅ SÓ INICIA scanning DEPOIS do play() funcionar
+          const scanQRCode = () => {
+            if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              
+              canvas.width = videoRef.current.videoWidth;
+              canvas.height = videoRef.current.videoHeight;
+              
+              if (canvas.width > 0 && canvas.height > 0) {
+                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                
+                if (code) {
+                  clearInterval(scanIntervalRef.current);
+                  const foundProduct = findProductByQR(code.data);
+                  
+                  if (foundProduct) {
+                    setScannedProduct(foundProduct);
+                    stopCamera();
+                    setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
+                    setTimeout(() => setSuccess(''), 3000);
+                  } else {
+                    setErrors({
+                      general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.',
+                    });
+                    stopCamera();
+                    setTimeout(() => setErrors({}), 3000);
+                  }
+                }
+              }
+            }
+          };
+
+          scanIntervalRef.current = setInterval(scanQRCode, 100);
+          
+        }).catch(error => {
+          setErrors({ camera: `Erro ao iniciar vídeo: ${error.message}` });
+          setLoading(false);
+          stopCamera();
+        });
+      };
+    }
+  } catch (error) {
+    console.error('Erro ao acessar câmera:', error);
+    setErrors({
+      camera: 'Não foi possível acessar a câmera. Verifique as permissões.',
+    });
+    setScannerActive(false);
+    setLoading(false);
       
       // ✅ ADICIONAR:
 setErrors({
@@ -742,16 +748,22 @@ setErrors({
   };
 
   const stopCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
-    }
-    setScannerActive(false);
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.srcObject = null;
-    }
-  };
+  // ✅ LIMPAR interval primeiro
+  if (scanIntervalRef.current) {
+    clearInterval(scanIntervalRef.current);
+    scanIntervalRef.current = null;
+  }
+  
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(track => track.stop());
+    setCameraStream(null);
+  }
+  setScannerActive(false);
+  if (videoRef.current) {
+    videoRef.current.pause();
+    videoRef.current.srcObject = null;
+  }
+};
 
   const findProductByQR = (qrCode) => {
     return products.find(p => p.qrCode === qrCode || p.id === qrCode);
