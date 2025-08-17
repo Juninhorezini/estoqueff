@@ -682,12 +682,31 @@ const EstoqueFFApp = () => {
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
       
-      // ✅ AGUARDA o vídeo estar pronto ANTES de iniciar scanning
-      videoRef.current.onloadedmetadata = () => {
-        videoRef.current.play().then(() => {
+      // ✅ TIMEOUT DE SEGURANÇA para evitar travamento
+      const loadTimeout = setTimeout(() => {
+        setLoading(false);
+        setErrors({ camera: 'Tempo limite para carregar câmera excedido.' });
+      }, 5000);
+
+      // ✅ AGUARDA vídeo carregar E inicia play
+      videoRef.current.addEventListener('loadedmetadata', async () => {
+        try {
+          clearTimeout(loadTimeout);
+          
+          // ✅ PLAY com timeout próprio
+          const playPromise = videoRef.current.play();
+          
+          // ✅ FORÇA resolução após 2 segundos se não resolver
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Play timeout')), 2000);
+          });
+          
+          await Promise.race([playPromise, timeoutPromise]);
+          
+          // ✅ SE chegou aqui, vídeo está funcionando
           setLoading(false);
           
-          // ✅ SÓ INICIA scanning DEPOIS do play() funcionar
+          // ✅ INICIA scanning
           const scanQRCode = () => {
             if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
               const canvas = document.createElement('canvas');
@@ -724,12 +743,15 @@ const EstoqueFFApp = () => {
 
           scanIntervalRef.current = setInterval(scanQRCode, 100);
           
-        }).catch(error => {
+        } catch (error) {
+          clearTimeout(loadTimeout);
+          console.error('Erro no play:', error);
           setErrors({ camera: `Erro ao iniciar vídeo: ${error.message}` });
           setLoading(false);
           stopCamera();
-        });
-      };
+        }
+      }, { once: true }); // ✅ Remove listener após primeira execução
+      
     }
   } catch (error) {
     console.error('Erro ao acessar câmera:', error);
@@ -738,11 +760,6 @@ const EstoqueFFApp = () => {
     });
     setScannerActive(false);
     setLoading(false);
-      
-      // ✅ ADICIONAR:
-setErrors({
-    camera: 'Câmera não disponível. Tente inserir o código manualmente.',
-      });
     }
   };
 
