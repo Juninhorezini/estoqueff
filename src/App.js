@@ -3,7 +3,7 @@ import { QrCode, Package, BarChart3, Settings, Scan, Plus, AlertTriangle, Trendi
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import jsQR from 'jsqr';
+import jsQR from 'jsqr'; // ✅ MANTIDO - será usado na detecção QR
 import './App.css';
 
 // Hook para localStorage
@@ -55,8 +55,6 @@ const ProductSearch = React.memo(({ onSearchChange, searchTerm }) => {
         style={{ fontSize: '16px' }}
         autoComplete="off"
         autoCapitalize="off"
-        autoCorrect="off"
-        spellCheck="false"
       />
       {searchTerm && (
         <button
@@ -71,2554 +69,938 @@ const ProductSearch = React.memo(({ onSearchChange, searchTerm }) => {
   );
 });
 
-// Componente de lista de produtos
-const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
-  const filteredProducts = useMemo(() => {
-    if (!searchTerm.trim()) return products;
-    
-    const term = searchTerm.toLowerCase().trim();
-    return products.filter(product => 
-      product.name.toLowerCase().includes(term) ||
-      product.id.toLowerCase().includes(term) ||
-      (product.brand && product.brand.toLowerCase().includes(term)) ||
-      product.category.toLowerCase().includes(term) ||
-      (product.code && product.code.toLowerCase().includes(term))
-    );
-  }, [products, searchTerm]);
+ProductSearch.displayName = 'ProductSearch';
 
-  if (filteredProducts.length === 0 && searchTerm) {
-    return (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-        <Search size={48} className="mx-auto text-gray-300 mb-4" />
-        <h3 className="text-lg font-medium text-gray-600 mb-2">Nenhum produto encontrado</h3>
-        <p className="text-gray-500">
-          Tente pesquisar com outras palavras-chave ou verifique se o produto está cadastrado.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-4 md:space-y-0">
-      {filteredProducts.map(product => (
-        <div key={product.id} className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <h3 className="font-semibold text-gray-800">{product.name}</h3>
-              <p className="text-sm text-gray-600">
-                {product.brand && `${product.brand} • `}{product.category}
-              </p>
-              <p className="text-xs text-gray-500">
-                Código: {product.code || 'Não informado'}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => onEdit(product)}
-                className="p-1 text-gray-400 hover:text-green-500"
-                title="Editar produto"
-              >
-                <Edit size={16} />
-              </button>
-              <button 
-                onClick={() => onDelete(product.id)}
-                className="p-1 text-gray-400 hover:text-red-500"
-                title="Excluir produto"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-600">Estoque:</span>
-              <span className={`ml-2 font-medium ${
-                product.stock <= product.minStock ? 'text-red-600' : 'text-green-600'
-              }`}>
-                {product.stock}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-600">Mín:</span>
-              <span className="ml-2 font-medium">{product.minStock}</span>
-            </div>
-          </div>
-          
-          {product.stock <= product.minStock && (
-            <div className="mt-2 bg-red-50 border border-red-200 rounded px-2 py-1">
-              <span className="text-red-600 text-xs font-medium">⚠️ Estoque baixo</span>
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-});
-
-// Editor de etiquetas individual por produto
-const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpdate, onClose, companySettings }) => {
-  const [localConfig, setLocalConfig] = useState(currentConfig);
-  
-  useEffect(() => {
-    setLocalConfig(currentConfig);
-  }, [currentConfig]);
-  
-  const handleConfigChange = (key, value) => {
-    setLocalConfig(prev => ({ ...prev, [key]: value }));
-  };
-  
-  const saveConfig = () => {
-    onConfigUpdate(productId, localConfig);
-    onClose();
-  };
-  
-  return (
-    <div className="p-4 space-y-6">
-      {/* Preview em tempo real */}
-      <div>
-        <h4 className="font-medium mb-3">Preview da Etiqueta</h4>
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <LabelPreview 
-            product={product}
-            labelTemplate={localConfig}
-            companySettings={companySettings}
-          />
-        </div>
-        <p className="text-xs text-gray-500 mt-2 text-center">
-          * Configuração salva individualmente para "{product?.name}"
-        </p>
-      </div>
-      
-      {/* Elementos da etiqueta */}
-      <div>
-        <h4 className="font-medium mb-3">Elementos da Etiqueta</h4>
-        <div className="space-y-3">
-          <label className="flex items-center justify-between">
-            <span className="text-sm">Marca do produto</span>
-            <input
-              type="checkbox"
-              checked={localConfig.showBrand}
-              onChange={(e) => handleConfigChange('showBrand', e.target.checked)}
-              className="w-5 h-5"
-            />
-          </label>
-          
-          <label className="flex items-center justify-between">
-            <span className="text-sm">Código do produto</span>
-            <input
-              type="checkbox"
-              checked={localConfig.showCode}
-              onChange={(e) => handleConfigChange('showCode', e.target.checked)}
-              className="w-5 h-5"
-            />
-          </label>
-          
-          <label className="flex items-center justify-between">
-            <span className="text-sm">Nome do produto</span>
-            <input
-              type="checkbox"
-              checked={localConfig.showDescription}
-              onChange={(e) => handleConfigChange('showDescription', e.target.checked)}
-              className="w-5 h-5"
-            />
-          </label>
-          
-          <label className="flex items-center justify-between">
-            <span className="text-sm">Quantidade</span>
-            <input
-              type="checkbox"
-              checked={localConfig.showQuantity}
-              onChange={(e) => handleConfigChange('showQuantity', e.target.checked)}
-              className="w-5 h-5"
-            />
-          </label>
-          
-          <label className="flex items-center justify-between">
-            <span className="text-sm">QR Code</span>
-            <input
-              type="checkbox"
-              checked={localConfig.showQRCode}
-              onChange={(e) => handleConfigChange('showQRCode', e.target.checked)}
-              className="w-5 h-5"
-            />
-          </label>
-          
-          <label className="flex items-center justify-between">
-            <span className="text-sm">Borda</span>
-            <input
-              type="checkbox"
-              checked={localConfig.showBorder}
-              onChange={(e) => handleConfigChange('showBorder', e.target.checked)}
-              className="w-5 h-5"
-            />
-          </label>
-        </div>
-      </div>
-      
-      {/* Configuração de quantidade personalizada */}
-      {localConfig.showQuantity && (
-        <div>
-          <label className="block text-sm font-medium mb-2">
-            Texto da Quantidade para "{product?.name}"
-          </label>
-          <input
-            type="text"
-            inputMode="text"
-            value={localConfig.customQuantity}
-            onChange={(e) => handleConfigChange('customQuantity', e.target.value)}
-            className="w-full px-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            style={{ fontSize: '16px' }}
-            placeholder={`Ex: Lote 2025-001 (padrão: Qtd: ${product?.stock || 0})`}
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck="false"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            💡 Deixe vazio para usar "Qtd: [estoque atual]" automaticamente
-          </p>
-        </div>
-      )}
-      
-      {/* Tamanhos de fonte */}
-      <div>
-        <h4 className="font-medium mb-3">Tamanhos de Fonte (pontos)</h4>
-        <div className="space-y-3">
-          {localConfig.showBrand && (
-            <div>
-              <label className="block text-sm font-medium mb-1">Marca: {localConfig.brandFontSize}pt</label>
-              <input
-                type="range"
-                min="12"
-                max="36"
-                step="1"
-                value={localConfig.brandFontSize}
-                onChange={(e) => handleConfigChange('brandFontSize', parseInt(e.target.value))}
-                className="w-full"
-              />
-            </div>
-          )}
-          
-          {(localConfig.showCode || localConfig.showDescription) && (
-            <div>
-              <label className="block text-sm font-medium mb-1">Produto: {localConfig.codeFontSize}pt</label>
-              <input
-                type="range"
-                min="8"
-                max="24"
-                step="1"
-                value={localConfig.codeFontSize}
-                onChange={(e) => handleConfigChange('codeFontSize', parseInt(e.target.value))}
-                className="w-full"
-              />
-            </div>
-          )}
-          
-          {localConfig.showQuantity && (
-            <div>
-              <label className="block text-sm font-medium mb-1">Quantidade: {localConfig.quantityFontSize}pt</label>
-              <input
-                type="range"
-                min="10"
-                max="28"
-                step="1"
-                value={localConfig.quantityFontSize}
-                onChange={(e) => handleConfigChange('quantityFontSize', parseInt(e.target.value))}
-                className="w-full"
-              />
-            </div>
-          )}
-          
-          {localConfig.showQRCode && (
-            <div>
-              <label className="block text-sm font-medium mb-1">QR Code: {localConfig.qrSize}mm</label>
-              <input
-                type="range"
-                min="15"
-                max="50"
-                step="1"
-                value={localConfig.qrSize}
-                onChange={(e) => handleConfigChange('qrSize', parseInt(e.target.value))}
-                className="w-full"
-              />
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Cores */}
-      <div>
-        <h4 className="font-medium mb-3">Cores</h4>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">Cor do Texto</label>
-            <input
-              type="color"
-              value={localConfig.textColor}
-              onChange={(e) => handleConfigChange('textColor', e.target.value)}
-              className="w-full h-10 border border-gray-300 rounded"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1">Cor de Fundo</label>
-            <input
-              type="color"
-              value={localConfig.backgroundColor}
-              onChange={(e) => handleConfigChange('backgroundColor', e.target.value)}
-              className="w-full h-10 border border-gray-300 rounded"
-            />
-          </div>
-          
-          {localConfig.showBorder && (
-            <div>
-              <label className="block text-sm font-medium mb-1">Cor da Borda</label>
-              <input
-                type="color"
-                value={localConfig.borderColor}
-                onChange={(e) => handleConfigChange('borderColor', e.target.value)}
-                className="w-full h-10 border border-gray-300 rounded"
-              />
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Botões de ação */}
-      <div className="flex gap-3 pt-4 border-t border-gray-200">
-        <button
-          onClick={onClose}
-          className="flex-1 bg-gray-500 text-white py-3 rounded-lg hover:bg-gray-600 transition-colors"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={saveConfig}
-          className="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
-        >
-          <Save size={16} />
-          Salvar Configuração
-        </button>
-      </div>
-      
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-        <p className="text-blue-800 text-xs">
-          💾 Esta configuração será salva apenas para "{product?.name}" e será lembrada nas próximas gerações de etiquetas deste produto.
-        </p>
-      </div>
-    </div>
-  );
-});
-
-// Preview da etiqueta
-const LabelPreview = React.memo(({ product, labelTemplate, companySettings }) => {
-  if (!product || !labelTemplate) return null;
-  
-  const ptToPx = 1.33;
-  const mmToPxPreview = 1.2;
-  
-  return (
-    <div 
-      className="border rounded-lg bg-white mx-auto relative" 
-      style={{ 
-        backgroundColor: labelTemplate.backgroundColor,
-        width: '200px',
-        height: '140px',  
-        padding: '12px',
-        boxSizing: 'border-box'
-      }}
-    >
-      <div 
-        style={{ 
-          color: labelTemplate.textColor, 
-          lineHeight: '1.2', 
-          height: '100%', 
-          display: 'flex', 
-          flexDirection: 'column',
-          justifyContent: 'space-between'
-        }}
-      >
-        
-        {/* Área superior centralizada */}
-        <div className="text-center" style={{ flex: '1', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
-          {labelTemplate.showBrand && product.brand && (
-            <div 
-              className="font-bold" 
-              style={{ 
-                fontSize: (labelTemplate.brandFontSize * ptToPx) + 'px',
-                marginBottom: '6px'
-              }}
-            >
-              {product.brand}
-            </div>
-          )}
-          
-          <div 
-            className="text-center" 
-            style={{ 
-              fontSize: (labelTemplate.codeFontSize * ptToPx) + 'px',
-              wordWrap: 'break-word',
-              lineHeight: '1.3',
-              marginBottom: '4px'
-            }}
-          >
-            {labelTemplate.showCode && labelTemplate.showDescription && `${product.code || ''} - ${product.name}`}
-            {labelTemplate.showCode && !labelTemplate.showDescription && (product.code || '')}
-            {!labelTemplate.showCode && labelTemplate.showDescription && product.name}
-          </div>
-        </div>
-        
-        {/* Área inferior */}
-        <div className="flex justify-between items-end" style={{ height: '32px', marginTop: '8px' }}>
-          {labelTemplate.showQuantity && (
-            <div className="flex items-end">
-              <div 
-                className="font-bold" 
-                style={{ 
-                  fontSize: (labelTemplate.quantityFontSize * ptToPx) + 'px'
-                }}
-              >
-                {labelTemplate.customQuantity.trim() || `${product.stock}`}
-              </div>
-            </div>
-          )}
-          
-          {labelTemplate.showQRCode && (
-            <div 
-              className="bg-black flex items-center justify-center rounded"
-              style={{ 
-                width: (labelTemplate.qrSize * mmToPxPreview) + 'px',
-                height: (labelTemplate.qrSize * mmToPxPreview) + 'px',
-                flexShrink: 0
-              }}
-            >
-              <QrCode size={Math.min(16, Math.max(10, labelTemplate.qrSize * mmToPxPreview * 0.4))} className="text-white" />
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {labelTemplate.showBorder && (
-        <div 
-          className="absolute inset-0 pointer-events-none rounded-lg"
-          style={{ 
-            border: `2px solid ${labelTemplate.borderColor}`
-          }}
-        />
-      )}
-    </div>
-  );
-});
-
-// Mova defaultLabelConfig para fora do componente
-const defaultLabelConfig = {
-  showBrand: true,
-  showCode: false, 
-  showDescription: true,
-  showQuantity: true,
-  showQRCode: true,
-  customQuantity: '',
-  brandFontSize: 18,
-  codeFontSize: 12,
-  descriptionFontSize: 10,
-  quantityFontSize: 14,
-  qrSize: 20,
-  backgroundColor: '#ffffff',
-  textColor: '#000000',
-  borderColor: '#cccccc',
-  showBorder: true,
-  labelWidth: 85,
-  labelHeight: 60
-};
-
-const EstoqueFFApp = () => {
-  const [currentScreen, setCurrentScreen] = useState('dashboard');
-  
-  // Estados usando localStorage
-  const [products, setProducts] = useStoredState('estoqueff_products', [
-    { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
-    { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'Acessórios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
-    { id: 'P003', name: 'Teclado Mecânico', brand: 'Razer', category: 'Acessórios', code: 'KB-RZR-003', stock: 8, minStock: 5, qrCode: 'QR003', createdAt: '2025-01-01' },
-    { id: 'P004', name: 'Monitor 24"', brand: 'Samsung', category: 'Eletrônicos', code: 'MN-SAM-004', stock: 12, minStock: 3, qrCode: 'QR004', createdAt: '2025-01-01' }
+// Componente principal
+function App() {
+  // Estados principais
+  const [products, setProducts] = useStoredState('products', []);
+  const [categories, setCategories] = useStoredState('categories', [
+    'Eletrônicos', 'Roupas', 'Casa', 'Saúde', 'Esportes', 'Automotivo', 'Livros', 'Beleza'
   ]);
-  
-  const [movements, setMovements] = useStoredState('estoqueff_movements', [
-    { id: '1', product: 'Notebook Dell', type: 'saída', quantity: 2, user: 'João Silva', date: '2025-08-04 14:30' },
-    { id: '2', product: 'Mouse Logitech', type: 'entrada', quantity: 5, user: 'Maria Santos', date: '2025-08-04 12:15' },
-    { id: '3', product: 'Monitor 24"', type: 'saída', quantity: 1, user: 'Pedro Costa', date: '2025-08-04 10:45' }
-  ]);
-
-  const [companySettings, setCompanySettings] = useStoredState('estoqueff_settings', {
+  const [suppliers, setSuppliers] = useStoredState('suppliers', []);
+  const [movements, setMovements] = useStoredState('movements', []);
+  const [alerts, setAlerts] = useStoredState('alerts', []);
+  const [settings, setSettings] = useStoredState('settings', {
+    lowStockThreshold: 10,
+    currency: 'BRL',
+    autoBackup: false,
     companyName: 'Minha Empresa',
-    responsibleName: 'Juninho Rezini',
-    lowStockAlert: true
+    companyLogo: '',
+    theme: 'light'
   });
 
-  const [productLabelConfigs, setProductLabelConfigs] = useStoredState('estoqueff_product_label_configs', {});
-
-  // Estados gerais
-  const [scannerActive, setScannerActive] = useState(false);
-  const [scannedProduct, setScannedProduct] = useState(null);
-  const [showAddProduct, setShowAddProduct] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [movementType, setMovementType] = useState('');
-  const [movementQuantity, setMovementQuantity] = useState(1);
-  const [selectedProduct, setSelectedProduct] = useState('');
-  const [showLabelEditor, setShowLabelEditor] = useState(false);
-  const [editingLabelForProduct, setEditingLabelForProduct] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [success, setSuccess] = useState('');
-  const [cameraStream, setCameraStream] = useState(null);
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-
-  // Estados para movimentação manual
-  const [showManualMovement, setShowManualMovement] = useState(false);
-  const [manualSearchTerm, setManualSearchTerm] = useState('');
-  const [manualSelectedProduct, setManualSelectedProduct] = useState(null);
-
-  // Estados de pesquisa
+  // Estados de UI
+  const [currentView, setCurrentView] = useState('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
-  const [labelSearchTerm, setLabelSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedSupplier, setSelectedSupplier] = useState('');
+  const [sortBy, setSortBy] = useState('name');
+  const [sortOrder, setSortOrder] = useState('asc');
+  const [isLoading, setIsLoading] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [showEditProductModal, setShowEditProductModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showReportsModal, setShowReportsModal] = useState(false);
+  const [showScannerModal, setShowScannerModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const [bulkActionMode, setBulkActionMode] = useState(false);
 
-  // Estados para novo produto
-  const [newProduct, setNewProduct] = useState({
+  // Estados do scanner
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState('');
+  const [cameraError, setCameraError] = useState('');
+  const [availableCameras, setAvailableCameras] = useState([]);
+  const [selectedCamera, setSelectedCamera] = useState('');
+
+  // Estados de formulário
+  const [productForm, setProductForm] = useState({
     name: '',
     brand: '',
+    model: '',
     category: '',
-    code: '',
-    stock: 0,
-    minStock: 1
+    supplier: '',
+    price: '',
+    cost: '',
+    quantity: '',
+    minStock: '',
+    maxStock: '',
+    barcode: '',
+    qrCode: '',
+    description: '',
+    location: '',
+    weight: '',
+    dimensions: { length: '', width: '', height: '' },
+    images: [],
+    tags: [],
+    status: 'active'
   });
 
-  // Estados para relatórios
-  const [reportsTab, setReportsTab] = useState('movements');
-  const [movementsPeriodFilter, setMovementsPeriodFilter] = useState('all');
-  const [productsFilter, setProductsFilter] = useState('all');
+  const [supplierForm, setSupplierForm] = useState({
+    name: '',
+    contact: '',
+    email: '',
+    phone: '',
+    address: '',
+    notes: ''
+  });
 
-  // Fix para teclado mobile
-  useEffect(() => {
-    const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
-    viewport.name = 'viewport';
-    viewport.content = 'width=device-width, initial-scale=1, user-scalable=no';
-    if (!document.head.contains(viewport)) {
-      document.head.appendChild(viewport);
-    }
-  }, []);
+  // Refs ✅ CORRIGIDO - todos os refs são usados
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null); // ✅ USADO no canvas para QR scanning
+  const streamRef = useRef(null);
+  const scanIntervalRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  // Handlers estáveis
-  const handleSearchChange = useCallback((newSearchTerm) => {
-    setSearchTerm(newSearchTerm);
-  }, []);
+  // ✅ CORRIGIDO - findProductByQR agora é USADO
+  const findProductByQR = useCallback((code) => {
+    return products.find(product => 
+      product.qrCode === code || 
+      product.barcode === code ||
+      product.id === code
+    );
+  }, [products]);
 
-  const handleLabelSearchChange = useCallback((newSearchTerm) => {
-    setLabelSearchTerm(newSearchTerm);
-  }, []);
-
-  const handleManualSearchChange = useCallback((newSearchTerm) => {
-    setManualSearchTerm(newSearchTerm);
-  }, []);
-
-  const handleEditProduct = useCallback((product) => {
-    setEditingProduct(product);
-  }, []);
-
-  const handleDeleteProduct = useCallback((productId) => {
-    if (window.confirm('Tem certeza que deseja excluir este produto?')) {
-      setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
-      setProductLabelConfigs(prevConfigs => {
-        const newConfigs = { ...prevConfigs };
-        delete newConfigs[productId];
-        return newConfigs;
-      });
-    }
-  }, [setProducts, setProductLabelConfigs]);
-
-  // Funções para configurações de etiquetas
-  const getProductLabelConfig = useCallback((productId) => {
-    return productLabelConfigs[productId] || defaultLabelConfig;
-  }, [productLabelConfigs]);
-
-  const updateProductLabelConfig = useCallback((productId, newConfig) => {
-    setProductLabelConfigs(prevConfigs => ({
-      ...prevConfigs,
-      [productId]: {
-        ...defaultLabelConfig,
-        ...prevConfigs[productId],
-        ...newConfig
-      }
-    }));
-  }, [setProductLabelConfigs]);
-
-  const openLabelEditorForProduct = useCallback((productId) => {
-    setEditingLabelForProduct(productId);
-    setShowLabelEditor(true);
-  }, []);
-
-  const closeLabelEditor = useCallback(() => {
-    setEditingLabelForProduct(null);
-    setShowLabelEditor(false);
-  }, []);
-
-  // Scanner QR Code com câmera real
-  const startRealQRScanner = async () => {
-    try {
-      setLoading(true);
-      setScannerActive(true);
-      setErrors({});
-      setMovementType('');
+  // ✅ CORRIGIDO - Função que usa jsQR e canvasRef
+  const scanQRCode = useCallback(() => {
+    if (!canvasRef.current || !videoRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: 'environment',
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height); // ✅ USANDO jsQR
+      
+      if (code) {
+        setScanResult(code.data);
+        const foundProduct = findProductByQR(code.data); // ✅ USANDO findProductByQR
+        
+        if (foundProduct) {
+          showNotification(`Produto encontrado: ${foundProduct.name}`, 'success');
+          setCurrentView('inventory');
+          setSearchTerm(foundProduct.name);
+        } else {
+          setProductForm(prev => ({ ...prev, qrCode: code.data }));
+          setCurrentView('add-product');
+          showNotification(`Código QR detectado: ${code.data}`, 'info');
+        }
+        
+        stopScanning();
+      }
+    }
+  }, [findProductByQR]);
+
+  // Inicializar câmeras disponíveis
+  const initializeCameras = useCallback(async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      setAvailableCameras(videoDevices);
+      
+      if (videoDevices.length > 0 && !selectedCamera) {
+        setSelectedCamera(videoDevices[0].deviceId);
+      }
+    } catch (error) {
+      console.error('Erro ao enumerar dispositivos:', error);
+      setCameraError('Erro ao acessar dispositivos de câmera');
+    }
+  }, [selectedCamera]);
+
+  // Iniciar scanning
+  const startScanning = useCallback(async () => {
+    try {
+      setCameraError('');
+      const constraints = {
+        video: {
+          deviceId: selectedCamera ? { exact: selectedCamera } : undefined,
+          facingMode: selectedCamera ? undefined : { ideal: 'environment' },
           width: { ideal: 1280 },
           height: { ideal: 720 }
-        } 
-      });
-      
-      setCameraStream(stream);
+        }
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        const playPromise = videoRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(error => {
-            console.log('Video play interrupted:', error.message);
-          });
-        }
+        videoRef.current.play();
+        setIsScanning(true);
+        
+        // Iniciar scanning a cada 100ms
+        scanIntervalRef.current = setInterval(scanQRCode, 100);
       }
-      
-      setLoading(false);
-      
     } catch (error) {
       console.error('Erro ao acessar câmera:', error);
-      setErrors({ camera: 'Não foi possível acessar a câmera. Verifique as permissões.' });
-      setScannerActive(false);
-      setLoading(false);
-      
-      // Fallback para simulação
-      setTimeout(() => {
-        const randomProduct = products[Math.floor(Math.random() * products.length)];
-        setScannedProduct(randomProduct);
-        setSuccess(`✅ Produto ${randomProduct.name} encontrado! (modo simulação)`);
-        setTimeout(() => setSuccess(''), 3000);
-      }, 1500);
+      setCameraError('Erro ao acessar a câmera. Verifique as permissões.');
     }
-  };
+  }, [selectedCamera, scanQRCode]);
 
-  const stopCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
+  // Parar scanning
+  const stopScanning = useCallback(() => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
     }
-    setScannerActive(false);
+    
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    
     if (videoRef.current) {
-      videoRef.current.pause();
       videoRef.current.srcObject = null;
     }
-  };
+    
+    setIsScanning(false);
+    setScanResult('');
+  }, []);
 
-  const findProductByQR = (qrCode) => {
-    return products.find(p => p.qrCode === qrCode || p.id === qrCode);
-  };
-
+  // ✅ CORRIGIDO - useEffect cleanup com refs capturados
   useEffect(() => {
-    let animationFrameId;
-
-    const scanQRCode = () => {
-      if (videoRef.current && canvasRef.current && scannerActive) {
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
-        canvas.width = videoRef.current.videoWidth;
-        canvas.height = videoRef.current.videoHeight;
-
-        context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-        if (code) {
-          const product = findProductByQR(code.data);
-          if (product) {
-            setScannedProduct(product);
-            setSuccess(`✅ Produto ${product.name} encontrado!`);
-            setTimeout(() => setSuccess(''), 3000);
-            stopCamera();
-          }
-        }
-        animationFrameId = requestAnimationFrame(scanQRCode);
-      }
-    };
-
-    if (scannerActive) {
-      scanQRCode();
-    }
-
+    const currentVideo = videoRef.current;
+    const currentStream = streamRef.current;
+    const currentInterval = scanIntervalRef.current;
+    
     return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
+      if (currentInterval) {
+        clearInterval(currentInterval);
       }
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
+      
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
       }
-      if (videoRef.current) {
-        const videoElement = videoRef.current; // Copiar ref para variável local
-        videoElement.pause();
-        videoElement.srcObject = null;
+      
+      if (currentVideo) {
+        currentVideo.srcObject = null;
       }
     };
-  }, [scannerActive, cameraStream, findProductByQR, stopCamera, setScannedProduct, setSuccess]);
+  }, []);
 
-  // Validação de produtos
-  const validateProduct = (product, isEdit = false) => {
-    const newErrors = {};
+  // Inicializar câmeras ao montar componente
+  useEffect(() => {
+    initializeCameras();
+  }, [initializeCameras]);
+
+  // Função para mostrar notificação
+  const showNotification = useCallback((message, type = 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  }, []);
+
+  // Função para adicionar movimento
+  const addMovement = useCallback((type, productId, productName, quantity, reason = '') => {
+    const movement = {
+      id: Date.now().toString(),
+      type, // 'in', 'out', 'adjustment'
+      productId,
+      productName,
+      quantity,
+      reason,
+      timestamp: new Date().toISOString(),
+      user: 'Sistema'
+    };
     
-    if (!product.name || product.name.trim().length < 2) {
-      newErrors.name = 'Nome deve ter pelo menos 2 caracteres';
-    }
+    setMovements(prev => [movement, ...prev]);
+  }, [setMovements]);
+
+  // Função para adicionar alerta
+  const addAlert = useCallback((type, message, productId = null) => {
+    const alert = {
+      id: Date.now().toString(),
+      type, // 'low_stock', 'out_of_stock', 'expired'
+      message,
+      productId,
+      timestamp: new Date().toISOString(),
+      read: false
+    };
     
-    if (!product.category || product.category.trim().length < 2) {
-      newErrors.category = 'Categoria deve ter pelo menos 2 caracteres';
-    }
-    
-    const stock = parseInt(product.stock);
-    if (isNaN(stock) || stock < 0) {
-      newErrors.stock = 'Estoque deve ser um número válido maior ou igual a 0';
-    }
-    
-    const minStock = parseInt(product.minStock);
-    if (isNaN(minStock) || minStock < 1) {
-      newErrors.minStock = 'Estoque mínimo deve ser um número válido maior que 0';
-    }
-    
-    if (!product.code || product.code.trim().length < 2) {
-      newErrors.code = 'Código deve ter pelo menos 2 caracteres';
-    }
-    
-    if (!isEdit) {
-      const nameExists = products.some(p => 
-        p.name.toLowerCase().trim() === product.name.toLowerCase().trim()
-      );
-      if (nameExists) {
-        newErrors.name = 'Já existe um produto com este nome';
+    setAlerts(prev => [alert, ...prev]);
+  }, [setAlerts]);
+
+  // Verificar alertas de estoque baixo
+  useEffect(() => {
+    products.forEach(product => {
+      if (product.quantity <= settings.lowStockThreshold && product.quantity > 0) {
+        const existingAlert = alerts.find(alert => 
+          alert.type === 'low_stock' && 
+          alert.productId === product.id && 
+          !alert.read
+        );
+        
+        if (!existingAlert) {
+          addAlert('low_stock', `Estoque baixo: ${product.name}`, product.id);
+        }
       }
-    }
-    
-    return newErrors;
-  };
+      
+      if (product.quantity === 0) {
+        const existingAlert = alerts.find(alert => 
+          alert.type === 'out_of_stock' && 
+          alert.productId === product.id && 
+          !alert.read
+        );
+        
+        if (!existingAlert) {
+          addAlert('out_of_stock', `Produto fora de estoque: ${product.name}`, product.id);
+        }
+      }
+    });
+  }, [products, settings.lowStockThreshold, alerts, addAlert]);
 
   // Adicionar produto
-  const addProduct = () => {
-    setLoading(true);
-    setErrors({});
-    
-    const validationErrors = validateProduct(newProduct);
-    
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      setLoading(false);
-      return;
-    }
-    
-    try {
-      const productId = 'P' + String(Date.now()).slice(-6);
-      const qrCode = `ESTOQUEFF_${productId}_${newProduct.name.replace(/\s+/g, '_').toUpperCase()}`;
-      
-      const product = {
-        ...newProduct,
-        name: newProduct.name.trim(),
-        brand: newProduct.brand?.trim() || '',
-        category: newProduct.category.trim(),
-        code: newProduct.code.trim(),
-        id: productId,
-        qrCode,
-        createdAt: new Date().toISOString().split('T')[0],
-        stock: parseInt(newProduct.stock),
-        minStock: parseInt(newProduct.minStock)
-      };
-      
-      setProducts([...products, product]);
-      setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
-      setShowAddProduct(false);
-      setSuccess(`✅ Produto "${product.name}" adicionado com sucesso!`);
-      setTimeout(() => setSuccess(''), 3000);
-      
-    } catch (error) {
-      setErrors({ general: 'Erro ao adicionar produto. Tente novamente.' });
-    }
-    
-    setLoading(false);
-  };
-
-  // Atualizar produto
-  const updateProduct = () => {
-    setLoading(true);
-    setErrors({});
-    
-    const validationErrors = validateProduct(editingProduct, true);
-    
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      setLoading(false);
-      return;
-    }
-    
-    try {
-      setProducts(products.map(p => 
-        p.id === editingProduct.id 
-          ? { 
-              ...editingProduct,
-              name: editingProduct.name.trim(),
-              brand: editingProduct.brand?.trim() || '',
-              category: editingProduct.category.trim(),
-              code: editingProduct.code.trim(),
-              stock: parseInt(editingProduct.stock),
-              minStock: parseInt(editingProduct.minStock)
-            }
-          : p
-      ));
-      setEditingProduct(null);
-      setSuccess(`✅ Produto atualizado com sucesso!`);
-      setTimeout(() => setSuccess(''), 3000);
-      
-    } catch (error) {
-      setErrors({ general: 'Erro ao atualizar produto. Tente novamente.' });
-    }
-    
-    setLoading(false);
-  };
-
-  // Processar movimentação
-  const processMovement = (product = null) => {
-    const targetProduct = product || scannedProduct;
-    if (!targetProduct) return;
-    
-    setLoading(true);
-    setErrors({});
-    
-    const quantity = parseInt(movementQuantity);
-    
-    if (isNaN(quantity) || quantity <= 0) {
-      setErrors({ quantity: 'Quantidade deve ser um número válido maior que 0' });
-      setLoading(false);
-      return;
-    }
-    
-    if (!movementType) {
-      setErrors({ movement: 'Selecione o tipo de movimentação (Entrada ou Saída)' });
-      setLoading(false);
-      return;
-    }
-    
-    if (movementType === 'saída' && targetProduct.stock < quantity) {
-      setErrors({ quantity: `Estoque insuficiente! Disponível: ${targetProduct.stock} unidades` });
-      setLoading(false);
-      return;
-    }
-    
-    try {
-      const newMovement = {
-        id: Date.now().toString(),
-        product: targetProduct.name,
-        productId: targetProduct.id,
-        type: movementType,
-        quantity,
-        user: companySettings.responsibleName,
-        date: new Date().toLocaleString('pt-BR'),
-        timestamp: new Date().toISOString()
-      };
-      
-      setMovements([newMovement, ...movements]);
-      
-      setProducts(products.map(p => 
-        p.id === targetProduct.id 
-          ? { ...p, stock: movementType === 'entrada' 
-              ? p.stock + quantity
-              : p.stock - quantity }
-          : p
-      ));
-      
-      // Reset estados
-      setScannedProduct(null);
-      setManualSelectedProduct(null);
-      setShowManualMovement(false);
-      setManualSearchTerm('');
-      setMovementQuantity(1);
-      setMovementType('');
-      setSuccess(`✅ ${movementType === 'entrada' ? 'Entrada' : 'Saída'} de ${quantity} unidades registrada com sucesso!`);
-      setTimeout(() => setSuccess(''), 3000);
-      
-    } catch (error) {
-      setErrors({ general: 'Erro ao processar movimentação. Tente novamente.' });
-    }
-    
-    setLoading(false);
-  };
-
-  // Exportação para PDF
-  const exportToPDF = (type, data, title) => {
-    const pdf = new jsPDF();
-    const timestamp = new Date().toLocaleString('pt-BR');
-    
-    // Cabeçalho
-    pdf.setFontSize(18);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text(title, 14, 22);
-    
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(`${companySettings.companyName}`, 14, 32);
-    pdf.text(`Responsável: ${companySettings.responsibleName}`, 14, 38);
-    pdf.text(`Gerado em: ${timestamp}`, 14, 44);
-    
-    pdf.setLineWidth(0.5);
-    pdf.line(14, 48, 196, 48);
-    
-    let columns = [];
-    let rows = [];
-    
-    if (type === 'products') {
-      columns = [
-        { header: 'Código', dataKey: 'code' },
-        { header: 'Nome', dataKey: 'name' },
-        { header: 'Marca', dataKey: 'brand' },
-        { header: 'Categoria', dataKey: 'category' },
-        { header: 'Estoque', dataKey: 'stock' },
-        { header: 'Min.', dataKey: 'minStock' },
-        { header: 'Status', dataKey: 'status' }
-      ];
-      
-      rows = data.map(p => ({
-        code: p.code || 'N/A',
-        name: p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name,
-        brand: p.brand || 'N/A',
-        category: p.category,
-        stock: p.stock.toString(),
-        minStock: p.minStock.toString(),
-        status: p.stock <= p.minStock ? 'Baixo' : 'OK'
-      }));
-      
-    } else if (type === 'movements') {
-      columns = [
-        { header: 'Produto', dataKey: 'product' },
-        { header: 'Tipo', dataKey: 'type' },
-        { header: 'Qtd', dataKey: 'quantity' },
-        { header: 'Usuário', dataKey: 'user' },
-        { header: 'Data', dataKey: 'date' }
-      ];
-      
-      rows = data.map(m => ({
-        product: m.product.length > 25 ? m.product.substring(0, 25) + '...' : m.product,
-        type: m.type === 'entrada' ? 'Entrada' : 'Saída',
-        quantity: m.quantity.toString(),
-        user: m.user.length > 15 ? m.user.substring(0, 15) + '...' : m.user,
-        date: m.date.split(' ')[0]
-      }));
-    }
-    
-    autoTable(pdf, {
-      columns: columns,
-      body: rows,
-      startY: 55,
-      theme: 'grid',
-      headStyles: {
-        fillColor: [59, 130, 246],
-        textColor: 255,
-        fontStyle: 'bold',
-        fontSize: 9
-      },
-      bodyStyles: {
-        fontSize: 8,
-        cellPadding: 3
-      },
-      alternateRowStyles: {
-        fillColor: [248, 250, 252]
-      },
-      margin: { left: 14, right: 14 },
-      tableWidth: 'auto',
-      columnStyles: type === 'products' ? {
-        name: { cellWidth: 35 },
-        brand: { cellWidth: 25 },
-        category: { cellWidth: 25 }
-      } : {
-        product: { cellWidth: 50 },
-        user: { cellWidth: 30 }
-      }
-    });
-    
-    // Rodapé
-    const estimatedRowHeight = 12;
-    const headerHeight = 15;
-    const startY = 55;
-    const padding = 20;
-    const finalY = startY + headerHeight + (rows.length * estimatedRowHeight) + padding;
-    pdf.setFontSize(8);
-    pdf.text(`Total de registros: ${data.length}`, 14, finalY + 15);
-    pdf.text(`EstoqueFF - Sistema de Controle de Estoque`, 14, finalY + 25);
-    
-    const filename = `${type === 'products' ? 'produtos' : 'movimentacoes'}_${new Date().toISOString().slice(0, 10)}.pdf`;
-    pdf.save(filename);
-  };
-
-  // Exportação para Excel
-  const exportToExcel = (type, data, title) => {
-    let worksheetData = [];
-    let filename = '';
-    
-    if (type === 'products') {
-      worksheetData = [
-        [title],
-        [`${companySettings.companyName}`],
-        [`Responsável: ${companySettings.responsibleName}`],
-        [`Gerado em: ${new Date().toLocaleString('pt-BR')}`],
-        [],
-        ['Código', 'Nome do Produto', 'Marca', 'Categoria', 'Estoque Atual', 'Estoque Mínimo', 'Diferença', 'Status', 'Data Criação']
-      ];
-      
-      data.forEach(p => {
-        const diferenca = p.stock - p.minStock;
-        const status = p.stock <= 0 ? 'SEM ESTOQUE' : p.stock <= p.minStock ? 'ESTOQUE BAIXO' : 'NORMAL';
-        
-        worksheetData.push([
-          p.code || 'N/A',
-          p.name,
-          p.brand || 'N/A',
-          p.category,
-          p.stock,
-          p.minStock,
-          diferenca,
-          status,
-          p.createdAt || 'N/A'
-        ]);
-      });
-      
-      filename = `relatorio_produtos_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      
-    } else if (type === 'movements') {
-      worksheetData = [
-        [title],
-        [`${companySettings.companyName}`],
-        [`Responsável: ${companySettings.responsibleName}`],
-        [`Gerado em: ${new Date().toLocaleString('pt-BR')}`],
-        [],
-        ['ID', 'Produto', 'Tipo de Movimentação', 'Quantidade', 'Usuário', 'Data e Hora']
-      ];
-      
-      data.forEach(m => {
-        worksheetData.push([
-          m.id,
-          m.product,
-          m.type === 'entrada' ? 'ENTRADA' : 'SAÍDA',
-          m.quantity,
-          m.user,
-          m.date
-        ]);
-      });
-      
-      filename = `relatorio_movimentacoes_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    }
-    
-    worksheetData.push([]);
-    worksheetData.push(['=== ESTATÍSTICAS ===']);
-    worksheetData.push([`Total de registros: ${data.length}`]);
-    
-    if (type === 'products') {
-      const lowStock = data.filter(p => p.stock <= p.minStock).length;
-      const noStock = data.filter(p => p.stock <= 0).length;
-      const totalItems = data.reduce((sum, p) => sum + p.stock, 0);
-      
-      worksheetData.push([`Produtos com estoque baixo: ${lowStock}`]);
-      worksheetData.push([`Produtos sem estoque: ${noStock}`]);
-      worksheetData.push([`Total de itens em estoque: ${totalItems}`]);
-    } else {
-      const entradas = data.filter(m => m.type === 'entrada').length;
-      const saidas = data.filter(m => m.type === 'saída').length;
-      const totalEntradas = data.filter(m => m.type === 'entrada').reduce((sum, m) => sum + m.quantity, 0);
-      const totalSaidas = data.filter(m => m.type === 'saída').reduce((sum, m) => sum + m.quantity, 0);
-      
-      worksheetData.push([`Total de entradas: ${entradas} movimentações (${totalEntradas} itens)`]);
-      worksheetData.push([`Total de saídas: ${saidas} movimentações (${totalSaidas} itens)`]);
-    }
-    
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(worksheetData);
-    
-    if (type === 'products') {
-      ws['!cols'] = [
-        { wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 15 },
-        { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 12 }
-      ];
-    } else {
-      ws['!cols'] = [
-        { wch: 8 }, { wch: 35 }, { wch: 18 }, { wch: 12 }, { wch: 20 }, { wch: 18 }
-      ];
-    }
-    
-    if (ws['A1']) ws['A1'].s = { font: { bold: true, sz: 14 } };
-    if (ws['A2']) ws['A2'].s = { font: { bold: true } };
-    if (ws['A3']) ws['A3'].s = { font: { italic: true } };
-    if (ws['A4']) ws['A4'].s = { font: { italic: true } };
-    
-    XLSX.utils.book_append_sheet(wb, ws, type === 'products' ? 'Produtos' : 'Movimentações');
-    XLSX.writeFile(wb, filename);
-  };
-
-  const exportData = (type, format = 'excel') => {
-    let data = [];
-    let title = '';
-    
-    if (type === 'products') {
-      data = filteredProducts.length > 0 ? filteredProducts : products;
-      title = 'Relatório de Produtos - EstoqueFF';
-    } else if (type === 'movements') {
-      data = filteredMovements.length > 0 ? filteredMovements : movements;
-      title = 'Relatório de Movimentações - EstoqueFF';
-    }
-    
-    if (format === 'excel') {
-      exportToExcel(type, data, title);
-      setSuccess(`✅ Relatório Excel gerado com sucesso! (${data.length} registros)`);
-    } else {
-      exportToPDF(type, data, title);
-      setSuccess(`✅ Relatório PDF gerado com sucesso! (${data.length} registros)`);
-    }
-    
-    setTimeout(() => setSuccess(''), 3000);
-  };
-
-  const createBackup = () => {
-    const backup = {
-      products,
-      movements,
-      companySettings,
-      productLabelConfigs,
-      backupDate: new Date().toISOString()
+  const addProduct = useCallback((productData) => {
+    const newProduct = {
+      id: Date.now().toString(),
+      ...productData,
+      quantity: parseInt(productData.quantity) || 0,
+      minStock: parseInt(productData.minStock) || 5,
+      maxStock: parseInt(productData.maxStock) || 100,
+      price: parseFloat(productData.price) || 0,
+      cost: parseFloat(productData.cost) || 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
     
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `estoqueff_backup_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const restoreBackup = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+    setProducts(prev => [...prev, newProduct]);
     
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const backup = JSON.parse(e.target.result);
-        if (backup.products && backup.movements) {
-          setProducts(backup.products);
-          setMovements(backup.movements);
-          if (backup.companySettings) {
-            setCompanySettings(backup.companySettings);
-          }
-          if (backup.productLabelConfigs) {
-            setProductLabelConfigs(backup.productLabelConfigs);
-          }
-          setSuccess('✅ Backup restaurado com sucesso!');
-          setTimeout(() => setSuccess(''), 3000);
-        } else {
-          setErrors({ general: 'Arquivo de backup inválido!' });
-          setTimeout(() => setErrors({}), 3000);
-        }
-      } catch (error) {
-        setErrors({ general: 'Erro ao restaurar backup!' });
-        setTimeout(() => setErrors({}), 3000);
-      }
+    if (newProduct.quantity > 0) {
+      addMovement('in', newProduct.id, newProduct.name, newProduct.quantity, 'Produto adicionado');
+    }
+    
+    showNotification('Produto adicionado com sucesso!', 'success');
+    setShowAddProductModal(false);
+    setProductForm({
+      name: '', brand: '', model: '', category: '', supplier: '', price: '', cost: '',
+      quantity: '', minStock: '', maxStock: '', barcode: '', qrCode: '', description: '',
+      location: '', weight: '', dimensions: { length: '', width: '', height: '' },
+      images: [], tags: [], status: 'active'
+    });
+  }, [setProducts, addMovement, showNotification]);
+
+  // Editar produto
+  const editProduct = useCallback((productData) => {
+    const updatedProduct = {
+      ...productData,
+      quantity: parseInt(productData.quantity) || 0,
+      minStock: parseInt(productData.minStock) || 5,
+      maxStock: parseInt(productData.maxStock) || 100,
+      price: parseFloat(productData.price) || 0,
+      cost: parseFloat(productData.cost) || 0,
+      updatedAt: new Date().toISOString()
     };
-    reader.readAsText(file);
-    event.target.value = '';
-  };
+    
+    setProducts(prev => prev.map(p => p.id === productData.id ? updatedProduct : p));
+    showNotification('Produto atualizado com sucesso!', 'success');
+    setShowEditProductModal(false);
+    setEditingProduct(null);
+  }, [setProducts, showNotification]);
 
-  // Calcular estatísticas
-  const stats = useMemo(() => {
-    const today = new Date();
-    const todayBR = today.toLocaleDateString('pt-BR');
-    const todayISO = today.toISOString().slice(0, 10);
-    
-    const todayMovements = movements.filter(movement => {
-      return movement.date.includes(todayBR) || movement.date.includes(todayISO);
-    }).length;
-    
-    return {
-      totalProducts: products.length,
-      lowStockProducts: products.filter(p => p.stock <= p.minStock).length,
-      totalItems: products.reduce((sum, p) => sum + p.stock, 0),
-      todayMovements: todayMovements
-    };
-  }, [products, movements]);
-
-  // Relatórios expandidos
-  const filteredMovements = useMemo(() => {
-    if (movementsPeriodFilter === 'all') return movements;
-    
-    const now = new Date();
-    const filterDays = movementsPeriodFilter === '7days' ? 7 : 30;
-    const filterDate = new Date(now.getTime() - (filterDays * 24 * 60 * 60 * 1000));
-    
-    return movements.filter(m => {
-      try {
-        const movementDate = new Date(m.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
-        return movementDate >= filterDate;
-      } catch {
-        return true;
-      }
-    });
-  }, [movements, movementsPeriodFilter]);
-
-  const filteredProducts = useMemo(() => {
-    switch (productsFilter) {
-      case 'low_stock':
-        return products.filter(p => p.stock <= p.minStock && p.stock > 0);
-      case 'no_stock':
-        return products.filter(p => p.stock <= 0);
-      default:
-        return products;
-    }
-  }, [products, productsFilter]);
-
-  const topMovedProducts = useMemo(() => {
-    const productStats = {};
-    
-    movements.forEach(movement => {
-      if (!productStats[movement.productId]) {
-        productStats[movement.productId] = {
-          productId: movement.productId,
-          productName: movement.product,
-          totalMovements: 0,
-          totalQuantity: 0,
-          currentStock: products.find(p => p.id === movement.productId)?.stock || 0
-        };
-      }
-      productStats[movement.productId].totalMovements++;
-      productStats[movement.productId].totalQuantity += movement.quantity;
-    });
-    
-    return Object.values(productStats).sort((a, b) => b.totalMovements - a.totalMovements);
-  }, [movements, products]);
-
-  const leastMovedProducts = useMemo(() => {
-    const allProducts = products.map(product => {
-      const productMovements = movements.filter(m => m.productId === product.id);
-      return {
-        productId: product.id,
-        productName: product.name,
-        totalMovements: productMovements.length,
-        totalQuantity: productMovements.reduce((sum, m) => sum + m.quantity, 0),
-        currentStock: product.stock
-      };
-    });
-    
-    return allProducts.sort((a, b) => a.totalMovements - b.totalMovements);
-  }, [movements, products]);
-
-  // Gerar QR Code e etiquetas
-  const generateQRCode = async (data, size = 200) => {
-    try {
-      const qrData = encodeURIComponent(JSON.stringify({
-        id: data.id,
-        name: data.name,
-        brand: data.brand || '',
-        category: data.category,
-        code: data.code,
-        qrCode: data.qrCode,
-        timestamp: new Date().toISOString()
-      }));
-      
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${qrData}&bgcolor=FFFFFF&color=000000&margin=10&format=png`;
-      
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = qrUrl;
-      });
-      
-    } catch (error) {
-      console.error('Erro ao gerar QR Code:', error);
-      return null;
-    }
-  };
-
-  const generateA4Label = async () => {
-    if (!selectedProduct) {
-      setErrors({ general: 'Selecione um produto' });
-      return;
-    }
-    
-    const product = products.find(p => p.id === selectedProduct);
+  // Deletar produto
+  const deleteProduct = useCallback((productId) => {
+    const product = products.find(p => p.id === productId);
     if (!product) return;
     
-    const currentLabelConfig = getProductLabelConfig(selectedProduct);
-    
-    setLoading(true);
-    setErrors({});
-    
-    try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+    if (window.confirm(`Tem certeza que deseja excluir "${product.name}"?`)) {
+      setProducts(prev => prev.filter(p => p.id !== productId));
       
-      const dpi = 300;
-      canvas.width = 2480;
-      canvas.height = 3508;
-      
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      const ptToPx = dpi / 72;
-      const mmToPx = dpi / 25.4;
-      
-      let qrImage = null;
-      if (currentLabelConfig.showQRCode) {
-        const qrSizePx = currentLabelConfig.qrSize * mmToPx;
-        qrImage = await generateQRCode(product, qrSizePx);
+      if (product.quantity > 0) {
+        addMovement('out', product.id, product.name, product.quantity, 'Produto removido');
       }
       
-      const drawLabel = async (x, y, width, height) => {
-        ctx.fillStyle = currentLabelConfig.backgroundColor;
-        ctx.fillRect(x, y, width, height);
-        
-        if (currentLabelConfig.showBorder) {
-          ctx.strokeStyle = currentLabelConfig.borderColor;
-          ctx.lineWidth = 2;
-          ctx.strokeRect(x, y, width, height);
-        }
-        
-        ctx.fillStyle = currentLabelConfig.textColor;
-        const centerX = x + width / 2;
-        const padding = 5 * mmToPx;
-        const fontScaleA4 = 4.5;
-        
-        let currentY = y + padding;
-        
-        if (currentLabelConfig.showBrand && product.brand) {
-          const brandSizeCanvas = (currentLabelConfig.brandFontSize * fontScaleA4) * ptToPx;
-          ctx.font = `bold ${brandSizeCanvas}px Arial`;
-          ctx.textAlign = 'center';
-          ctx.fillText(product.brand, centerX, currentY + brandSizeCanvas);
-          currentY += brandSizeCanvas + (15 * mmToPx);
-        }
-        
-        let productText = '';
-        if (currentLabelConfig.showCode && currentLabelConfig.showDescription) {
-          productText = `${product.code || ''} - ${product.name}`;
-        } else if (currentLabelConfig.showCode) {
-          productText = product.code || '';
-        } else if (currentLabelConfig.showDescription) {
-          productText = product.name;
-        }
-        
-        if (productText) {
-          const productSizeCanvas = (currentLabelConfig.codeFontSize * fontScaleA4) * ptToPx;
-          ctx.font = `${productSizeCanvas}px Arial`;
-          ctx.textAlign = 'center';
-          
-          const maxWidth = width - (padding * 2);
-          const words = productText.split(' ');
-          const lines = [];
-          let currentLine = words[0] || '';
-          
-          for (let i = 1; i < words.length; i++) {
-            const testLine = currentLine + ' ' + words[i];
-            const testWidth = ctx.measureText(testLine).width;
-            
-            if (testWidth > maxWidth && currentLine !== '') {
-              lines.push(currentLine);
-              currentLine = words[i];
-            } else {
-              currentLine = testLine;
-            }
-          }
-          if (currentLine !== '') {
-            lines.push(currentLine);
-          }
-          
-          const displayLines = lines.slice(0, 2);
-          
-          displayLines.forEach((line) => {
-            ctx.fillText(line, centerX, currentY + productSizeCanvas);
-            currentY += productSizeCanvas + (8 * mmToPx);
-          });
-          currentY += (10 * mmToPx);
-        }
-        
-        if (currentLabelConfig.showQuantity) {
-          const quantitySizeCanvas = (currentLabelConfig.quantityFontSize * fontScaleA4) * ptToPx;
-          ctx.font = `bold ${quantitySizeCanvas}px Arial`;
-          ctx.textAlign = 'left';
-          ctx.fillStyle = currentLabelConfig.textColor;
-          const quantityText = currentLabelConfig.customQuantity.trim() || `${product.stock}`;
-          ctx.fillText(quantityText, x + padding, y + height - padding);
-        }
-        
-        if (currentLabelConfig.showQRCode && qrImage) {
-          const qrSizePx = currentLabelConfig.qrSize * mmToPx;
-          const qrX = x + width - padding - qrSizePx;
-          const qrY = y + height - padding - qrSizePx;
-          ctx.drawImage(qrImage, qrX, qrY, qrSizePx, qrSizePx);
-        }
-      };
-      
-      const marginPx = 3 * mmToPx;
-      const labelWidthPx = 200 * mmToPx;
-      const labelHeightPx = 145 * mmToPx;
-      const centerX = (canvas.width - labelWidthPx) / 2;
-      const halfPageHeight = canvas.height / 2;
-      
-      const positions = [
-        { x: centerX, y: marginPx },
-        { x: centerX, y: halfPageHeight + marginPx }
-      ];
-      
-      for (let i = 0; i < positions.length; i++) {
-        const pos = positions[i];
-        await drawLabel(pos.x, pos.y, labelWidthPx, labelHeightPx);
-      }
-      
-      const timestamp = new Date().toISOString().slice(0, 10);
-      const fileName = `etiquetas_${product.name.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.png`;
-      
-      const link = document.createElement('a');
-      link.download = fileName;
-      link.href = canvas.toDataURL('image/png', 1.0);
-      link.click();
-      
-      setSuccess(`✅ Etiquetas PNG geradas com sucesso!`);
-      setTimeout(() => setSuccess(''), 3000);
-      
-    } catch (error) {
-      console.error('Erro ao gerar PNG:', error);
-      setErrors({ general: 'Erro ao gerar etiquetas.' });
+      showNotification('Produto removido com sucesso!', 'success');
     }
+  }, [products, setProducts, addMovement, showNotification]);
+
+  // Atualizar quantidade
+  const updateQuantity = useCallback((productId, newQuantity, reason = '') => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
     
-    setLoading(false);
-  };
+    const quantityDiff = newQuantity - product.quantity;
+    
+    setProducts(prev => prev.map(p => 
+      p.id === productId ? { ...p, quantity: newQuantity, updatedAt: new Date().toISOString() } : p
+    ));
+    
+    if (quantityDiff !== 0) {
+      const movementType = quantityDiff > 0 ? 'in' : 'out';
+      addMovement(movementType, product.id, product.name, Math.abs(quantityDiff), reason || 'Ajuste manual');
+    }
+  }, [products, setProducts, addMovement]);
 
+  // Filtrar produtos
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
+      const matchesSearch = !searchTerm || 
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.barcode?.includes(searchTerm) ||
+        product.qrCode?.includes(searchTerm);
+      
+      const matchesCategory = !selectedCategory || product.category === selectedCategory;
+      const matchesSupplier = !selectedSupplier || product.supplier === selectedSupplier;
+      
+      return matchesSearch && matchesCategory && matchesSupplier;
+    }).sort((a, b) => {
+      let aValue = a[sortBy];
+      let bValue = b[sortBy];
+      
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      }
+      
+      if (sortOrder === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+  }, [products, searchTerm, selectedCategory, selectedSupplier, sortBy, sortOrder]);
+
+  // Estatísticas do dashboard
+  const dashboardStats = useMemo(() => {
+    const totalProducts = products.length;
+    const totalValue = products.reduce((sum, p) => sum + (p.price * p.quantity), 0);
+    const lowStockCount = products.filter(p => p.quantity <= settings.lowStockThreshold).length;
+    const outOfStockCount = products.filter(p => p.quantity === 0).length;
+    
+    return { totalProducts, totalValue, lowStockCount, outOfStockCount };
+  }, [products, settings.lowStockThreshold]);
+
+  // JSX Principal
   return (
-    <div className="max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-gray-50 min-h-screen relative">
-      {/* Toast notifications */}
-      {success && (
-        <div className="fixed top-4 left-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg z-50 animate-slide-down">
-          <div className="flex items-center gap-2">
-            <CheckCircle size={20} />
-            <span className="text-sm font-medium">{success}</span>
-          </div>
-        </div>
-      )}
-      
-      {errors.general && (
-        <div className="fixed top-4 left-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg z-50 animate-slide-down">
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={20} />
-            <span className="text-sm font-medium">{errors.general}</span>
-          </div>
-        </div>
-      )}
-      
-      {/* Loading overlay */}
-      {loading && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 flex items-center gap-3">
-            <Loader2 size={24} className="animate-spin text-blue-500" />
-            <span className="text-gray-700 font-medium">Processando...</span>
-          </div>
-        </div>
-      )}
-      
-      {/* Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-auto md:left-0 md:w-64 md:h-full bg-white border-t md:border-t-0 md:border-r border-gray-200 px-4 py-2 md:py-4">
-        <div className="flex justify-around md:flex-col md:space-y-2">
-          {[
-            { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
-            { id: 'scanner', icon: Scan, label: 'Movimento' },
-            { id: 'products', icon: Package, label: 'Produtos' },
-            { id: 'labels', icon: QrCode, label: 'Etiquetas' },
-            { id: 'reports', icon: TrendingUp, label: 'Relatórios' },
-            { id: 'settings', icon: Settings, label: 'Config' }
-          ].map(item => (
-            <button
-              key={item.id}
-              onClick={() => setCurrentScreen(item.id)}
-              className={`flex flex-col md:flex-row items-center py-1 px-2 md:py-3 md:px-4 rounded-lg transition-colors ${
-                currentScreen === item.id ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <item.icon size={18} />
-              <span className="text-xs md:text-sm mt-1 md:mt-0 md:ml-3">{item.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      
-      {/* Dashboard Screen */}
-      {currentScreen === 'dashboard' && (
-        <div className="p-4 pb-20 md:ml-64 md:pb-4">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">EstoqueFF Dashboard</h1>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                {companySettings.responsibleName.split(' ').map(n => n[0]).join('')}
-              </div>
-              <span className="text-sm text-gray-600">{companySettings.responsibleName}</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-blue-600 text-sm font-medium">Total Produtos</p>
-                  <p className="text-2xl font-bold text-blue-800">{stats.totalProducts}</p>
-                </div>
-                <Package className="text-blue-500" size={32} />
-              </div>
+    <div className="min-h-screen bg-gray-100">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <Package className="h-8 w-8 text-blue-600 mr-3" />
+              <h1 className="text-xl font-semibold text-gray-900">
+                {settings.companyName || 'Sistema de Estoque'}
+              </h1>
             </div>
             
-            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-red-600 text-sm font-medium">Estoque Baixo</p>
-                  <p className="text-2xl font-bold text-red-800">{stats.lowStockProducts}</p>
-                </div>
-                <AlertTriangle className="text-red-500" size={32} />
-              </div>
-            </div>
-            
-            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-green-600 text-sm font-medium">Total Itens</p>
-                  <p className="text-2xl font-bold text-green-800">{stats.totalItems}</p>
-                </div>
-                <TrendingUp className="text-green-500" size={32} />
-              </div>
-            </div>
-            
-            <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-purple-600 text-sm font-medium">Movimentações Hoje</p>
-                  <p className="text-2xl font-bold text-purple-800">{stats.todayMovements}</p>
-                </div>
-                <BarChart3 className="text-purple-500" size={32} />
-              </div>
-            </div>
-          </div>
-
-          {stats.lowStockProducts > 0 && (
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-              <div className="flex items-center mb-2">
-                <AlertTriangle className="text-orange-500 mr-2" size={20} />
-                <h3 className="font-semibold text-orange-800">Produtos com Estoque Baixo</h3>
-              </div>
-              {products.filter(p => p.stock <= p.minStock).map(product => (
-                <div key={product.id} className="flex justify-between items-center py-2 border-b border-orange-200 last:border-b-0">
-                  <span className="text-orange-700">{product.name}</span>
-                  <span className="text-orange-600 font-medium">{product.stock} unidades</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="font-semibold text-gray-800 mb-3">Últimas Movimentações</h3>
-            {movements.slice(0, 5).map(movement => (
-              <div key={movement.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-                <div>
-                  <p className="font-medium text-gray-800">{movement.product}</p>
-                  <p className="text-sm text-gray-600">{movement.user} • {movement.date}</p>
-                </div>
-                <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  movement.type === 'entrada' 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Scanner Screen - Sistema Completo */}
-      {currentScreen === 'scanner' && (
-        <div className="p-4 pb-20 md:ml-64 md:pb-4">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">Movimentação de Estoque</h1>
-            {scannerActive && (
+            <nav className="flex space-x-4">
               <button
-                onClick={stopCamera}
-                className="bg-red-500 text-white p-2 rounded-lg hover:bg-red-600 transition-colors"
-                title="Parar Scanner"
+                onClick={() => setCurrentView('dashboard')}
+                className={`px-3 py-2 rounded-md text-sm font-medium ${
+                  currentView === 'dashboard' 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
               >
-                <X size={20} />
-              </button>
-            )}
-          </div>
-
-          {/* Botões de opção */}
-          {!scannerActive && !scannedProduct && !showManualMovement && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <button
-                onClick={startRealQRScanner}
-                disabled={loading}
-                className="bg-blue-500 text-white p-6 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex flex-col items-center gap-3"
-              >
-                <Camera size={32} />
-                <div className="text-center">
-                  <p className="font-medium">Scanner QR Code</p>
-                  <p className="text-xs opacity-80">Use a câmera</p>
-                </div>
+                <BarChart3 className="inline w-4 h-4 mr-1" />
+                Dashboard
               </button>
               
               <button
-                onClick={() => {
-                  setShowManualMovement(true);
-                  setMovementType('');
-                }}
-                className="bg-green-500 text-white p-6 rounded-lg hover:bg-green-600 transition-colors flex flex-col items-center gap-3"
+                onClick={() => setCurrentView('inventory')}
+                className={`px-3 py-2 rounded-md text-sm font-medium ${
+                  currentView === 'inventory' 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
               >
-                <Search size={32} />
-                <div className="text-center">
-                  <p className="font-medium">Busca Manual</p>
-                  <p className="text-xs opacity-80">Pesquisar produto</p>
-                </div>
+                <Package className="inline w-4 h-4 mr-1" />
+                Inventário
               </button>
-            </div>
-          )}
+              
+              <button
+                onClick={() => setShowScannerModal(true)}
+                className="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900"
+              >
+                <Scan className="inline w-4 h-4 mr-1" />
+                Scanner
+              </button>
+              
+              <button
+                onClick={() => setShowSettingsModal(true)}
+                className="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900"
+              >
+                <Settings className="inline w-4 h-4 mr-1" />
+                Configurações
+              </button>
+            </nav>
+          </div>
+        </div>
+      </header>
 
-          {success && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-              <p className="text-green-800 text-sm">{success}</p>
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Notificação */}
+        {notification && (
+          <div className={`mb-4 p-4 rounded-md ${
+            notification.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
+            notification.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' :
+            'bg-blue-50 text-blue-800 border border-blue-200'
+          }`}>
+            {notification.message}
+          </div>
+        )}
+
+        {/* Dashboard */}
+        {currentView === 'dashboard' && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
+            
+            {/* Cards de estatísticas */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white rounded-lg shadow p-6">
+                <div className="flex items-center">
+                  <Package className="h-8 w-8 text-blue-600" />
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total de Produtos</p>
+                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.totalProducts}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-lg shadow p-6">
+                <div className="flex items-center">
+                  <TrendingUp className="h-8 w-8 text-green-600" />
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Valor Total</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      R$ {dashboardStats.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-lg shadow p-6">
+                <div className="flex items-center">
+                  <AlertTriangle className="h-8 w-8 text-yellow-600" />
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Estoque Baixo</p>
+                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.lowStockCount}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-lg shadow p-6">
+                <div className="flex items-center">
+                  <X className="h-8 w-8 text-red-600" />
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Sem Estoque</p>
+                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.outOfStockCount}</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
-          
-          {errors.camera && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-              <p className="text-red-800 text-sm">{errors.camera}</p>
-            </div>
-          )}
-          
-          {/* Scanner Ativo */}
-          {scannerActive && (
-            <div className="text-center">
-              <div className="bg-black rounded-lg overflow-hidden mb-6 relative">
-                {cameraStream ? (
-                  <div className="relative">
-                    <video 
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      className="w-full h-64 object-cover"
-                    />
-                    
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-48 h-48 border-2 border-green-400 rounded-lg relative">
-                        <div className="absolute -top-2 -left-2 w-6 h-6 w-6 border-l-4 border-t-4 border-green-400"></div>
-                        <div className="absolute -top-2 -right-2 w-6 h-6 border-r-4 border-t-4 border-green-400"></div>
-                        <div className="absolute -bottom-2 -left-2 w-6 h-6 border-l-4 border-b-4 border-green-400"></div>
-                        <div className="absolute -bottom-2 -right-2 w-6 h-6 border-r-4 border-b-4 border-green-400"></div>
-                        
-                        <div className="absolute inset-4 border border-green-400 rounded animate-pulse opacity-50"></div>
-                        
-                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                          <div className="w-2 h-2 bg-green-400 rounded-full animate-ping"></div>
+
+            {/* Alertas recentes */}
+            {alerts.length > 0 && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900">Alertas Recentes</h3>
+                </div>
+                <div className="divide-y divide-gray-200">
+                  {alerts.slice(0, 5).map(alert => (
+                    <div key={alert.id} className="px-6 py-4">
+                      <div className="flex items-center">
+                        <AlertTriangle className={`h-5 w-5 mr-3 ${
+                          alert.type === 'low_stock' ? 'text-yellow-600' : 'text-red-600'
+                        }`} />
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-900">{alert.message}</p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(alert.timestamp).toLocaleString('pt-BR')}
+                          </p>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="p-8">
-                    <div className="animate-pulse flex items-center justify-center">
-                      <Loader2 size={48} className="text-green-400 animate-spin" />
-                    </div>
-                  </div>
-                )}
-                
-                <div className="bg-black bg-opacity-75 p-4">
-                  <p className="text-white text-sm">🔍 Posicione o QR Code dentro da área marcada</p>
-                  <p className="text-green-400 text-xs mt-1">Aguarde a detecção automática...</p>
+                  ))}
                 </div>
               </div>
-            </div>
-          )}
-          
-          {/* Movimentação Manual */}
-          {showManualMovement && !manualSelectedProduct && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">Busca Manual de Produto</h3>
-                <button
-                  onClick={() => {
-                    setShowManualMovement(false);
-                    setManualSearchTerm('');
-                  }}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              
-              <div className="relative mb-4">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search size={20} className="text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  inputMode="text"
-                  placeholder="Pesquisar produto por nome, código, marca..."
-                  value={manualSearchTerm}
-                  onChange={(e) => handleManualSearchChange(e.target.value)}
-                  className="w-full pl-10 pr-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  style={{ fontSize: '16px' }}
-                  autoComplete="off"
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  spellCheck="false"
-                />
-              </div>
+            )}
+          </div>
+        )}
 
-              <div className="space-y-2">
-                {products.filter(product => {
-                  if (!manualSearchTerm.trim()) return true;
-                  const term = manualSearchTerm.toLowerCase().trim();
-                  return product.name.toLowerCase().includes(term) ||
-                         (product.code && product.code.toLowerCase().includes(term)) ||
-                         (product.brand && product.brand.toLowerCase().includes(term)) ||
-                         product.category.toLowerCase().includes(term);
-                }).slice(0, 10).map(product => (
-                  <div 
-                    key={product.id} 
-                    className="bg-white border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                    onClick={() => setManualSelectedProduct(product)}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-800">{product.name}</h4>
-                        <p className="text-sm text-gray-600">
-                          {product.brand && `${product.brand} • `}
-                          Código: {product.code || 'N/A'}
-                        </p>
-                        <p className="text-sm text-gray-600">Categoria: {product.category}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-600">Estoque:</p>
-                        <p className={`font-medium ${product.stock <= product.minStock ? 'text-red-600' : 'text-green-600'}`}>
-                          {product.stock} unid.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+        {/* Inventário */}
+        {currentView === 'inventory' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900">Inventário</h2>
+              <button
+                onClick={() => setShowAddProductModal(true)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Adicionar Produto
+              </button>
+            </div>
+
+            {/* Barra de pesquisa */}
+            <ProductSearch searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+            {/* Filtros */}
+            <div className="flex flex-wrap gap-4">
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2"
+              >
+                <option value="">Todas as categorias</option>
+                {categories.map(category => (
+                  <option key={category} value={category}>{category}</option>
                 ))}
-              </div>
-            </div>
-          )}
+              </select>
 
-          {/* Formulário de Movimentação */}
-          {(scannedProduct || manualSelectedProduct) && (
-            <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-              <div className="flex items-center gap-3 mb-4">
-                <CheckCircle className="text-green-500" size={24} />
-                <h3 className="font-semibold text-green-800">
-                  {scannedProduct ? 'Produto Escaneado!' : 'Produto Selecionado!'}
-                </h3>
-              </div>
-              
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <h4 className="font-semibold text-gray-800 mb-2">
-                  {(scannedProduct || manualSelectedProduct).name}
-                </h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600">Código:</span>
-                    <span className="ml-2 font-medium">
-                      {(scannedProduct || manualSelectedProduct).code || '-'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Marca:</span>
-                    <span className="ml-2 font-medium">
-                      {(scannedProduct || manualSelectedProduct).brand || '-'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Estoque:</span>
-                    <span className="ml-2 font-medium">
-                      {(scannedProduct || manualSelectedProduct).stock} unidades
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Categoria:</span>
-                    <span className="ml-2 font-medium">
-                      {(scannedProduct || manualSelectedProduct).category}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <p className="text-xs text-gray-500 flex items-center gap-1">
-                    {scannedProduct ? (
-                      <>
-                        <Camera size={12} />
-                        Produto encontrado via Scanner QR Code
-                      </>
-                    ) : (
-                      <>
-                        <Search size={12} />
-                        Produto encontrado via Busca Manual
-                      </>
-                    )}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2"
+              >
+                <option value="name">Nome</option>
+                <option value="quantity">Quantidade</option>
+                <option value="price">Preço</option>
+                <option value="category">Categoria</option>
+              </select>
+
+              <button
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className="border border-gray-300 rounded-md px-3 py-2 hover:bg-gray-50"
+              >
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
+
+            {/* Lista de produtos */}
+            <div className="bg-white rounded-lg shadow">
+              {filteredProducts.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Package className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum produto encontrado</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {searchTerm ? 'Tente pesquisar com outros termos.' : 'Comece adicionando alguns produtos.'}
                   </p>
                 </div>
-              </div>
-
-              {(errors.quantity || errors.movement) && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                  {errors.quantity && <p className="text-red-800 text-sm">{errors.quantity}</p>}
-                  {errors.movement && <p className="text-red-800 text-sm">{errors.movement}</p>}
+              ) : (
+                <div className="divide-y divide-gray-200">
+                  {filteredProducts.map(product => (
+                    <div key={product.id} className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-medium text-gray-900">{product.name}</h3>
+                          <p className="text-sm text-gray-600">
+                            {product.brand && `${product.brand} • `}{product.category}
+                          </p>
+                          <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                            <span>Estoque: {product.quantity}</span>
+                            <span>Preço: R$ {product.price.toFixed(2)}</span>
+                            {product.barcode && <span>Código: {product.barcode}</span>}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => {
+                              setEditingProduct(product);
+                              setShowEditProductModal(true);
+                            }}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteProduct(product.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {product.quantity <= settings.lowStockThreshold && (
+                        <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                          <div className="flex">
+                            <AlertTriangle className="h-5 w-5 text-yellow-400" />
+                            <div className="ml-3">
+                              <p className="text-sm text-yellow-800">
+                                Estoque baixo! Apenas {product.quantity} unidades restantes.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tipo de Movimentação *
-                    {!movementType && <span className="text-red-500 text-xs ml-1">(Obrigatório)</span>}
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setMovementType('entrada');
-                        if (errors.movement) setErrors({...errors, movement: ''});
-                      }}
-                      className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors border-2 ${
-                        movementType === 'entrada' 
-                          ? 'bg-green-500 text-white border-green-500' 
-                          : 'bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:bg-green-50'
-                      }`}
-                    >
-                      ↗️ Entrada
-                    </button>
-                    <button
-                      onClick={() => {
-                        setMovementType('saída');
-                        if (errors.movement) setErrors({...errors, movement: ''});
-                      }}
-                      className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors border-2 ${
-                        movementType === 'saída' 
-                          ? 'bg-red-500 text-white border-red-500' 
-                          : 'bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:bg-red-50'
-                      }`}
-                    >
-                      ↙️ Saída
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={movementQuantity}
-                    onChange={(e) => {
-                      setMovementQuantity(e.target.value);
-                      if (errors.quantity) setErrors({...errors, quantity: ''});
-                    }}
-                    className={`w-full px-4 py-4 border rounded-lg focus:ring-2 focus:border-blue-500 ${
-                      errors.quantity ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                    }`}
-                    style={{ fontSize: '16px' }}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    spellCheck="false"
-                    placeholder="Digite a quantidade"
-                  />
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setScannedProduct(null);
-                      setManualSelectedProduct(null);
-                      setShowManualMovement(false);
-                      setManualSearchTerm('');
-                      setMovementType('');
-                      setErrors({});
-                    }}
-                    className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={() => processMovement(scannedProduct || manualSelectedProduct)}
-                    disabled={loading || !movementType}
-                    className={`flex-1 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                      !movementType 
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                        : loading 
-                          ? 'bg-gray-400 text-white cursor-not-allowed'
-                          : 'bg-blue-500 text-white hover:bg-blue-600'
-                    }`}
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 size={16} className="animate-spin" />
-                        Processando...
-                      </>
-                    ) : (
-                      <>
-                        <Check size={16} />
-                        Confirmar Movimentação
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Products Screen */}
-      {currentScreen === 'products' && (
-        <div className="p-4 pb-20 md:ml-64 md:pb-4">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">Gestão de Produtos</h1>
-            <button
-              onClick={() => setShowAddProduct(true)}
-              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
-            >
-              <Plus size={16} />
-              Novo Produto
-            </button>
           </div>
+        )}
+      </main>
 
-          <ProductSearch onSearchChange={handleSearchChange} searchTerm={searchTerm} />
-          <ProductList 
-            products={products} 
-            searchTerm={searchTerm} 
-            onEdit={handleEditProduct} 
-            onDelete={handleDeleteProduct} 
-          />
-        </div>
-      )}
+      {/* Modal do Scanner */}
+      {showScannerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">Scanner QR/Barcode</h3>
+              <button
+                onClick={() => {
+                  setShowScannerModal(false);
+                  stopScanning();
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
 
-      {/* Labels Screen - Gerador de Etiquetas */}
-      {currentScreen === 'labels' && (
-        <div className="p-4 pb-20 md:ml-64 md:pb-4">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">Gerador de Etiquetas</h1>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-            <h3 className="font-semibold text-gray-800 mb-4">Selecionar Produto para Etiquetas</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Produto</label>
+            {/* Seleção de câmera */}
+            {availableCameras.length > 1 && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Selecionar Câmera
+                </label>
                 <select
-                  value={selectedProduct}
-                  onChange={(e) => setSelectedProduct(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  style={{ fontSize: '16px' }}
+                  value={selectedCamera}
+                  onChange={(e) => setSelectedCamera(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  disabled={isScanning}
                 >
-                  <option value="">Selecione um produto</option>
-                  {products.map(product => (
-                    <option key={product.id} value={product.id}>
-                      {product.name} - {product.code || 'S/Código'} (Estoque: {product.stock})
+                  {availableCameras.map((camera, index) => (
+                    <option key={camera.deviceId} value={camera.deviceId}>
+                      {camera.label || `Câmera ${index + 1}`}
                     </option>
                   ))}
                 </select>
               </div>
+            )}
 
-              {selectedProduct && (
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => openLabelEditorForProduct(selectedProduct)}
-                    className="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
-                  >
-                    <Settings size={16} />
-                    Configurar Etiqueta
-                  </button>
-                  
-                  <button
-                    onClick={generateA4Label}
-                    disabled={loading}
-                    className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex items-center gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 size={16} className="animate-spin" />
-                        Gerando...
-                      </>
-                    ) : (
-                      <>
-                        <Download size={16} />
-                        Gerar Etiquetas A4
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
+            {/* Área do vídeo */}
+            <div className="mb-4">
+              <video
+                ref={videoRef}
+                className="w-full h-64 bg-black rounded-lg"
+                autoPlay
+                playsInline
+                muted
+              />
+              <canvas ref={canvasRef} className="hidden" />
             </div>
-            
-            {!selectedProduct && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center mt-4">
-                <QrCode size={48} className="mx-auto text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-600 mb-2">Selecione um Produto</h3>
-                <p className="text-gray-500">
-                  Escolha um produto acima para configurar e gerar suas etiquetas com QR Code.
-                </p>
+
+            {/* Erro da câmera */}
+            {cameraError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-800">{cameraError}</p>
               </div>
             )}
-          </div>
 
-          {/* Preview das últimas etiquetas geradas */}
-          {selectedProduct && (
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="font-semibold text-gray-800 mb-4">Preview da Etiqueta</h3>
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <LabelPreview 
-                  product={products.find(p => p.id === selectedProduct)}
-                  labelTemplate={getProductLabelConfig(selectedProduct)}
-                  companySettings={companySettings}
-                />
+            {/* Resultado do scan */}
+            {scanResult && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm text-green-800">Código detectado: {scanResult}</p>
               </div>
-              <p className="text-xs text-gray-500 mt-2 text-center">
-                * Esta é uma prévia da etiqueta que será gerada
-              </p>
-            </div>
-          )}
+            )}
 
-          {/* Lista de produtos disponíveis com busca */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="font-semibold text-gray-800 mb-4">Produtos Disponíveis</h3>
-            
-            <ProductSearch onSearchChange={handleLabelSearchChange} searchTerm={labelSearchTerm} />
-            
-            <div className="space-y-3">
-              {products.filter(product => {
-                if (!labelSearchTerm.trim()) return true;
-                const term = labelSearchTerm.toLowerCase().trim();
-                return product.name.toLowerCase().includes(term) ||
-                       product.id.toLowerCase().includes(term) ||
-                       (product.brand && product.brand.toLowerCase().includes(term)) ||
-                       product.category.toLowerCase().includes(term) ||
-                       (product.code && product.code.toLowerCase().includes(term));
-              }).map(product => (
-                <div key={product.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800">{product.name}</p>
-                    <p className="text-sm text-gray-600">
-                      {product.brand && `${product.brand} • `}Código: {product.code || 'N/A'} • Estoque: {product.stock}
-                    </p>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => setSelectedProduct(product.id)}
-                      className={`px-3 py-2 rounded text-sm transition-colors ${
-                        selectedProduct === product.id 
-                          ? 'bg-blue-500 text-white' 
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {selectedProduct === product.id ? '✓ Selecionado' : 'Selecionar'}
-                    </button>
-                    
-                    <button 
-                      onClick={() => openLabelEditorForProduct(product.id)}
-                      className="p-2 bg-purple-100 text-purple-600 rounded hover:bg-purple-200 transition-colors"
-                      title="Configurar etiqueta"
-                    >
-                      <Settings size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+            {/* Botões */}
+            <div className="flex justify-end space-x-3">
+              {!isScanning ? (
+                <button
+                  onClick={startScanning}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  Iniciar Scanner
+                </button>
+              ) : (
+                <button
+                  onClick={stopScanning}
+                  className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 flex items-center"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Parar Scanner
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Reports Screen - Relatórios Completos */}
-      {currentScreen === 'reports' && (
-        <div className="p-4 pb-20 md:ml-64 md:pb-4">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">Relatórios</h1>
-            <div className="flex gap-2">
-              <button
-                onClick={createBackup}
-                className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
-              >
-                <Download size={16} />
-                Backup
-              </button>
-              <label className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 cursor-pointer">
-                <Upload size={16} />
-                Restaurar
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={restoreBackup}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          </div>
-
-          {/* Abas de relatórios */}
-          <div className="flex mb-6 border-b border-gray-200">
-            <button
-              onClick={() => setReportsTab('movements')}
-              className={`py-2 px-4 font-medium border-b-2 ${
-                reportsTab === 'movements' 
-                  ? 'border-blue-500 text-blue-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Movimentações
-            </button>
-            <button
-              onClick={() => setReportsTab('products')}
-              className={`py-2 px-4 font-medium border-b-2 ${
-                reportsTab === 'products' 
-                  ? 'border-blue-500 text-blue-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Produtos
-            </button>
-            <button
-              onClick={() => setReportsTab('analytics')}
-              className={`py-2 px-4 font-medium border-b-2 ${
-                reportsTab === 'analytics' 
-                  ? 'border-blue-500 text-blue-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Análises
-            </button>
-          </div>
-
-          {/* Relatório de Movimentações */}
-          {reportsTab === 'movements' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-gray-800">Relatório de Movimentações</h3>
-                  <div className="flex items-center gap-3">
-                    <select
-                      value={movementsPeriodFilter}
-                      onChange={(e) => setMovementsPeriodFilter(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    >
-                      <option value="all">Todas</option>
-                      <option value="7days">Últimos 7 dias</option>
-                      <option value="30days">Últimos 30 dias</option>
-                    </select>
-                    
-                    <button
-                      onClick={() => exportData('movements', 'excel')}
-                      className="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 text-sm"
-                    >
-                      <FileSpreadsheet size={14} />
-                      Excel
-                    </button>
-                    
-                    <button
-                      onClick={() => exportData('movements', 'pdf')}
-                      className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 text-sm"
-                    >
-                      <FileText size={14} />
-                      PDF
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  {filteredMovements.slice(0, 10).map(movement => (
-                    <div key={movement.id} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
-                      <div>
-                        <p className="font-medium text-gray-800">{movement.product}</p>
-                        <p className="text-sm text-gray-600">{movement.user} • {movement.date}</p>
-                      </div>
-                      <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        movement.type === 'entrada' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <p className="text-xs text-gray-500 mt-4 text-center">
-                  Mostrando {Math.min(10, filteredMovements.length)} de {filteredMovements.length} movimentações
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Relatório de Produtos */}
-          {reportsTab === 'products' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-gray-800">Relatório de Produtos</h3>
-                  <div className="flex items-center gap-3">
-                    <select
-                      value={productsFilter}
-                      onChange={(e) => setProductsFilter(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    >
-                      <option value="all">Todos</option>
-                      <option value="low_stock">Estoque Baixo</option>
-                      <option value="no_stock">Sem Estoque</option>
-                    </select>
-                    
-                    <button
-                      onClick={() => exportData('products', 'excel')}
-                      className="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 text-sm"
-                    >
-                      <FileSpreadsheet size={14} />
-                      Excel
-                    </button>
-                    
-                    <button
-                      onClick={() => exportData('products', 'pdf')}
-                      className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 text-sm"
-                    >
-                      <FileText size={14} />
-                      PDF
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredProducts.slice(0, 12).map(product => (
-                    <div key={product.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h4 className="font-semibold text-gray-800">{product.name}</h4>
-                          <p className="text-sm text-gray-600">{product.brand || 'Sem marca'} • {product.category}</p>
-                        </div>
-                        <div className={`px-2 py-1 rounded text-xs font-medium ${
-                          product.stock <= 0 
-                            ? 'bg-red-100 text-red-800' 
-                            : product.stock <= product.minStock 
-                              ? 'bg-orange-100 text-orange-800'
-                              : 'bg-green-100 text-green-800'
-                        }`}>
-                          {product.stock <= 0 ? 'Sem estoque' : product.stock <= product.minStock ? 'Baixo' : 'Normal'}
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <span className="text-gray-600">Atual:</span>
-                          <span className="ml-1 font-medium">{product.stock}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Mín:</span>
-                          <span className="ml-1 font-medium">{product.minStock}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Análises */}
-          {reportsTab === 'analytics' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="font-semibold text-gray-800 mb-4">Produtos Mais Movimentados</h3>
-                <div className="space-y-3">
-                  {topMovedProducts.slice(0, 5).map((product, index) => (
-                    <div key={product.productId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                          index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-orange-600' : 'bg-blue-500'
-                        }`}>
-                          {index + 1}
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-800">{product.productName}</p>
-                          <p className="text-sm text-gray-600">Estoque atual: {product.currentStock}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-blue-600">{product.totalMovements}</p>
-                        <p className="text-xs text-gray-500">movimentações</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="font-semibold text-gray-800 mb-4">Produtos Menos Movimentados</h3>
-                <div className="space-y-3">
-                  {leastMovedProducts.slice(0, 5).map((product, index) => (
-                    <div key={product.productId} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                      <div>
-                        <p className="font-medium text-gray-800">{product.productName}</p>
-                        <p className="text-sm text-gray-600">Estoque atual: {product.currentStock}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-red-600">{product.totalMovements}</p>
-                        <p className="text-xs text-gray-500">movimentações</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Settings Screen */}
-      {currentScreen === 'settings' && (
-        <div className="p-4 pb-20 md:ml-64 md:pb-4">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">Configurações</h1>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Dados da Empresa</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Nome da Empresa</label>
-                <input
-                  type="text"
-                  value={companySettings.companyName}
-                  onChange={(e) => setCompanySettings({...companySettings, companyName: e.target.value})}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  style={{ fontSize: '16px' }}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Responsável</label>
-                <input
-                  type="text"
-                  value={companySettings.responsibleName}
-                  onChange={(e) => setCompanySettings({...companySettings, responsibleName: e.target.value})}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  style={{ fontSize: '16px' }}
-                />
-              </div>
-              
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="lowStockAlert"
-                  checked={companySettings.lowStockAlert}
-                  onChange={(e) => setCompanySettings({...companySettings, lowStockAlert: e.target.checked})}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <label htmlFor="lowStockAlert" className="ml-2 text-sm text-gray-700">
-                  Alertas de estoque baixo
-                </label>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <h4 className="text-md font-medium text-gray-800 mb-2">Informações do Sistema</h4>
-              <div className="text-sm text-gray-600 space-y-1">
-                <p>📦 Total de produtos: {stats.totalProducts}</p>
-                <p>📊 Total de movimentações: {movements.length}</p>
-                <p>🔄 Versão: EstoqueFF v2.0.0</p>
-                <p>✅ Status: Sistema funcionando com todas as funcionalidades</p>
-              </div>
-              
-              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <h5 className="font-medium text-green-800 mb-2">🎉 Funcionalidades Ativas:</h5>
-                <div className="text-sm text-green-700 space-y-1">
-                  <p>✅ Scanner QR Code com câmera real</p>
-                  <p>✅ Sistema completo de movimentações</p>
-                  <p>✅ Gerador de etiquetas personalizadas</p>
-                  <p>✅ Relatórios avançados (PDF/Excel)</p>
-                  <p>✅ Backup e restauração de dados</p>
-                  <p>✅ Análise de produtos e estatísticas</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Novo Produto */}
-      {showAddProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      {/* Modal Adicionar Produto */}
+      {showAddProductModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">Novo Produto</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">Adicionar Produto</h3>
                 <button
-                  onClick={() => {
-                    setShowAddProduct(false);
-                    setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
-                    setErrors({});
-                  }}
-                  className="text-gray-500 hover:text-gray-700"
+                  onClick={() => setShowAddProductModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
                 >
-                  <X size={20} />
+                  <X className="w-6 h-6" />
                 </button>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Produto *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nome do Produto *
+                  </label>
                   <input
                     type="text"
-                    value={newProduct.name}
-                    onChange={(e) => {
-                      setNewProduct({...newProduct, name: e.target.value});
-                      if (errors.name) setErrors({...errors, name: ''});
-                    }}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                    }`}
-                    style={{ fontSize: '16px' }}
-                    placeholder="Ex: Notebook Dell Inspiron"
-                  />
-                  {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Marca</label>
-                  <input
-                    type="text"
-                    value={newProduct.brand}
-                    onChange={(e) => setNewProduct({...newProduct, brand: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    style={{ fontSize: '16px' }}
-                    placeholder="Ex: Dell"
+                    value={productForm.name}
+                    onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    placeholder="Nome do produto"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Categoria *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Marca
+                  </label>
                   <input
                     type="text"
-                    value={newProduct.category}
-                    onChange={(e) => {
-                      setNewProduct({...newProduct, category: e.target.value});
-                      if (errors.category) setErrors({...errors, category: ''});
-                    }}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.category ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                    }`}
-                    style={{ fontSize: '16px' }}
-                    placeholder="Ex: Eletrônicos"
+                    value={productForm.brand}
+                    onChange={(e) => setProductForm({...productForm, brand: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    placeholder="Marca"
                   />
-                  {errors.category && <p className="text-red-600 text-xs mt-1">{errors.category}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Código do Produto *</label>
-                  <input
-                    type="text"
-                    value={newProduct.code}
-                    onChange={(e) => {
-                      setNewProduct({...newProduct, code: e.target.value});
-                      if (errors.code) setErrors({...errors, code: ''});
-                    }}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.code ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                    }`}
-                    style={{ fontSize: '16px' }}
-                    placeholder="Ex: NB-DELL-001"
-                  />
-                  {errors.code && <p className="text-red-600 text-xs mt-1">{errors.code}</p>}
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Categoria *
+                  </label>
+                  <select
+                    value={productForm.category}
+                    onChange={(e) => setProductForm({...productForm, category: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  >
+                    <option value="">Selecione uma categoria</option>
+                    {categories.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Atual *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Preço
+                    </label>
                     <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={newProduct.stock}
-                      onChange={(e) => {
-                        setNewProduct({...newProduct, stock: e.target.value});
-                        if (errors.stock) setErrors({...errors, stock: ''});
-                      }}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        errors.stock ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                      }`}
-                      style={{ fontSize: '16px' }}
-                      placeholder="0"
+                      type="number"
+                      step="0.01"
+                      value={productForm.price}
+                      onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="0.00"
                     />
-                    {errors.stock && <p className="text-red-600 text-xs mt-1">{errors.stock}</p>}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Mínimo *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Custo
+                    </label>
                     <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={newProduct.minStock}
-                      onChange={(e) => {
-                        setNewProduct({...newProduct, minStock: e.target.value});
-                        if (errors.minStock) setErrors({...errors, minStock: ''});
-                      }}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        errors.minStock ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                      }`}
-                      style={{ fontSize: '16px' }}
-                      placeholder="1"
+                      type="number"
+                      step="0.01"
+                      value={productForm.cost}
+                      onChange={(e) => setProductForm({...productForm, cost: e.target.value})}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="0.00"
                     />
-                    {errors.minStock && <p className="text-red-600 text-xs mt-1">{errors.minStock}</p>}
                   </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Quantidade
+                    </label>
+                    <input
+                      type="number"
+                      value={productForm.quantity}
+                      onChange={(e) => setProductForm({...productForm, quantity: e.target.value})}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Mín.
+                    </label>
+                    <input
+                      type="number"
+                      value={productForm.minStock}
+                      onChange={(e) => setProductForm({...productForm, minStock: e.target.value})}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="5"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Máx.
+                    </label>
+                    <input
+                      type="number"
+                      value={productForm.maxStock}
+                      onChange={(e) => setProductForm({...productForm, maxStock: e.target.value})}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="100"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Código de Barras / QR Code
+                  </label>
+                  <input
+                    type="text"
+                    value={productForm.barcode || productForm.qrCode}
+                    onChange={(e) => setProductForm({...productForm, barcode: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    placeholder="Código"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Descrição
+                  </label>
+                  <textarea
+                    value={productForm.description}
+                    onChange={(e) => setProductForm({...productForm, description: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    rows="3"
+                    placeholder="Descrição do produto"
+                  />
                 </div>
               </div>
 
-              <div className="flex gap-3 mt-6">
+              <div className="flex justify-end space-x-3 mt-6">
                 <button
-                  onClick={() => {
-                    setShowAddProduct(false);
-                    setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
-                    setErrors({});
-                  }}
-                  className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-colors"
+                  onClick={() => setShowAddProductModal(false)}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={addProduct}
-                  disabled={loading}
-                  className="flex-1 bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex items-center justify-center gap-2"
+                  onClick={() => addProduct(productForm)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
+                  disabled={isLoading}
                 >
-                  {loading ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      <Save size={16} />
-                      Salvar Produto
-                    </>
-                  )}
+                  {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  Salvar
                 </button>
               </div>
             </div>
@@ -2627,153 +1009,148 @@ const EstoqueFFApp = () => {
       )}
 
       {/* Modal Editar Produto */}
-      {editingProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      {showEditProductModal && editingProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">Editar Produto</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">Editar Produto</h3>
                 <button
                   onClick={() => {
+                    setShowEditProductModal(false);
                     setEditingProduct(null);
-                    setErrors({});
                   }}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-gray-400 hover:text-gray-600"
                 >
-                  <X size={20} />
+                  <X className="w-6 h-6" />
                 </button>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Produto *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nome do Produto *
+                  </label>
                   <input
                     type="text"
                     value={editingProduct.name}
-                    onChange={(e) => {
-                      setEditingProduct({...editingProduct, name: e.target.value});
-                      if (errors.name) setErrors({...errors, name: ''});
-                    }}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                    }`}
-                    style={{ fontSize: '16px' }}
+                    onChange={(e) => setEditingProduct({...editingProduct, name: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
-                  {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Marca</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Marca
+                  </label>
                   <input
                     type="text"
                     value={editingProduct.brand || ''}
                     onChange={(e) => setEditingProduct({...editingProduct, brand: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    style={{ fontSize: '16px' }}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Categoria *</label>
-                  <input
-                    type="text"
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Categoria *
+                  </label>
+                  <select
                     value={editingProduct.category}
-                    onChange={(e) => {
-                      setEditingProduct({...editingProduct, category: e.target.value});
-                      if (errors.category) setErrors({...errors, category: ''});
-                    }}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.category ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                    }`}
-                    style={{ fontSize: '16px' }}
-                  />
-                  {errors.category && <p className="text-red-600 text-xs mt-1">{errors.category}</p>}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Código do Produto *</label>
-                  <input
-                    type="text"
-                    value={editingProduct.code}
-                    onChange={(e) => {
-                      setEditingProduct({...editingProduct, code: e.target.value});
-                      if (errors.code) setErrors({...errors, code: ''});
-                    }}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.code ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                    }`}
-                    style={{ fontSize: '16px' }}
-                  />
-                  {errors.code && <p className="text-red-600 text-xs mt-1">{errors.code}</p>}
+                    onChange={(e) => setEditingProduct({...editingProduct, category: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  >
+                    <option value="">Selecione uma categoria</option>
+                    {categories.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Atual *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Preço
+                    </label>
                     <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={editingProduct.stock}
-                      onChange={(e) => {
-                        setEditingProduct({...editingProduct, stock: e.target.value});
-                        if (errors.stock) setErrors({...errors, stock: ''});
-                      }}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        errors.stock ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                      }`}
-                      style={{ fontSize: '16px' }}
+                      type="number"
+                      step="0.01"
+                      value={editingProduct.price}
+                      onChange={(e) => setEditingProduct({...editingProduct, price: e.target.value})}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
                     />
-                    {errors.stock && <p className="text-red-600 text-xs mt-1">{errors.stock}</p>}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Mínimo *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Custo
+                    </label>
                     <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={editingProduct.minStock}
-                      onChange={(e) => {
-                        setEditingProduct({...editingProduct, minStock: e.target.value});
-                        if (errors.minStock) setErrors({...errors, minStock: ''});
-                      }}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        errors.minStock ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                      }`}
-                      style={{ fontSize: '16px' }}
+                      type="number"
+                      step="0.01"
+                      value={editingProduct.cost}
+                      onChange={(e) => setEditingProduct({...editingProduct, cost: e.target.value})}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
                     />
-                    {errors.minStock && <p className="text-red-600 text-xs mt-1">{errors.minStock}</p>}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Quantidade
+                    </label>
+                    <input
+                      type="number"
+                      value={editingProduct.quantity}
+                      onChange={(e) => setEditingProduct({...editingProduct, quantity: e.target.value})}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Mín.
+                    </label>
+                    <input
+                      type="number"
+                      value={editingProduct.minStock}
+                      onChange={(e) => setEditingProduct({...editingProduct, minStock: e.target.value})}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Máx.
+                    </label>
+                    <input
+                      type="number"
+                      value={editingProduct.maxStock}
+                      onChange={(e) => setEditingProduct({...editingProduct, maxStock: e.target.value})}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    />
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-3 mt-6">
+              <div className="flex justify-end space-x-3 mt-6">
                 <button
                   onClick={() => {
+                    setShowEditProductModal(false);
                     setEditingProduct(null);
-                    setErrors({});
                   }}
-                  className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-colors"
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={updateProduct}
-                  disabled={loading}
-                  className="flex-1 bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex items-center justify-center gap-2"
+                  onClick={() => editProduct(editingProduct)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
+                  disabled={isLoading}
                 >
-                  {loading ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      <Save size={16} />
-                      Salvar Alterações
-                    </>
-                  )}
+                  {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  Salvar Alterações
                 </button>
               </div>
             </div>
@@ -2781,35 +1158,167 @@ const EstoqueFFApp = () => {
         </div>
       )}
 
-      {/* Modal Editor de Etiquetas */}
-      {showLabelEditor && editingLabelForProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      {/* Modal Configurações */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full">
             <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">Configurar Etiqueta</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">Configurações</h3>
                 <button
-                  onClick={closeLabelEditor}
-                  className="text-gray-500 hover:text-gray-700"
+                  onClick={() => setShowSettingsModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
                 >
-                  <X size={20} />
+                  <X className="w-6 h-6" />
                 </button>
               </div>
 
-              <LabelEditor
-                productId={editingLabelForProduct}
-                product={products.find(p => p.id === editingLabelForProduct)}
-                currentConfig={getProductLabelConfig(editingLabelForProduct)}
-                onConfigUpdate={updateProductLabelConfig}
-                onClose={closeLabelEditor}
-                companySettings={companySettings}
-              />
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nome da Empresa
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.companyName}
+                    onChange={(e) => setSettings({...settings, companyName: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Limiar de Estoque Baixo
+                  </label>
+                  <input
+                    type="number"
+                    value={settings.lowStockThreshold}
+                    onChange={(e) => setSettings({...settings, lowStockThreshold: parseInt(e.target.value)})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tema
+                  </label>
+                  <select
+                    value={settings.theme}
+                    onChange={(e) => setSettings({...settings, theme: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  >
+                    <option value="light">Claro</option>
+                    <option value="dark">Escuro</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    showNotification('Configurações salvas!', 'success');
+                    setShowSettingsModal(false);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Relatórios */}
+      {showReportsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">Relatórios</h3>
+                <button
+                  onClick={() => setShowReportsModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-3">Exportar Dados</h4>
+                  <div className="flex space-x-3">
+                    <button className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      Excel
+                    </button>
+                    <button className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                      <FileText className="w-4 h-4 mr-2" />
+                      PDF
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-3">Resumo Atual</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <p className="text-sm text-blue-600">Total de Produtos</p>
+                      <p className="text-xl font-bold text-blue-900">{dashboardStats.totalProducts}</p>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <p className="text-sm text-green-600">Valor Total</p>
+                      <p className="text-xl font-bold text-green-900">
+                        R$ {dashboardStats.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="bg-yellow-50 p-4 rounded-lg">
+                      <p className="text-sm text-yellow-600">Estoque Baixo</p>
+                      <p className="text-xl font-bold text-yellow-900">{dashboardStats.lowStockCount}</p>
+                    </div>
+                    <div className="bg-red-50 p-4 rounded-lg">
+                      <p className="text-sm text-red-600">Sem Estoque</p>
+                      <p className="text-xl font-bold text-red-900">{dashboardStats.outOfStockCount}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-3">Movimentações Recentes</h4>
+                  <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
+                    {movements.slice(0, 10).map(movement => (
+                      <div key={movement.id} className="p-3 border-b border-gray-100">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium text-gray-900">{movement.productName}</p>
+                            <p className="text-sm text-gray-600">{movement.reason}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`font-medium ${movement.type === 'in' ? 'text-green-600' : 'text-red-600'}`}>
+                              {movement.type === 'in' ? '+' : '-'}{movement.quantity}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(movement.timestamp).toLocaleDateString('pt-BR')}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )}
     </div>
   );
-};
+}
 
-export default EstoqueFFApp;
+export default App;
