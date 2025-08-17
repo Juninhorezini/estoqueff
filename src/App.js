@@ -693,6 +693,42 @@ const EstoqueFFApp = () => {
           await videoRef.current.play();
           clearTimeout(loadTimeout);
           setLoading(false);
+
+          // Define a função scanQRCode no escopo correto
+          const scanQRCode = () => {
+            if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              
+              canvas.width = videoRef.current.videoWidth;
+              canvas.height = videoRef.current.videoHeight;
+              
+              if (canvas.width > 0 && canvas.height > 0) {
+                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                
+                if (code) {
+                  clearInterval(scanIntervalRef.current);
+                  const foundProduct = findProductByQR(code.data);
+                  
+                  if (foundProduct) {
+                    setScannedProduct(foundProduct);
+                    stopCamera();
+                    setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
+                    setTimeout(() => setSuccess(''), 3000);
+                  } else {
+                    setErrors({
+                      general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.',
+                    });
+                    stopCamera();
+                    setTimeout(() => setErrors({}), 3000);
+                  }
+                }
+              }
+            }
+          };
+
           scanIntervalRef.current = setInterval(scanQRCode, 100);
         } catch (error) {
           clearTimeout(loadTimeout);
