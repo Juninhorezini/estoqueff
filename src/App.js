@@ -691,44 +691,42 @@ const EstoqueFFApp = () => {
       setLoading(false);
       
     // ✅ ADICIONAR ESTA PARTE (detecção real):
-let scanInterval;
+  const scanQRCode = () => {
+  if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    
+    if (canvas.width > 0 && canvas.height > 0) {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       
-const scanQRCode = () => {
-    if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      
+      if (code) {
+        // Para o scanning ANTES de processar
+        stopCamera(); // ✅ Usa stopCamera() ao invés de clearInterval
         
-        canvas.width = videoRef.current.videoWidth;
-        canvas.height = videoRef.current.videoHeight;
+        const foundProduct = findProductByQR(code.data);
         
-        if (canvas.width > 0 && canvas.height > 0) {
-            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-            
-            if (code) {
-                clearInterval(scanInterval);
-                const foundProduct = findProductByQR(code.data);
-                
-                if (foundProduct) {
-                    setScannedProduct(foundProduct);
-                    stopCamera();
-                    setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
-                    setTimeout(() => setSuccess(''), 3000);
-                } else {
-                    setErrors({
-                        general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.',
-                    });
-                    stopCamera();
-                    setTimeout(() => setErrors({}), 3000);
-                }
-            }
+        if (foundProduct) {
+          setScannedProduct(foundProduct);
+          setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
+          setTimeout(() => setSuccess(''), 3000);
+        } else {
+          setErrors({
+            general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.',
+          });
+          setTimeout(() => setErrors({}), 3000);
         }
+      }
     }
+  }
 };
 
-const scanInterval = setInterval(scanQRCode, 100);  
+setInterval(scanQRCode, 100); // ✅ Simples e funcional
       
     } catch (error) {
       console.error('Erro ao acessar câmera:', error);
