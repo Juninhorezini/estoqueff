@@ -571,7 +571,6 @@ const EstoqueFFApp = () => {
   const [success, setSuccess] = useState('');
   const [cameraStream, setCameraStream] = useState(null);
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
   const scanIntervalRef = useRef(null);
 
   // Estados para movimentação manual
