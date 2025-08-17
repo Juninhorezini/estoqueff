@@ -691,6 +691,8 @@ const EstoqueFFApp = () => {
       setLoading(false);
       
     // ✅ ADICIONAR ESTA PARTE (detecção real):
+let scanInterval;
+      
 const scanQRCode = () => {
     if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
         const canvas = document.createElement('canvas');
