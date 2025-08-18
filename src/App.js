@@ -672,26 +672,30 @@ async function startRealQRScanner() {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'environment',
-        width: { min: 640, ideal: 1280, max: 1920 },
-        height: { min: 480, ideal: 720, max: 1080 },
+        width: { min: 640, ideal: 1280 },
+        height: { min: 480, ideal: 720 },
       },
     });
 
     setCameraStream(stream);
-    console.log('Stream obtido:', stream, 'Tracks:', stream.getTracks());
+    console.log('Stream obtido, tentando aplicar ao video');
 
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
       videoRef.current.muted = true;
       videoRef.current.playsInline = true;
-      console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject);
 
-      // Atraso para garantir que o DOM esteja pronto
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Tentar play com timeout
+      const playTimeout = setTimeout(() => {
+        console.log('Timeout de play atingido, forçando parada');
+        setLoading(false);
+        stopCamera();
+      }, 5000);
 
       try {
         await videoRef.current.play();
-        console.log('Play bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
+        console.log('Play bem-sucedido, videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
+        clearTimeout(playTimeout);
         setLoading(false);
 
         const scanQRCode = () => {
@@ -731,6 +735,7 @@ async function startRealQRScanner() {
         scanIntervalRef.current = setInterval(scanQRCode, 100);
       } catch (playError) {
         console.log('Erro no play:', playError);
+        clearTimeout(playTimeout);
         setLoading(false);
         setErrors({ camera: 'Erro ao iniciar a câmera: ' + playError.message });
         stopCamera();
@@ -741,14 +746,42 @@ async function startRealQRScanner() {
     setLoading(false);
     setErrors({ camera: 'Erro ao acessar a câmera: ' + error.message });
   } finally {
-    setLoading(false);
+    setLoading(false); // Garante que loading seja desativado
   }
 }
 
-// Função para iniciar o scanner com interação do usuário
+// Função para iniciar o scanner
 function handleStartScanner() {
   startRealQRScanner();
 }
+
+// Bloco JSX atualizado
+{scannerActive && (
+  <div className="text-center">
+    <div className="bg-black rounded-lg overflow-hidden mb-6 relative">
+      {cameraStream ? (
+        <div className="relative">
+          <video 
+            ref={videoRef}
+            className="w-full h-auto" // Ajustado para h-auto
+            autoPlay 
+            playsInline 
+            muted
+          />
+          <button
+            onClick={handleStartScanner}
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Iniciar Scanner
+          </button>
+        </div>
+      ) : null}
+      {loading && <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 text-white">Processando...</div>}
+      {errors.camera && <div className="text-red-500 mt-2">{errors.camera}</div>}
+      {success && <div className="text-green-500 mt-2">{success}</div>}
+    </div>
+  </div>
+)}
   const stopCamera = () => {
   // ✅ LIMPAR interval primeiro
   if (scanIntervalRef.current) {
@@ -1719,32 +1752,7 @@ function handleStartScanner() {
               <p className="text-red-800 text-sm">{errors.camera}</p>
             </div>
           )}
-          
-          {/* Scanner Ativo */}
-          {scannerActive && (
-  <div className="text-center">
-    <div className="bg-black rounded-lg overflow-hidden mb-6 relative">
-      {cameraStream ? (
-        <div className="relative">
-          <video 
-            ref={videoRef}
-            className="w-full h-64 object-cover"
-            autoPlay 
-            playsInline 
-            muted
-          />
-          <button
-            onClick={handleStartScanner}
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Iniciar Scanner
-          </button>
-        </div>
-      ) : null}
-    </div>
-  </div>
-)}
-          
+                  
           {/* Movimentação Manual */}
           {showManualMovement && !manualSelectedProduct && (
             <div>
