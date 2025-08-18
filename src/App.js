@@ -755,33 +755,6 @@ function handleStartScanner() {
   startRealQRScanner();
 }
 
-// Bloco JSX atualizado
-{scannerActive && (
-  <div className="text-center">
-    <div className="bg-black rounded-lg overflow-hidden mb-6 relative">
-      {cameraStream ? (
-        <div className="relative">
-          <video 
-            ref={videoRef}
-            className="w-full h-auto" // Ajustado para h-auto
-            autoPlay 
-            playsInline 
-            muted
-          />
-          <button
-            onClick={handleStartScanner}
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Iniciar Scanner
-          </button>
-        </div>
-      ) : null}
-      {loading && <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 text-white">Processando...</div>}
-      {errors.camera && <div className="text-red-500 mt-2">{errors.camera}</div>}
-      {success && <div className="text-green-500 mt-2">{success}</div>}
-    </div>
-  </div>
-)}
   const stopCamera = () => {
   // ✅ LIMPAR interval primeiro
   if (scanIntervalRef.current) {
@@ -1752,6 +1725,33 @@ function handleStartScanner() {
               <p className="text-red-800 text-sm">{errors.camera}</p>
             </div>
           )}
+
+{scannerActive && (
+  <div className="text-center">
+    <div className="bg-black rounded-lg overflow-hidden mb-6 relative">
+      {cameraStream ? (
+        <div className="relative">
+          <video 
+            ref={videoRef}
+            className="w-full h-auto" // Ajustado para h-auto
+            autoPlay 
+            playsInline 
+            muted
+          />
+          <button
+            onClick={handleStartScanner}
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Iniciar Scanner
+          </button>
+        </div>
+      ) : null}
+      {loading && <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 text-white">Processando...</div>}
+      {errors.camera && <div className="text-red-500 mt-2">{errors.camera}</div>}
+      {success && <div className="text-green-500 mt-2">{success}</div>}
+    </div>
+  </div>
+)}
                   
           {/* Movimentação Manual */}
           {showManualMovement && !manualSelectedProduct && (
