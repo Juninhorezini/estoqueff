@@ -690,11 +690,12 @@ const EstoqueFFApp = () => {
 
       const startVideo = async () => {
         try {
-          await videoRef.current.play();
+          videoRef.current.play().catch((error) => {
+            throw new Error('Falha ao iniciar reprodução: ' + error.message);
+          });
           clearTimeout(loadTimeout);
           setLoading(false);
 
-          // Define a função scanQRCode no escopo correto
           const scanQRCode = () => {
             if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
               const canvas = document.createElement('canvas');
