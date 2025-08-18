@@ -671,9 +671,9 @@ const EstoqueFFApp = () => {
 
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        facingMode: { exact: 'environment' }, // Tenta forçar a câmera traseira
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        facingMode: 'environment', // Removido 'exact' para maior compatibilidade
+        width: { min: 640, ideal: 1280, max: 1920 }, // Faixa de resolução flexível
+        height: { min: 480, ideal: 720, max: 1080 },
       },
     });
 
