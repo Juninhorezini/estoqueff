@@ -684,7 +684,7 @@ async function startRealQRScanner() {
       videoRef.current.srcObject = stream;
       videoRef.current.muted = true;
       videoRef.current.playsInline = true;
-      console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject, 'Video tracks:', stream.getVideoTracks());
+      console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject, 'Video tracks:', stream.getVideoTracks(), 'videoRef exists:', !!videoRef.current);
 
       const loadTimeout = setTimeout(() => {
         console.log('Timeout atingido, verificando videoRef:', videoRef.current, 'ReadyState:', videoRef.current?.readyState);
@@ -758,8 +758,8 @@ async function startRealQRScanner() {
         }
       };
 
-      videoRef.current.addEventListener('loadedmetadata', startVideo, { once: true });
       videoRef.current.load();
+      videoRef.current.addEventListener('loadedmetadata', startVideo, { once: true });
       console.log('Video carregado, readyState após load:', videoRef.current.readyState);
     }
   } catch (error) {
