@@ -662,7 +662,7 @@ const EstoqueFFApp = () => {
   }, []);
 
   // Scanner QR Code com câmera real
-  async function startRealQRScanner() {
+ async function startRealQRScanner() {
   try {
     setLoading(true);
     setScannerActive(true);
@@ -745,6 +745,8 @@ const EstoqueFFApp = () => {
   } catch (error) {
     setLoading(false);
     setErrors({ camera: 'Erro ao acessar a câmera: ' + error.message });
+  } finally {
+    setLoading(false);
   }
 }
   const stopCamera = () => {
