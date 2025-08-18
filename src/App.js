@@ -685,7 +685,7 @@ async function startRealQRScanner() {
       videoRef.current.srcObject = stream;
       videoRef.current.muted = true;
       videoRef.current.playsInline = true;
-      console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject, 'Video tracks:', stream.getVideoTracks());
+      console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject, 'ReadyState inicial:', videoRef.current.readyState);
 
       const loadTimeout = setTimeout(() => {
         console.log('Timeout atingido, verificando videoRef:', videoRef.current, 'ReadyState:', videoRef.current?.readyState);
@@ -694,11 +694,11 @@ async function startRealQRScanner() {
         stopCamera();
       }, 5000);
 
-      // Forçar play com atraso mínimo
-      await new Promise(resolve => setTimeout(resolve, 100)); // Pequeno atraso para DOM
+      // Forçar play com atraso maior
+      await new Promise(resolve => setTimeout(resolve, 500)); // Atraso de 500ms para DOM
       try {
         await videoRef.current.play();
-        console.log('Play inicial bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth);
+        console.log('Play inicial bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
       } catch (playError) {
         console.log('Erro no play inicial:', playError);
       }
