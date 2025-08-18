@@ -569,9 +569,97 @@ const EstoqueFFApp = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState('');
-  const [cameraStream, setCameraStream] = useState(null);
+  // const [cameraStream, setCameraStream] = useState(null);
   const videoRef = useRef(null);
   const scanIntervalRef = useRef(null);
+  
+  // Adicione este novo useEffect aqui: // Gemini daqui...
+useEffect(() => {
+  let stream = null;
+  let scanInterval = null;
+
+  const startCamera = async () => {
+    if (!videoRef.current) return;
+    
+    try {
+      setLoading(true);
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      });
+      stream = mediaStream;
+      videoRef.current.srcObject = mediaStream;
+      videoRef.current.playsInline = true;
+      
+      await new Promise(resolve => {
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current.play().then(resolve).catch(console.error);
+        };
+      });
+
+      scanInterval = setInterval(() => {
+        if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = videoRef.current.videoWidth;
+          canvas.height = videoRef.current.videoHeight;
+          
+          if (canvas.width > 0 && canvas.height > 0) {
+            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            
+            if (code) {
+              const foundProduct = products.find(p => p.qrCode === code.data || p.id === code.data);
+              
+              if (foundProduct) {
+                setScannedProduct(foundProduct);
+                setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
+              } else {
+                setErrors({ general: 'QR Code não reconhecido.' });
+              }
+              
+              setScannerActive(false); 
+            }
+          }
+        }
+      }, 300);
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Erro ao acessar a câmera:', error);
+      setErrors({ camera: 'Erro ao acessar a câmera. Verifique as permissões.' });
+      setLoading(false);
+      setScannerActive(false); 
+    }
+  };
+
+  const stopCamera = () => {
+    if (scanInterval) {
+      clearInterval(scanInterval);
+      scanInterval = null;
+    }
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      stream = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+  
+  if (scannerActive) {
+    startCamera();
+  }
+  
+  return () => {
+    stopCamera();
+  };
+
+}, [scannerActive, products]); // Gemini alterado até aqui
 
   // Estados para movimentação manual
   const [showManualMovement, setShowManualMovement] = useState(false);
@@ -662,151 +750,14 @@ const EstoqueFFApp = () => {
   }, []);
 
   // Scanner QR Code com câmera real
-async function startRealQRScanner() {
-  try {
-    setLoading(true);
-    setScannerActive(true);
-    setErrors({});
-    setMovementType('');
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: 'environment',
-        width: { min: 640, ideal: 1280, max: 1920 },
-        height: { min: 480, ideal: 720, max: 1080 },
-      },
-    });
-
-    setCameraStream(stream);
-    console.log('Stream obtido:', stream, 'Tracks:', stream.getTracks());
-
-    if (videoRef.current) {
-      console.log('videoRef exists:', !!videoRef.current, 'isConnected:', videoRef.current.isConnected);
-      videoRef.current.srcObject = stream;
-      videoRef.current.muted = true;
-      videoRef.current.playsInline = true;
-      console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject, 'ReadyState inicial:', videoRef.current.readyState);
-
-      const loadTimeout = setTimeout(() => {
-        console.log('Timeout atingido, verificando videoRef:', videoRef.current, 'ReadyState:', videoRef.current?.readyState);
-        setLoading(false);
-        setErrors({ camera: 'Tempo limite para carregar câmera excedido.' });
-        stopCamera();
-      }, 5000);
-
-      // Forçar play com atraso maior
-      await new Promise(resolve => setTimeout(resolve, 500)); // Atraso de 500ms para DOM
-      try {
-        await videoRef.current.play();
-        console.log('Play inicial bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
-      } catch (playError) {
-        console.log('Erro no play inicial:', playError);
-      }
-
-      const startVideo = async () => {
-        try {
-          console.log('startVideo chamado, readyState:', videoRef.current.readyState);
-          await new Promise((resolve, reject) => {
-            videoRef.current.play().then(resolve).catch((error) => {
-              console.log('Erro no play secundário:', error);
-              reject(error);
-            });
-          });
-          console.log('Video play bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
-          clearTimeout(loadTimeout);
-          setLoading(false);
-
-          const scanQRCode = () => {
-            if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-              const canvas = document.createElement('canvas');
-              const ctx = canvas.getContext('2d');
-              
-              canvas.width = videoRef.current.videoWidth;
-              canvas.height = videoRef.current.videoHeight;
-              
-              if (canvas.width > 0 && canvas.height > 0) {
-                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-                
-                if (code) {
-                  clearInterval(scanIntervalRef.current);
-                  const foundProduct = findProductByQR(code.data);
-                  
-                  if (foundProduct) {
-                    setScannedProduct(foundProduct);
-                    stopCamera();
-                    setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
-                    setTimeout(() => setSuccess(''), 3000);
-                  } else {
-                    setErrors({
-                      general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.',
-                    });
-                    stopCamera();
-                    setTimeout(() => setErrors({}), 3000);
-                  }
-                }
-              }
-            }
-          };
-
-          scanIntervalRef.current = setInterval(scanQRCode, 100);
-        } catch (error) {
-          console.log('Erro no startVideo:', error);
-          clearTimeout(loadTimeout);
-          setLoading(false);
-          setErrors({ camera: 'Erro ao iniciar a câmera: ' + error.message });
-          stopCamera();
-        }
-      };
-
-      videoRef.current.load();
-      videoRef.current.addEventListener('loadedmetadata', startVideo, { once: true });
-      console.log('Video carregado, readyState após load:', videoRef.current.readyState);
-    }
-  } catch (error) {
-    console.log('Erro no getUserMedia:', error);
-    setLoading(false);
-    setErrors({ camera: 'Erro ao acessar a câmera: ' + error.message });
-  } finally {
-    setLoading(false);
-  }
-}
-  const stopCamera = () => {
-  // ✅ LIMPAR interval primeiro
-  if (scanIntervalRef.current) {
-    clearInterval(scanIntervalRef.current);
-    scanIntervalRef.current = null;
-  }
-  
-  if (cameraStream) {
-    cameraStream.getTracks().forEach(track => track.stop());
-    setCameraStream(null);
-  }
-  setScannerActive(false);
-  if (videoRef.current) {
-    videoRef.current.pause();
-    videoRef.current.srcObject = null;
-  }
-};
 
   const findProductByQR = (qrCode) => {
     return products.find(p => p.qrCode === qrCode || p.id === qrCode);
   };
 
-  useEffect(() => {
-    const currentVideoRef = videoRef.current; // Armazena o valor atual
-    return () => {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-      }
-      if (currentVideoRef) {
-        currentVideoRef.pause();
-        currentVideoRef.srcObject = null;
-      }
-    };
-  }, [cameraStream]);
 
+  
   // Validação de produtos
   const validateProduct = (product, isEdit = false) => {
     const newErrors = {};
@@ -933,6 +884,21 @@ async function startRealQRScanner() {
     
     setLoading(true);
     setErrors({});
+
+    // Novos handlers para iniciar e parar o scanner "Gemini"
+const handleStartScanner = () => {
+  setScannedProduct(null);
+  setErrors({});
+  setMovementType('');
+  setScannerActive(true);
+};
+
+const handleCancelScanner = () => {
+  setScannedProduct(null);
+  setMovementQuantity(1);
+  setMovementType('');
+  setScannerActive(false);
+}; // Gemini Até aqui...
     
     const quantity = parseInt(movementQuantity);
     
@@ -1691,7 +1657,7 @@ async function startRealQRScanner() {
             <h1 className="text-2xl font-bold text-gray-800">Movimentação de Estoque</h1>
             {scannerActive && (
               <button
-                onClick={stopCamera}
+                onClick={handleCancelScanner}
                 className="bg-red-500 text-white p-2 rounded-lg hover:bg-red-600 transition-colors"
                 title="Parar Scanner"
               >
@@ -1704,7 +1670,7 @@ async function startRealQRScanner() {
           {!scannerActive && !scannedProduct && !showManualMovement && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <button
-                onClick={startRealQRScanner}
+                onClick={handleStartScanner}
                 disabled={loading}
                 className="bg-blue-500 text-white p-6 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex flex-col items-center gap-3"
               >
