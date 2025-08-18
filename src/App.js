@@ -678,16 +678,16 @@ async function startRealQRScanner() {
     });
 
     setCameraStream(stream);
-    console.log('Stream obtido:', stream);
+    console.log('Stream obtido:', stream, 'Tracks:', stream.getTracks());
 
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
-      videoRef.current.muted = true; // Adicionado para evitar bloqueio de autoplay
-      videoRef.current.playsInline = true; // Necessário para dispositivos móveis
-      console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject);
+      videoRef.current.muted = true;
+      videoRef.current.playsInline = true;
+      console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject, 'Video tracks:', stream.getVideoTracks());
 
       const loadTimeout = setTimeout(() => {
-        console.log('Timeout atingido, verificando videoRef:', videoRef.current);
+        console.log('Timeout atingido, verificando videoRef:', videoRef.current, 'ReadyState:', videoRef.current?.readyState);
         setLoading(false);
         setErrors({ camera: 'Tempo limite para carregar câmera excedido.' });
         stopCamera();
@@ -751,7 +751,7 @@ async function startRealQRScanner() {
 
       videoRef.current.addEventListener('loadedmetadata', startVideo, { once: true });
       videoRef.current.load();
-      console.log('Video carregado, esperando metadata:', videoRef.current.readyState);
+      console.log('Video carregado, esperando metadata:', videoRef.current.readyState, 'Tracks após load:', stream.getTracks());
     }
   } catch (error) {
     console.log('Erro no getUserMedia:', error);
