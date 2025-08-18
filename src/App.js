@@ -808,7 +808,7 @@ const startRealQRScanner = async () => {
   }
 };
 
-         const scanQRCode = () => {
+ const scanQRCode = () => {
   if (!videoRef.current || !cameraStream) {
     console.log('⚠️ Vídeo ou stream não disponível');
     return;
@@ -869,30 +869,8 @@ const startRealQRScanner = async () => {
     setError('Erro durante o escaneamento');
     stopCamera();
   }
-}; 
-
-          scanIntervalRef.current = setInterval(scanQRCode, 100);
-        } catch (error) {
-          console.log('Erro no startVideo:', error);
-          clearTimeout(loadTimeout);
-          setLoading(false);
-          setErrors({ camera: 'Erro ao iniciar a câmera: ' + error.message });
-          stopCamera();
-        }
-      };
-
-      videoRef.current.addEventListener('loadedmetadata', startVideo, { once: true });
-      videoRef.current.load();
-      console.log('Video carregado, esperando metadata:', videoRef.current.readyState);
-    }
-  } catch (error) {
-    console.log('Erro no getUserMedia:', error);
-    setLoading(false);
-    setErrors({ camera: 'Erro ao acessar a câmera: ' + error.message });
-  } finally {
-    setLoading(false);
-  }
-}
+};
+  
   const stopCamera = () => {
   // ✅ LIMPAR interval primeiro
   if (scanIntervalRef.current) {
