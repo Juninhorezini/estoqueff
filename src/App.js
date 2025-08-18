@@ -671,7 +671,7 @@ const EstoqueFFApp = () => {
 
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        facingMode: 'environment',
+        facingMode: { exact: 'environment' }, // Tenta forçar a câmera traseira
         width: { ideal: 1280 },
         height: { ideal: 720 },
       },
@@ -681,6 +681,7 @@ const EstoqueFFApp = () => {
 
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
+      console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject);
 
       const loadTimeout = setTimeout(() => {
         setLoading(false);
@@ -690,9 +691,8 @@ const EstoqueFFApp = () => {
 
       const startVideo = async () => {
         try {
-          videoRef.current.play().catch((error) => {
-            throw new Error('Falha ao iniciar reprodução: ' + error.message);
-          });
+          await videoRef.current.play();
+          console.log('Video play bem-sucedido');
           clearTimeout(loadTimeout);
           setLoading(false);
 
@@ -732,6 +732,7 @@ const EstoqueFFApp = () => {
 
           scanIntervalRef.current = setInterval(scanQRCode, 100);
         } catch (error) {
+          console.log('Erro no play:', error);
           clearTimeout(loadTimeout);
           setLoading(false);
           setErrors({ camera: 'Erro ao iniciar a câmera: ' + error.message });
@@ -743,6 +744,7 @@ const EstoqueFFApp = () => {
       videoRef.current.load();
     }
   } catch (error) {
+    console.log('Erro no getUserMedia:', error);
     setLoading(false);
     setErrors({ camera: 'Erro ao acessar a câmera: ' + error.message });
   } finally {
