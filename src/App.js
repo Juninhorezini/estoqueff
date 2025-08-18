@@ -568,6 +568,7 @@ const EstoqueFFApp = () => {
   const [editingLabelForProduct, setEditingLabelForProduct] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [error, setError] = useState(null);
   const [success, setSuccess] = useState('');
   const [cameraStream, setCameraStream] = useState(null);
   const videoRef = useRef(null);
