@@ -686,31 +686,14 @@ async function startRealQRScanner() {
       videoRef.current.playsInline = true;
       console.log('Stream aplicado, readyState inicial:', videoRef.current.readyState);
 
-      // Atraso para estabilizar o DOM
+      // Atraso para estabilizar
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      let attempts = 0;
-      const maxAttempts = 3;
+      try {
+        await videoRef.current.play();
+        console.log('Play bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
+        setLoading(false);
 
-      while (attempts < maxAttempts) {
-        try {
-          await videoRef.current.play();
-          console.log('Play bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
-          setLoading(false);
-          break; // Sai do loop se bem-sucedido
-        } catch (playError) {
-          attempts++;
-          console.log(`Erro no play (tentativa ${attempts}/${maxAttempts}):`, playError);
-          if (attempts === maxAttempts) {
-            setLoading(false);
-            setErrors({ camera: 'Falha ao iniciar a câmera após várias tentativas: ' + playError.message });
-            stopCamera();
-          }
-          await new Promise(resolve => setTimeout(resolve, 500)); // Aguarda antes de tentar novamente
-        }
-      }
-
-      if (videoRef.current.played.length > 0) {
         const scanQRCode = () => {
           if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
             const canvas = document.createElement('canvas');
@@ -746,6 +729,11 @@ async function startRealQRScanner() {
         };
 
         scanIntervalRef.current = setInterval(scanQRCode, 100);
+      } catch (playError) {
+        console.log('Erro no play:', playError);
+        setLoading(false);
+        setErrors({ camera: 'Falha ao iniciar a câmera: ' + playError.message });
+        stopCamera();
       }
     }
   } catch (error) {
@@ -753,7 +741,7 @@ async function startRealQRScanner() {
     setLoading(false);
     setErrors({ camera: 'Erro ao acessar a câmera: ' + error.message });
   } finally {
-    setLoading(false);
+    setLoading(false); // Garante que loading seja desativado
   }
 }
 
