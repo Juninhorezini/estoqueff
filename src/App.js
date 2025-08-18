@@ -693,15 +693,24 @@ async function startRealQRScanner() {
         stopCamera();
       }, 5000);
 
+      // Tentar play imediatamente
+      try {
+        await videoRef.current.play();
+        console.log('Play inicial bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth);
+      } catch (playError) {
+        console.log('Erro no play inicial:', playError);
+      }
+
       const startVideo = async () => {
         try {
+          console.log('startVideo chamado, readyState:', videoRef.current.readyState);
           await new Promise((resolve, reject) => {
             videoRef.current.play().then(resolve).catch((error) => {
-              console.log('Erro no play:', error);
+              console.log('Erro no play secundário:', error);
               reject(error);
             });
           });
-          console.log('Video play bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth);
+          console.log('Video play bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
           clearTimeout(loadTimeout);
           setLoading(false);
 
@@ -751,7 +760,7 @@ async function startRealQRScanner() {
 
       videoRef.current.addEventListener('loadedmetadata', startVideo, { once: true });
       videoRef.current.load();
-      console.log('Video carregado, esperando metadata:', videoRef.current.readyState, 'Tracks após load:', stream.getTracks());
+      console.log('Video carregado, readyState após load:', videoRef.current.readyState);
     }
   } catch (error) {
     console.log('Erro no getUserMedia:', error);
