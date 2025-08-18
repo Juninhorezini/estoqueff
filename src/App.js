@@ -662,7 +662,7 @@ const EstoqueFFApp = () => {
   }, []);
 
   // Scanner QR Code com câmera real
- async function startRealQRScanner() {
+async function startRealQRScanner() {
   try {
     setLoading(true);
     setScannerActive(true);
@@ -671,19 +671,21 @@ const EstoqueFFApp = () => {
 
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        facingMode: 'environment', // Removido 'exact' para maior compatibilidade
-        width: { min: 640, ideal: 1280, max: 1920 }, // Faixa de resolução flexível
+        facingMode: 'environment',
+        width: { min: 640, ideal: 1280, max: 1920 },
         height: { min: 480, ideal: 720, max: 1080 },
       },
     });
 
     setCameraStream(stream);
+    console.log('Stream obtido:', stream);
 
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
       console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject);
 
       const loadTimeout = setTimeout(() => {
+        console.log('Timeout atingido, verificando videoRef:', videoRef.current);
         setLoading(false);
         setErrors({ camera: 'Tempo limite para carregar câmera excedido.' });
         stopCamera();
@@ -691,8 +693,13 @@ const EstoqueFFApp = () => {
 
       const startVideo = async () => {
         try {
-          await videoRef.current.play();
-          console.log('Video play bem-sucedido');
+          await new Promise((resolve, reject) => {
+            videoRef.current.play().then(resolve).catch((error) => {
+              console.log('Erro no play:', error);
+              reject(error);
+            });
+          });
+          console.log('Video play bem-sucedido, readyState:', videoRef.current.readyState);
           clearTimeout(loadTimeout);
           setLoading(false);
 
@@ -732,7 +739,7 @@ const EstoqueFFApp = () => {
 
           scanIntervalRef.current = setInterval(scanQRCode, 100);
         } catch (error) {
-          console.log('Erro no play:', error);
+          console.log('Erro no startVideo:', error);
           clearTimeout(loadTimeout);
           setLoading(false);
           setErrors({ camera: 'Erro ao iniciar a câmera: ' + error.message });
@@ -742,6 +749,7 @@ const EstoqueFFApp = () => {
 
       videoRef.current.addEventListener('loadedmetadata', startVideo, { once: true });
       videoRef.current.load();
+      console.log('Video carregado, esperando metadata:', videoRef.current);
     }
   } catch (error) {
     console.log('Erro no getUserMedia:', error);
