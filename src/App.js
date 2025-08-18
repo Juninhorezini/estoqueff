@@ -682,6 +682,8 @@ async function startRealQRScanner() {
 
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
+      videoRef.current.muted = true; // Adicionado para evitar bloqueio de autoplay
+      videoRef.current.playsInline = true; // Necessário para dispositivos móveis
       console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject);
 
       const loadTimeout = setTimeout(() => {
@@ -699,7 +701,7 @@ async function startRealQRScanner() {
               reject(error);
             });
           });
-          console.log('Video play bem-sucedido, readyState:', videoRef.current.readyState);
+          console.log('Video play bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth);
           clearTimeout(loadTimeout);
           setLoading(false);
 
@@ -749,7 +751,7 @@ async function startRealQRScanner() {
 
       videoRef.current.addEventListener('loadedmetadata', startVideo, { once: true });
       videoRef.current.load();
-      console.log('Video carregado, esperando metadata:', videoRef.current);
+      console.log('Video carregado, esperando metadata:', videoRef.current.readyState);
     }
   } catch (error) {
     console.log('Erro no getUserMedia:', error);
