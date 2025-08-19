@@ -1227,6 +1227,42 @@ const EstoqueFFApp = () => {
     }
   }, [products, productsFilter]);
   
+  const filteredProductsForList = useMemo(() => {
+    if (!searchTerm.trim()) return products;
+    const term = searchTerm.toLowerCase().trim();
+    return products.filter(product => 
+      product.name.toLowerCase().includes(term) ||
+      product.id.toLowerCase().includes(term) ||
+      (product.brand && product.brand.toLowerCase().includes(term)) ||
+      product.category.toLowerCase().includes(term) ||
+      (product.code && product.code.toLowerCase().includes(term))
+    );
+  }, [products, searchTerm]);
+  
+  const filteredManualProducts = useMemo(() => {
+    if (!manualSearchTerm.trim()) return products;
+    const term = manualSearchTerm.toLowerCase().trim();
+    return products.filter(product => 
+      product.name.toLowerCase().includes(term) ||
+      product.id.toLowerCase().includes(term) ||
+      (product.brand && product.brand.toLowerCase().includes(term)) ||
+      product.category.toLowerCase().includes(term) ||
+      (product.code && product.code.toLowerCase().includes(term))
+    );
+  }, [products, manualSearchTerm]);
+  
+  const filteredLabelProducts = useMemo(() => {
+    if (!labelSearchTerm.trim()) return products;
+    const term = labelSearchTerm.toLowerCase().trim();
+    return products.filter(product => 
+      product.name.toLowerCase().includes(term) ||
+      product.id.toLowerCase().includes(term) ||
+      (product.brand && product.brand.toLowerCase().includes(term)) ||
+      product.category.toLowerCase().includes(term) ||
+      (product.code && product.code.toLowerCase().includes(term))
+    );
+  }, [products, labelSearchTerm]);
+
   // Navegação
   const renderScreen = () => {
     switch(currentScreen) {
@@ -1366,18 +1402,6 @@ const EstoqueFFApp = () => {
         );
       
       case 'products':
-        const filteredProductsForList = useMemo(() => {
-          if (!searchTerm.trim()) return products;
-          const term = searchTerm.toLowerCase().trim();
-          return products.filter(product => 
-            product.name.toLowerCase().includes(term) ||
-            product.id.toLowerCase().includes(term) ||
-            (product.brand && product.brand.toLowerCase().includes(term)) ||
-            product.category.toLowerCase().includes(term) ||
-            (product.code && product.code.toLowerCase().includes(term))
-          );
-        }, [products, searchTerm]);
-
         return (
           <div className="space-y-6">
             <h2 className="text-3xl font-bold text-gray-800">Produtos</h2>
@@ -1389,7 +1413,7 @@ const EstoqueFFApp = () => {
             )}
             <ProductSearch onSearchChange={handleSearchChange} searchTerm={searchTerm} />
             <ProductList 
-              products={products}
+              products={filteredProductsForList}
               searchTerm={searchTerm} 
               onEdit={handleEditProduct} 
               onDelete={handleDeleteProduct}
@@ -1561,18 +1585,6 @@ const EstoqueFFApp = () => {
         );
 
       case 'manualMovement':
-        const filteredManualProducts = useMemo(() => {
-          if (!manualSearchTerm.trim()) return products;
-          const term = manualSearchTerm.toLowerCase().trim();
-          return products.filter(product => 
-            product.name.toLowerCase().includes(term) ||
-            product.id.toLowerCase().includes(term) ||
-            (product.brand && product.brand.toLowerCase().includes(term)) ||
-            product.category.toLowerCase().includes(term) ||
-            (product.code && product.code.toLowerCase().includes(term))
-          );
-        }, [products, manualSearchTerm]);
-        
         return (
           <div className="space-y-6">
             <h2 className="text-3xl font-bold text-gray-800">Movimentação Manual</h2>
@@ -1886,18 +1898,6 @@ const EstoqueFFApp = () => {
         );
 
       case 'labels':
-        const filteredLabelProducts = useMemo(() => {
-          if (!labelSearchTerm.trim()) return products;
-          const term = labelSearchTerm.toLowerCase().trim();
-          return products.filter(product => 
-            product.name.toLowerCase().includes(term) ||
-            product.id.toLowerCase().includes(term) ||
-            (product.brand && product.brand.toLowerCase().includes(term)) ||
-            product.category.toLowerCase().includes(term) ||
-            (product.code && product.code.toLowerCase().includes(term))
-          );
-        }, [products, labelSearchTerm]);
-        
         const generateLabels = (productsToPrint) => {
           const doc = new jsPDF({
             orientation: 'p',
