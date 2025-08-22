@@ -688,6 +688,8 @@ const startRealQRScanner = async () => {
     }
 
     setCameraStream(stream);
+    console.log('📡 CameraStream definido:', !!stream);
+    console.log('📡 Tracks do stream:', stream.getTracks().length);
 
     // Aguardar elemento de vídeo estar disponível
 let attempts = 0;
@@ -709,58 +711,83 @@ console.log('✅ VideoRef disponível:', !!videoRef.current);
     videoRef.current.playsInline = true;
 
     // Função de escaneamento
-    const scanQRCode = () => {
-      if (!videoRef.current || !cameraStream || videoRef.current.readyState < 2) return;
-      
-      try {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = videoRef.current.videoWidth || 640;
-        canvas.height = videoRef.current.videoHeight || 480;
-        
-        if (canvas.width === 0 || canvas.height === 0) return;
-        
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-        
-        if (code) {
-          clearInterval(scanIntervalRef.current);
-          const product = findProductByQR(code.data);
-          if (product) {
-            setScannedProduct(product.id);
-            setSuccess(`Produto encontrado: ${product.name}`);
-          } else {
-            setErrors({ camera: 'Produto não encontrado' });
-          }
-          stopCamera();
-        }
-      } catch (scanError) {
-        console.error('Erro no scan:', scanError);
+const scanQRCode = () => {
+  console.log('🔄 scanQRCode executando...');
+  console.log('📹 videoRef.current:', !!videoRef.current);
+  console.log('📡 cameraStream:', !!cameraStream);
+  console.log('📊 readyState:', videoRef.current?.readyState);
+  
+  if (!videoRef.current || !cameraStream || videoRef.current.readyState < 2) {
+    console.log('⚠️ Condições não atendidas para scan');
+    return;
+  }
+  
+  console.log('✅ Tentando scan...');
+  
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = videoRef.current.videoWidth || 640;
+    canvas.height = videoRef.current.videoHeight || 480;
+    
+    console.log('📐 Canvas:', canvas.width, 'x', canvas.height);
+    
+    if (canvas.width === 0 || canvas.height === 0) {
+      console.log('⚠️ Dimensões inválidas');
+      return;
+    }
+    
+    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    
+    if (code) {
+      console.log('🎯 QR CODE ENCONTRADO!:', code.data);
+      clearInterval(scanIntervalRef.current);
+      const product = findProductByQR(code.data);
+      if (product) {
+        setScannedProduct(product.id);
+        setSuccess(`Produto encontrado: ${product.name}`);
+      } else {
+        setErrors({ camera: 'Produto não encontrado' });
       }
-    };
+      stopCamera();
+    } else {
+      // Só mostrar a cada 50 tentativas para não poluir o log
+      if (Math.random() < 0.02) console.log('🔍 Procurando QR Code...');
+    }
+  } catch (scanError) {
+    console.error('❌ Erro no scan:', scanError);
+  }
+};
 
     // Inicializar scanner
-    const initScanner = async () => {
-      try {
-        await videoRef.current.play();
-        
-        // Aguardar vídeo estar pronto
-        let attempts = 0;
-        while (videoRef.current.readyState < 2 && attempts < 50) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          attempts++;
-        }
-        
-        if (videoRef.current.readyState >= 2) {
-          scanIntervalRef.current = setInterval(scanQRCode, 100);
-        } else {
-          throw new Error('Vídeo não ficou pronto');
-        }
-      } catch (playError) {
-        throw new Error(`Erro no play: ${playError.message}`);
-      }
-    };
+const initScanner = async () => {
+  try {
+    console.log('▶️ Iniciando initScanner...');
+    await videoRef.current.play();
+    console.log('✅ Play executado');
+    
+    // Aguardar vídeo estar pronto
+    let attempts = 0;
+    while (videoRef.current.readyState < 2 && attempts < 50) {
+      console.log(`⏳ Aguardando readyState >= 2, atual: ${videoRef.current.readyState}, tentativa: ${attempts + 1}`);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      attempts++;
+    }
+    
+    if (videoRef.current.readyState >= 2) {
+      console.log('🚀 INICIANDO INTERVAL DE ESCANEAMENTO!');
+      scanIntervalRef.current = setInterval(scanQRCode, 100);
+      console.log('✅ Interval criado:', !!scanIntervalRef.current);
+    } else {
+      throw new Error('Vídeo não ficou pronto após 5 segundos');
+    }
+  } catch (playError) {
+    console.error('❌ Erro no initScanner:', playError);
+    throw new Error(`Erro no play: ${playError.message}`);
+  }
+};
 
     // Iniciar com eventos
     if (videoRef.current.readyState >= 2) {
