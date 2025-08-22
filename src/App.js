@@ -689,9 +689,19 @@ const startRealQRScanner = async () => {
 
     setCameraStream(stream);
 
-    if (!videoRef.current) {
-      throw new Error('Elemento de vídeo não encontrado');
-    }
+    // Aguardar elemento de vídeo estar disponível
+let attempts = 0;
+while (!videoRef.current && attempts < 20) {
+  console.log(`⏳ Aguardando videoRef... tentativa ${attempts + 1}`);
+  await new Promise(resolve => setTimeout(resolve, 100));
+  attempts++;
+}
+
+if (!videoRef.current) {
+  throw new Error('Elemento de vídeo não foi renderizado após 2 segundos');
+}
+
+console.log('✅ VideoRef disponível:', !!videoRef.current);
 
     // Configurar vídeo
     videoRef.current.srcObject = stream;
