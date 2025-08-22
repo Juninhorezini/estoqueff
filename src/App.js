@@ -759,7 +759,21 @@ try {
       console.log('✅ Produto encontrado via ID:', product.name);
       clearInterval(scanIntervalRef.current);
       setScannedProduct(product.id);
+      setSelectedProduct(product.id); // Se existe esse estado
+setNewProduct({
+  ...newProduct,
+  name: product.name,
+  brand: product.brand || '',
+  category: product.category || '',
+  code: product.code || '',
+  stock: product.stock || 0
+});
       setSuccess(`Produto encontrado: ${product.name}`);
+
+// Auto-limpar mensagem após 3 segundos
+setTimeout(() => {
+  setSuccess('');
+}, 3000);
       stopCamera();
       return;
     }
@@ -856,23 +870,37 @@ const initScanner = async () => {
   }
 };
   const stopCamera = () => {
-  // ✅ LIMPAR interval primeiro
+  console.log('🛑 Parando câmera...');
+  
+  // Parar interval de escaneamento
   if (scanIntervalRef.current) {
+    console.log('⏹️ Parando interval');
     clearInterval(scanIntervalRef.current);
     scanIntervalRef.current = null;
   }
   
+  // Parar todas as tracks do stream
   if (cameraStream) {
-    cameraStream.getTracks().forEach(track => track.stop());
+    console.log('📹 Parando tracks da câmera');
+    cameraStream.getTracks().forEach(track => {
+      console.log('🔚 Parando track:', track.kind);
+      track.stop();
+    });
     setCameraStream(null);
   }
-  setScannerActive(false);
+  
+  // Limpar srcObject do vídeo
   if (videoRef.current) {
-    videoRef.current.pause();
+    console.log('🧹 Limpando srcObject');
     videoRef.current.srcObject = null;
   }
+  
+  // Resetar estados
+  setScannerActive(false);
+  setLoading(false);
+  
+  console.log('✅ Câmera parada completamente');
 };
-
   const findProductByQR = (qrCode) => {
   console.log('🔍 findProductByQR recebeu:', qrCode);
   console.log('📦 Produtos disponíveis:', products.length);
