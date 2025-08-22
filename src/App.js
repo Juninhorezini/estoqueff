@@ -717,7 +717,7 @@ const scanQRCode = () => {
   console.log('📡 cameraStream:', !!cameraStream);
   console.log('📊 readyState:', videoRef.current?.readyState);
   
-  if (!videoRef.current || !cameraStream || videoRef.current.readyState < 2) {
+  if (!videoRef.current || videoRef.current.readyState < 2) {
     console.log('⚠️ Condições não atendidas para scan');
     return;
   }
