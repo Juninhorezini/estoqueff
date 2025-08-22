@@ -662,116 +662,154 @@ const EstoqueFFApp = () => {
   }, []);
 
   // Scanner QR Code com câmera real
-async function startRealQRScanner() {
+const startRealQRScanner = async () => {
+  console.log('🎬 Iniciando scanner de câmera...');
+  setLoading(true);
+  setScannerActive(true);
+  setErrors({});
+  setMovementType('');
+  setScannedProduct(null);
+  
   try {
-    setLoading(true);
-    setScannerActive(true);
-    setErrors({});
-    setMovementType('');
+    // 1. Obter stream da câmera com fallbacks
+    let stream;
+    const constraints = [
+      { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } },
+      { video: { width: { ideal: 1280 }, height: { ideal: 720 } } },
+      { video: true }
+    ];
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: 'environment',
-        width: { min: 640, ideal: 1280, max: 1920 },
-        height: { min: 480, ideal: 720, max: 1080 },
-      },
-    });
+    for (const constraint of constraints) {
+      try {
+        console.log('📱 Tentando constraint:', constraint);
+        stream = await navigator.mediaDevices.getUserMedia(constraint);
+        console.log('✅ Stream obtido com sucesso!');
+        break;
+      } catch (err) {
+        console.log('⚠️ Constraint falhou:', err.message);
+        continue;
+      }
+    }
+
+    if (!stream) {
+      throw new Error('Nenhuma configuração de câmera funcionou');
+    }
 
     setCameraStream(stream);
-    console.log('Stream obtido:', stream, 'Tracks:', stream.getTracks());
 
-    if (videoRef.current) {
-      console.log('videoRef exists:', !!videoRef.current, 'isConnected:', videoRef.current.isConnected);
-      videoRef.current.srcObject = stream;
-      videoRef.current.muted = true;
-      videoRef.current.playsInline = true;
-      console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject, 'ReadyState inicial:', videoRef.current.readyState);
+    // 2. Verificar videoRef
+    if (!videoRef.current) {
+      throw new Error('Elemento de vídeo não encontrado');
+    }
 
-      const loadTimeout = setTimeout(() => {
-        console.log('Timeout atingido, verificando videoRef:', videoRef.current, 'ReadyState:', videoRef.current?.readyState);
-        setLoading(false);
-        setErrors({ camera: 'Tempo limite para carregar câmera excedido.' });
-        stopCamera();
-      }, 5000);
+    // 3. Configurar elemento de vídeo
+    videoRef.current.srcObject = stream;
+    videoRef.current.muted = true;
+    videoRef.current.playsInline = true;
+    videoRef.current.autoplay = true;
 
-      // Forçar play com atraso maior
-      await new Promise(resolve => setTimeout(resolve, 500)); // Atraso de 500ms para DOM
+    console.log('🔗 Stream conectado ao elemento de vídeo');
+
+    // 4. Função robusta para iniciar escaneamento
+    const initializeScanner = async () => {
       try {
-        await videoRef.current.play();
-        console.log('Play inicial bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
-      } catch (playError) {
-        console.log('Erro no play inicial:', playError);
-      }
+        console.log('▶️ Iniciando reprodução...');
+        
+        // Tentar play com retry
+        let playAttempts = 0;
+        const maxPlayAttempts = 3;
+        
+        while (playAttempts < maxPlayAttempts) {
+          try {
+            await videoRef.current.play();
+            console.log('✅ Play bem-sucedido!');
+            break;
+          } catch (playError) {
+            playAttempts++;
+            console.log(`⚠️ Tentativa ${playAttempts} de play falhou:`, playError.message);
+            if (playAttempts >= maxPlayAttempts) {
+              throw playError;
+            }
+            // Aguardar antes de tentar novamente
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
 
-      const startVideo = async () => {
-        try {
-          console.log('startVideo chamado, readyState:', videoRef.current.readyState);
-          await new Promise((resolve, reject) => {
-            videoRef.current.play().then(resolve).catch((error) => {
-              console.log('Erro no play secundário:', error);
-              reject(error);
-            });
-          });
-          console.log('Video play bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
-          clearTimeout(loadTimeout);
-          setLoading(false);
-
-          const scanQRCode = () => {
-            if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-              const canvas = document.createElement('canvas');
-              const ctx = canvas.getContext('2d');
-              
-              canvas.width = videoRef.current.videoWidth;
-              canvas.height = videoRef.current.videoHeight;
-              
-              if (canvas.width > 0 && canvas.height > 0) {
-                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-                
-                if (code) {
-                  clearInterval(scanIntervalRef.current);
-                  const foundProduct = findProductByQR(code.data);
-                  
-                  if (foundProduct) {
-                    setScannedProduct(foundProduct);
-                    stopCamera();
-                    setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
-                    setTimeout(() => setSuccess(''), 3000);
-                  } else {
-                    setErrors({
-                      general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.',
-                    });
-                    stopCamera();
-                    setTimeout(() => setErrors({}), 3000);
-                  }
-                }
-              }
+        // 5. Aguardar vídeo estar pronto
+        console.log('⏳ Aguardando vídeo ficar pronto...');
+        await new Promise((resolve, reject) => {
+          const checkReady = () => {
+            if (videoRef.current.readyState >= 2) {
+              console.log('✅ Vídeo pronto! ReadyState:', videoRef.current.readyState);
+              resolve();
+            } else {
+              setTimeout(checkReady, 100);
             }
           };
+          checkReady();
+          
+          // Timeout de 10 segundos
+          setTimeout(() => reject(new Error('Timeout aguardando vídeo')), 10000);
+        });
 
-          scanIntervalRef.current = setInterval(scanQRCode, 100);
-        } catch (error) {
-          console.log('Erro no startVideo:', error);
-          clearTimeout(loadTimeout);
-          setLoading(false);
-          setErrors({ camera: 'Erro ao iniciar a câmera: ' + error.message });
-          stopCamera();
-        }
-      };
+        // 6. Iniciar escaneamento
+        console.log('🔄 Iniciando loop de escaneamento...');
+        scanIntervalRef.current = setInterval(scanQRCode, 100);
 
-      videoRef.current.load();
-      videoRef.current.addEventListener('loadedmetadata', startVideo, { once: true });
-      console.log('Video carregado, readyState após load:', videoRef.current.readyState);
+      } catch (error) {
+        console.error('❌ Erro na inicialização:', error);
+        throw error;
+      }
+    };
+
+    // 7. Inicializar com múltiplos métodos
+    const initPromises = [];
+    
+    // Método 1: loadedmetadata
+    if (videoRef.current.readyState < 1) {
+      initPromises.push(
+        new Promise(resolve => {
+          videoRef.current.addEventListener('loadedmetadata', resolve, { once: true });
+        })
+      );
     }
+
+    // Método 2: canplay  
+    initPromises.push(
+      new Promise(resolve => {
+        videoRef.current.addEventListener('canplay', resolve, { once: true });
+      })
+    );
+
+    // Método 3: Timeout de fallback
+    initPromises.push(
+      new Promise(resolve => setTimeout(resolve, 2000))
+    );
+
+    // Aguardar qualquer um dos métodos
+    await Promise.race(initPromises);
+    
+    // Inicializar scanner
+    await initializeScanner();
+
   } catch (error) {
-    console.log('Erro no getUserMedia:', error);
-    setLoading(false);
-    setErrors({ camera: 'Erro ao acessar a câmera: ' + error.message });
+    console.error('❌ Erro geral:', error);
+    
+    let errorMessage = 'Erro ao acessar câmera';
+    if (error.name === 'NotAllowedError') {
+      errorMessage = 'Permissão da câmera negada. Permita o acesso à câmera.';
+    } else if (error.name === 'NotFoundError') {
+      errorMessage = 'Nenhuma câmera encontrada no dispositivo.';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    setErrors({ camera: errorMessage });
+    stopCamera();
   } finally {
     setLoading(false);
   }
-}
+};
   const stopCamera = () => {
   // ✅ LIMPAR interval primeiro
   if (scanIntervalRef.current) {
