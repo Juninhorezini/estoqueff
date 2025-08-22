@@ -754,7 +754,28 @@ const startRealQRScanner = async () => {
 
         // 6. Iniciar escaneamento
         console.log('🔄 Iniciando loop de escaneamento...');
-        scanIntervalRef.current = setInterval(scanQRCode, 100);
+        scanIntervalRef.current = setInterval(() => {
+  if (!videoRef.current || !cameraStream || videoRef.current.readyState < 2) return;
+  
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = videoRef.current.videoWidth || 640;
+  canvas.height = videoRef.current.videoHeight || 480;
+  
+  if (canvas.width === 0 || canvas.height === 0) return;
+  
+  ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(imageData.data, imageData.width, imageData.height);
+  
+  if (code) {
+    clearInterval(scanIntervalRef.current);
+    const product = findProductByQR(code.data);
+    if (product) {
+      setScannedProduct(product.id);
+      setSuccess(`Produto encontrado: ${product.name}`);
+    } else {
+      setErrors({ camera: 'Produto não encontrado' });
 
       } catch (error) {
         console.error('❌ Erro na inicialização:', error);
