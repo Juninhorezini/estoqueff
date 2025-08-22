@@ -8,7 +8,7 @@ import './App.css';
 
 // Hook para localStorage
 const useStoredState = (key, initialValue) => {
-  const [storedValue, setStoredState] = useState(() => {
+  const [storedValue, setStoredValue] = useState(() => {
     try {
       const item = window.localStorage.getItem(key);
       return item ? JSON.parse(item) : initialValue;
@@ -20,7 +20,7 @@ const useStoredState = (key, initialValue) => {
 
   const setValue = (value) => {
     try {
-      setStoredState(value);
+      setStoredValue(value);
       window.localStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
       console.log(error);
@@ -129,6 +129,7 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
               </button>
             </div>
           </div>
+          
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-gray-600">Estoque:</span>
@@ -143,6 +144,7 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
               <span className="ml-2 font-medium">{product.minStock}</span>
             </div>
           </div>
+          
           {product.stock <= product.minStock && (
             <div className="mt-2 bg-red-50 border border-red-200 rounded px-2 py-1">
               <span className="text-red-600 text-xs font-medium">⚠️ Estoque baixo</span>
@@ -531,6 +533,7 @@ const defaultLabelConfig = {
 
 const EstoqueFFApp = () => {
   const [currentScreen, setCurrentScreen] = useState('dashboard');
+  
   // Estados usando localStorage
   const [products, setProducts] = useStoredState('estoqueff_products', [
     { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
@@ -544,11 +547,13 @@ const EstoqueFFApp = () => {
     { id: '2', product: 'Mouse Logitech', type: 'entrada', quantity: 5, user: 'Maria Santos', date: '2025-08-04 12:15' },
     { id: '3', product: 'Monitor 24"', type: 'saída', quantity: 1, user: 'Pedro Costa', date: '2025-08-04 10:45' }
   ]);
+
   const [companySettings, setCompanySettings] = useStoredState('estoqueff_settings', {
     companyName: 'Minha Empresa',
     responsibleName: 'Juninho Rezini',
     lowStockAlert: true
   });
+
   const [productLabelConfigs, setProductLabelConfigs] = useStoredState('estoqueff_product_label_configs', {});
   
   // Estados gerais
@@ -576,7 +581,7 @@ const EstoqueFFApp = () => {
   // Estados de pesquisa
   const [searchTerm, setSearchTerm] = useState('');
   const [labelSearchTerm, setLabelSearchTerm] = useState('');
-  
+
   // Estados para novo produto
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -610,7 +615,7 @@ const EstoqueFFApp = () => {
   const handleLabelSearchChange = useCallback((newSearchTerm) => {
     setLabelSearchTerm(newSearchTerm);
   }, []);
-  
+
   const handleManualSearchChange = useCallback((newSearchTerm) => {
     setManualSearchTerm(newSearchTerm);
   }, []);
@@ -650,142 +655,140 @@ const EstoqueFFApp = () => {
     setEditingLabelForProduct(productId);
     setShowLabelEditor(true);
   }, []);
-  
+
   const closeLabelEditor = useCallback(() => {
     setEditingLabelForProduct(null);
     setShowLabelEditor(false);
   }, []);
 
   // Scanner QR Code com câmera real
-  async function startRealQRScanner() {
-    try {
-      setLoading(true);
-      setScannerActive(true);
-      setErrors({});
-      setMovementType('');
+async function startRealQRScanner() {
+  try {
+    setLoading(true);
+    setScannerActive(true);
+    setErrors({});
+    setMovementType('');
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { min: 640, ideal: 1280, max: 1920 },
-          height: { min: 480, ideal: 720, max: 1080 },
-        },
-      });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'environment',
+        width: { min: 640, ideal: 1280, max: 1920 },
+        height: { min: 480, ideal: 720, max: 1080 },
+      },
+    });
 
-      setCameraStream(stream);
-      console.log('Stream obtido:', stream, 'Tracks:', stream.getTracks());
+    setCameraStream(stream);
+    console.log('Stream obtido:', stream, 'Tracks:', stream.getTracks());
 
-      if (videoRef.current) {
-        console.log('videoRef exists:', !!videoRef.current, 'isConnected:', videoRef.current.isConnected);
-        videoRef.current.srcObject = stream;
-        videoRef.current.muted = true;
-        videoRef.current.playsInline = true;
-        console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject, 'ReadyState inicial:', videoRef.current.readyState);
-        
-        const loadTimeout = setTimeout(() => {
-          console.log('Timeout atingido, verificando videoRef:', videoRef.current, 'ReadyState:', videoRef.current?.readyState);
-          setLoading(false);
-          setErrors({ camera: 'Tempo limite para carregar câmera excedido.' });
-          stopCamera();
-        }, 5000);
+    if (videoRef.current) {
+      console.log('videoRef exists:', !!videoRef.current, 'isConnected:', videoRef.current.isConnected);
+      videoRef.current.srcObject = stream;
+      videoRef.current.muted = true;
+      videoRef.current.playsInline = true;
+      console.log('Stream aplicado ao videoRef:', videoRef.current.srcObject, 'ReadyState inicial:', videoRef.current.readyState);
 
-        // Forçar play com atraso maior
-        await new Promise(resolve => setTimeout(resolve, 500));
+      const loadTimeout = setTimeout(() => {
+        console.log('Timeout atingido, verificando videoRef:', videoRef.current, 'ReadyState:', videoRef.current?.readyState);
+        setLoading(false);
+        setErrors({ camera: 'Tempo limite para carregar câmera excedido.' });
+        stopCamera();
+      }, 5000);
 
-        // Atraso de 500ms para DOM
+      // Forçar play com atraso maior
+      await new Promise(resolve => setTimeout(resolve, 500)); // Atraso de 500ms para DOM
+      try {
+        await videoRef.current.play();
+        console.log('Play inicial bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
+      } catch (playError) {
+        console.log('Erro no play inicial:', playError);
+      }
+
+      const startVideo = async () => {
         try {
-          await videoRef.current.play();
-          console.log('Play inicial bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
-        } catch (playError) {
-          console.log('Erro no play inicial:', playError);
-        }
-
-        const startVideo = async () => {
-          try {
-            console.log('startVideo chamado, readyState:', videoRef.current.readyState);
-            await new Promise((resolve, reject) => {
-              videoRef.current.play().then(resolve).catch((error) => {
-                console.log('Erro no play secundário:', error);
-                reject(error);
-              });
+          console.log('startVideo chamado, readyState:', videoRef.current.readyState);
+          await new Promise((resolve, reject) => {
+            videoRef.current.play().then(resolve).catch((error) => {
+              console.log('Erro no play secundário:', error);
+              reject(error);
             });
-            console.log('Video play bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
-            clearTimeout(loadTimeout);
-            setLoading(false);
+          });
+          console.log('Video play bem-sucedido, readyState:', videoRef.current.readyState, 'videoWidth:', videoRef.current.videoWidth, 'videoHeight:', videoRef.current.videoHeight);
+          clearTimeout(loadTimeout);
+          setLoading(false);
 
-            const scanQRCode = () => {
-              if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
+          const scanQRCode = () => {
+            if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              
+              canvas.width = videoRef.current.videoWidth;
+              canvas.height = videoRef.current.videoHeight;
+              
+              if (canvas.width > 0 && canvas.height > 0) {
+                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
                 
-                canvas.width = videoRef.current.videoWidth;
-                canvas.height = videoRef.current.videoHeight;
-
-                if (canvas.width > 0 && canvas.height > 0) {
-                  ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-                  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                  const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-                  if (code) {
-                    clearInterval(scanIntervalRef.current);
-                    const foundProduct = findProductByQR(code.data);
-                    
-                    if (foundProduct) {
-                      setScannedProduct(foundProduct);
-                      stopCamera();
-                      setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
-                      setTimeout(() => setSuccess(''), 3000);
-                    } else {
-                      setErrors({
-                        general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.',
-                      });
-                      stopCamera();
-                      setTimeout(() => setErrors({}), 3000);
-                    }
+                if (code) {
+                  clearInterval(scanIntervalRef.current);
+                  const foundProduct = findProductByQR(code.data);
+                  
+                  if (foundProduct) {
+                    setScannedProduct(foundProduct);
+                    stopCamera();
+                    setSuccess(`✅ Produto "${foundProduct.name}" encontrado!`);
+                    setTimeout(() => setSuccess(''), 3000);
+                  } else {
+                    setErrors({
+                      general: 'QR Code não reconhecido. Verifique se o produto está cadastrado.',
+                    });
+                    stopCamera();
+                    setTimeout(() => setErrors({}), 3000);
                   }
                 }
               }
-            };
-            scanIntervalRef.current = setInterval(scanQRCode, 100);
-          } catch (error) {
-            console.log('Erro no startVideo:', error);
-            clearTimeout(loadTimeout);
-            setLoading(false);
-            setErrors({ camera: 'Erro ao iniciar a câmera: ' + error.message });
-            stopCamera();
-          }
-        };
+            }
+          };
 
-        videoRef.current.load();
-        videoRef.current.addEventListener('loadedmetadata', startVideo, { once: true });
-        console.log('Video carregado, readyState após load:', videoRef.current.readyState);
-      }
-    } catch (error) {
-      console.log('Erro no getUserMedia:', error);
-      setLoading(false);
-      setErrors({ camera: 'Erro ao acessar a câmera: ' + error.message });
-    } finally {
-      setLoading(false);
+          scanIntervalRef.current = setInterval(scanQRCode, 100);
+        } catch (error) {
+          console.log('Erro no startVideo:', error);
+          clearTimeout(loadTimeout);
+          setLoading(false);
+          setErrors({ camera: 'Erro ao iniciar a câmera: ' + error.message });
+          stopCamera();
+        }
+      };
+
+      videoRef.current.load();
+      videoRef.current.addEventListener('loadedmetadata', startVideo, { once: true });
+      console.log('Video carregado, readyState após load:', videoRef.current.readyState);
     }
+  } catch (error) {
+    console.log('Erro no getUserMedia:', error);
+    setLoading(false);
+    setErrors({ camera: 'Erro ao acessar a câmera: ' + error.message });
+  } finally {
+    setLoading(false);
   }
-
+}
   const stopCamera = () => {
-    // ✅ LIMPAR interval primeiro
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
-    
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
-    }
-    setScannerActive(false);
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.srcObject = null;
-    }
-  };
+  // ✅ LIMPAR interval primeiro
+  if (scanIntervalRef.current) {
+    clearInterval(scanIntervalRef.current);
+    scanIntervalRef.current = null;
+  }
+  
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(track => track.stop());
+    setCameraStream(null);
+  }
+  setScannerActive(false);
+  if (videoRef.current) {
+    videoRef.current.pause();
+    videoRef.current.srcObject = null;
+  }
+};
 
   const findProductByQR = (qrCode) => {
     return products.find(p => p.qrCode === qrCode || p.id === qrCode);
@@ -807,6 +810,7 @@ const EstoqueFFApp = () => {
   // Validação de produtos
   const validateProduct = (product, isEdit = false) => {
     const newErrors = {};
+    
     if (!product.name || product.name.trim().length < 2) {
       newErrors.name = 'Nome deve ter pelo menos 2 caracteres';
     }
@@ -847,6 +851,7 @@ const EstoqueFFApp = () => {
     setErrors({});
     
     const validationErrors = validateProduct(newProduct);
+    
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       setLoading(false);
@@ -869,11 +874,13 @@ const EstoqueFFApp = () => {
         stock: parseInt(newProduct.stock),
         minStock: parseInt(newProduct.minStock)
       };
+      
       setProducts([...products, product]);
       setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
       setShowAddProduct(false);
       setSuccess(`✅ Produto "${product.name}" adicionado com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
+      
     } catch (error) {
       setErrors({ general: 'Erro ao adicionar produto. Tente novamente.' });
     }
@@ -887,6 +894,7 @@ const EstoqueFFApp = () => {
     setErrors({});
     
     const validationErrors = validateProduct(editingProduct, true);
+    
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       setLoading(false);
@@ -910,6 +918,7 @@ const EstoqueFFApp = () => {
       setEditingProduct(null);
       setSuccess(`✅ Produto atualizado com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
+      
     } catch (error) {
       setErrors({ general: 'Erro ao atualizar produto. Tente novamente.' });
     }
@@ -926,6 +935,7 @@ const EstoqueFFApp = () => {
     setErrors({});
     
     const quantity = parseInt(movementQuantity);
+    
     if (isNaN(quantity) || quantity <= 0) {
       setErrors({ quantity: 'Quantidade deve ser um número válido maior que 0' });
       setLoading(false);
@@ -955,8 +965,17 @@ const EstoqueFFApp = () => {
         date: new Date().toLocaleString('pt-BR'),
         timestamp: new Date().toISOString()
       };
+      
       setMovements([newMovement, ...movements]);
-      setProducts(products.map(p => p.id === targetProduct.id ? { ...p, stock: movementType === 'entrada' ? p.stock + quantity : p.stock - quantity } : p ));
+      
+      setProducts(products.map(p => 
+        p.id === targetProduct.id 
+          ? { ...p, stock: movementType === 'entrada' 
+              ? p.stock + quantity
+              : p.stock - quantity }
+          : p
+      ));
+      
       // Reset estados
       setScannedProduct(null);
       setManualSelectedProduct(null);
@@ -966,6 +985,7 @@ const EstoqueFFApp = () => {
       setMovementType('');
       setSuccess(`✅ ${movementType === 'entrada' ? 'Entrada' : 'Saída'} de ${quantity} unidades registrada com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
+      
     } catch (error) {
       setErrors({ general: 'Erro ao processar movimentação. Tente novamente.' });
     }
@@ -977,21 +997,24 @@ const EstoqueFFApp = () => {
   const exportToPDF = (type, data, title) => {
     const pdf = new jsPDF();
     const timestamp = new Date().toLocaleString('pt-BR');
+    
     // Cabeçalho
     pdf.setFontSize(18);
     pdf.setFont('helvetica', 'bold');
     pdf.text(title, 14, 22);
+    
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
     pdf.text(`${companySettings.companyName}`, 14, 32);
     pdf.text(`Responsável: ${companySettings.responsibleName}`, 14, 38);
     pdf.text(`Gerado em: ${timestamp}`, 14, 44);
+    
     pdf.setLineWidth(0.5);
     pdf.line(14, 48, 196, 48);
     
     let columns = [];
     let rows = [];
-
+    
     if (type === 'products') {
       columns = [
         { header: 'Código', dataKey: 'code' },
@@ -1002,6 +1025,7 @@ const EstoqueFFApp = () => {
         { header: 'Min.', dataKey: 'minStock' },
         { header: 'Status', dataKey: 'status' }
       ];
+      
       rows = data.map(p => ({
         code: p.code || 'N/A',
         name: p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name,
@@ -1011,6 +1035,7 @@ const EstoqueFFApp = () => {
         minStock: p.minStock.toString(),
         status: p.stock <= p.minStock ? 'Baixo' : 'OK'
       }));
+      
     } else if (type === 'movements') {
       columns = [
         { header: 'Produto', dataKey: 'product' },
@@ -1019,6 +1044,7 @@ const EstoqueFFApp = () => {
         { header: 'Usuário', dataKey: 'user' },
         { header: 'Data', dataKey: 'date' }
       ];
+      
       rows = data.map(m => ({
         product: m.product.length > 25 ? m.product.substring(0, 25) + '...' : m.product,
         type: m.type === 'entrada' ? 'Entrada' : 'Saída',
@@ -1027,15 +1053,25 @@ const EstoqueFFApp = () => {
         date: m.date.split(' ')[0]
       }));
     }
-
+    
     autoTable(pdf, {
       columns: columns,
       body: rows,
       startY: 55,
       theme: 'grid',
-      headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { fontSize: 8, cellPadding: 3 },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
+      headStyles: {
+        fillColor: [59, 130, 246],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 9
+      },
+      bodyStyles: {
+        fontSize: 8,
+        cellPadding: 3
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252]
+      },
       margin: { left: 14, right: 14 },
       tableWidth: 'auto',
       columnStyles: type === 'products' ? {
@@ -1047,7 +1083,7 @@ const EstoqueFFApp = () => {
         user: { cellWidth: 30 }
       }
     });
-
+    
     // Rodapé
     const estimatedRowHeight = 12;
     const headerHeight = 15;
@@ -1061,12 +1097,12 @@ const EstoqueFFApp = () => {
     const filename = `${type === 'products' ? 'produtos' : 'movimentacoes'}_${new Date().toISOString().slice(0, 10)}.pdf`;
     pdf.save(filename);
   };
-  
+
   // Exportação para Excel
   const exportToExcel = (type, data, title) => {
     let worksheetData = [];
     let filename = '';
-
+    
     if (type === 'products') {
       worksheetData = [
         [title],
@@ -1076,9 +1112,11 @@ const EstoqueFFApp = () => {
         [],
         ['Código', 'Nome do Produto', 'Marca', 'Categoria', 'Estoque Atual', 'Estoque Mínimo', 'Diferença', 'Status', 'Data Criação']
       ];
+      
       data.forEach(p => {
         const diferenca = p.stock - p.minStock;
         const status = p.stock <= 0 ? 'SEM ESTOQUE' : p.stock <= p.minStock ? 'ESTOQUE BAIXO' : 'NORMAL';
+        
         worksheetData.push([
           p.code || 'N/A',
           p.name,
@@ -1091,7 +1129,9 @@ const EstoqueFFApp = () => {
           p.createdAt || 'N/A'
         ]);
       });
+      
       filename = `relatorio_produtos_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      
     } else if (type === 'movements') {
       worksheetData = [
         [title],
@@ -1101,6 +1141,7 @@ const EstoqueFFApp = () => {
         [],
         ['ID', 'Produto', 'Tipo de Movimentação', 'Quantidade', 'Usuário', 'Data e Hora']
       ];
+      
       data.forEach(m => {
         worksheetData.push([
           m.id,
@@ -1111,17 +1152,19 @@ const EstoqueFFApp = () => {
           m.date
         ]);
       });
+      
       filename = `relatorio_movimentacoes_${new Date().toISOString().slice(0, 10)}.xlsx`;
     }
-
+    
     worksheetData.push([]);
     worksheetData.push(['=== ESTATÍSTICAS ===']);
     worksheetData.push([`Total de registros: ${data.length}`]);
-
+    
     if (type === 'products') {
       const lowStock = data.filter(p => p.stock <= p.minStock).length;
       const noStock = data.filter(p => p.stock <= 0).length;
       const totalItems = data.reduce((sum, p) => sum + p.stock, 0);
+      
       worksheetData.push([`Produtos com estoque baixo: ${lowStock}`]);
       worksheetData.push([`Produtos sem estoque: ${noStock}`]);
       worksheetData.push([`Total de itens em estoque: ${totalItems}`]);
@@ -1130,1160 +1173,1505 @@ const EstoqueFFApp = () => {
       const saidas = data.filter(m => m.type === 'saída').length;
       const totalEntradas = data.filter(m => m.type === 'entrada').reduce((sum, m) => sum + m.quantity, 0);
       const totalSaidas = data.filter(m => m.type === 'saída').reduce((sum, m) => sum + m.quantity, 0);
+      
       worksheetData.push([`Total de entradas: ${entradas} movimentações (${totalEntradas} itens)`]);
       worksheetData.push([`Total de saídas: ${saidas} movimentações (${totalSaidas} itens)`]);
     }
-
+    
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+    
     if (type === 'products') {
       ws['!cols'] = [
-        { wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 15 }
+        { wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 15 },
+        { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 12 }
       ];
     } else {
       ws['!cols'] = [
-        { wch: 10 }, { wch: 30 }, { wch: 25 }, { wch: 12 }, { wch: 20 }, { wch: 25 }
+        { wch: 8 }, { wch: 35 }, { wch: 18 }, { wch: 12 }, { wch: 20 }, { wch: 18 }
       ];
     }
-
-    XLSX.utils.book_append_sheet(wb, ws, title);
+    
+    if (ws['A1']) ws['A1'].s = { font: { bold: true, sz: 14 } };
+    if (ws['A2']) ws['A2'].s = { font: { bold: true } };
+    if (ws['A3']) ws['A3'].s = { font: { italic: true } };
+    if (ws['A4']) ws['A4'].s = { font: { italic: true } };
+    
+    XLSX.utils.book_append_sheet(wb, ws, type === 'products' ? 'Produtos' : 'Movimentações');
     XLSX.writeFile(wb, filename);
   };
-  
-  // Funções de dashboard
-  const lowStockProducts = useMemo(() => {
-    return products.filter(p => p.stock <= p.minStock);
-  }, [products]);
-  
-  const mostMovedProducts = useMemo(() => {
-    const counts = movements.reduce((acc, m) => {
-      acc[m.product] = (acc[m.product] || 0) + m.quantity;
-      return acc;
-    }, {});
-    return Object.entries(counts)
-      .sort(([, countA], [, countB]) => countB - countA)
-      .slice(0, 5)
-      .map(([name, quantity]) => ({ name, quantity }));
-  }, [movements]);
 
-  const totalStock = useMemo(() => {
-    return products.reduce((sum, p) => sum + p.stock, 0);
-  }, [products]);
-  
-  const totalProducts = products.length;
+  const exportData = (type, format = 'excel') => {
+    let data = [];
+    let title = '';
+    
+    if (type === 'products') {
+      data = filteredProducts.length > 0 ? filteredProducts : products;
+      title = 'Relatório de Produtos - EstoqueFF';
+    } else if (type === 'movements') {
+      data = filteredMovements.length > 0 ? filteredMovements : movements;
+      title = 'Relatório de Movimentações - EstoqueFF';
+    }
+    
+    if (format === 'pdf') {
+      exportToPDF(type, data, title);
+      setSuccess(`✅ Relatório PDF gerado com sucesso! (${data.length} registros)`);
+    } else {
+      exportToExcel(type, data, title);
+      setSuccess(`✅ Relatório Excel gerado com sucesso! (${data.length} registros)`);
+    }
+    
+    setTimeout(() => setSuccess(''), 3000);
+  };
 
-  const totalEntries = useMemo(() => {
-    return movements.filter(m => m.type === 'entrada').length;
-  }, [movements]);
-  
-  const totalExits = useMemo(() => {
-    return movements.filter(m => m.type === 'saída').length;
-  }, [movements]);
+  const createBackup = () => {
+    const backup = {
+      products,
+      movements,
+      companySettings,
+      productLabelConfigs,
+      backupDate: new Date().toISOString()
+    };
+    
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `estoqueff_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-  const recentMovements = useMemo(() => {
-    return movements.slice(0, 5);
-  }, [movements]);
+  const restoreBackup = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const backup = JSON.parse(e.target.result);
+        if (backup.products && backup.movements) {
+          setProducts(backup.products);
+          setMovements(backup.movements);
+          if (backup.companySettings) {
+            setCompanySettings(backup.companySettings);
+          }
+          if (backup.productLabelConfigs) {
+            setProductLabelConfigs(backup.productLabelConfigs);
+          }
+          setSuccess('✅ Backup restaurado com sucesso!');
+          setTimeout(() => setSuccess(''), 3000);
+        } else {
+          setErrors({ general: 'Arquivo de backup inválido!' });
+          setTimeout(() => setErrors({}), 3000);
+        }
+      } catch (error) {
+        setErrors({ general: 'Erro ao restaurar backup!' });
+        setTimeout(() => setErrors({}), 3000);
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  };
 
-  // Funções de relatórios
+  // Calcular estatísticas
+  const stats = useMemo(() => {
+    const today = new Date();
+    const todayBR = today.toLocaleDateString('pt-BR');
+    const todayISO = today.toISOString().slice(0, 10);
+    
+    const todayMovements = movements.filter(movement => {
+      return movement.date.includes(todayBR) || movement.date.includes(todayISO);
+    }).length;
+    
+    return {
+      totalProducts: products.length,
+      lowStockProducts: products.filter(p => p.stock <= p.minStock).length,
+      totalItems: products.reduce((sum, p) => sum + p.stock, 0),
+      todayMovements: todayMovements
+    };
+  }, [products, movements]);
+
+  // Relatórios expandidos
   const filteredMovements = useMemo(() => {
+    if (movementsPeriodFilter === 'all') return movements;
+    
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const last7Days = new Date(today);
-    last7Days.setDate(last7Days.getDate() - 7);
-    const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const filterDays = movementsPeriodFilter === '7days' ? 7 : 30;
+    const filterDate = new Date(now.getTime() - (filterDays * 24 * 60 * 60 * 1000));
     
     return movements.filter(m => {
-      const movementDate = new Date(m.timestamp);
-      switch (movementsPeriodFilter) {
-        case 'today':
-          return movementDate >= today;
-        case 'yesterday':
-          return movementDate >= yesterday && movementDate < today;
-        case 'last7days':
-          return movementDate >= last7Days;
-        case 'thisMonth':
-          return movementDate >= thisMonth;
-        case 'lastMonth':
-          return movementDate >= lastMonth && movementDate < thisMonth;
-        case 'all':
-        default:
-          return true;
+      try {
+        const movementDate = new Date(m.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
+        return movementDate >= filterDate;
+      } catch {
+        return true;
       }
     });
   }, [movements, movementsPeriodFilter]);
-  
-  const filteredProductsByStatus = useMemo(() => {
+
+  const filteredProducts = useMemo(() => {
     switch (productsFilter) {
-      case 'lowStock':
-        return products.filter(p => p.stock <= p.minStock);
-      case 'noStock':
+      case 'low_stock':
+        return products.filter(p => p.stock <= p.minStock && p.stock > 0);
+      case 'no_stock':
         return products.filter(p => p.stock <= 0);
-      case 'all':
       default:
         return products;
     }
   }, [products, productsFilter]);
-  
-  const filteredProductsForList = useMemo(() => {
-    if (!searchTerm.trim()) return products;
-    const term = searchTerm.toLowerCase().trim();
-    return products.filter(product => 
-      product.name.toLowerCase().includes(term) ||
-      product.id.toLowerCase().includes(term) ||
-      (product.brand && product.brand.toLowerCase().includes(term)) ||
-      product.category.toLowerCase().includes(term) ||
-      (product.code && product.code.toLowerCase().includes(term))
-    );
-  }, [products, searchTerm]);
-  
-  const filteredManualProducts = useMemo(() => {
-    if (!manualSearchTerm.trim()) return products;
-    const term = manualSearchTerm.toLowerCase().trim();
-    return products.filter(product => 
-      product.name.toLowerCase().includes(term) ||
-      product.id.toLowerCase().includes(term) ||
-      (product.brand && product.brand.toLowerCase().includes(term)) ||
-      product.category.toLowerCase().includes(term) ||
-      (product.code && product.code.toLowerCase().includes(term))
-    );
-  }, [products, manualSearchTerm]);
-  
-  const filteredLabelProducts = useMemo(() => {
-    if (!labelSearchTerm.trim()) return products;
-    const term = labelSearchTerm.toLowerCase().trim();
-    return products.filter(product => 
-      product.name.toLowerCase().includes(term) ||
-      product.id.toLowerCase().includes(term) ||
-      (product.brand && product.brand.toLowerCase().includes(term)) ||
-      product.category.toLowerCase().includes(term) ||
-      (product.code && product.code.toLowerCase().includes(term))
-    );
-  }, [products, labelSearchTerm]);
 
-  // Navegação
-  const renderScreen = () => {
-    switch(currentScreen) {
-      case 'dashboard':
-        return (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-gray-800">Dashboard</h2>
-            {/* Mensagens de feedback */}
-            {success && (
-              <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4" role="alert">
-                <p className="font-bold">Sucesso!</p>
-                <p>{success}</p>
-              </div>
-            )}
-            
-            {/* Cards de métricas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center gap-3 mb-2">
-                  <Package size={28} className="text-blue-500" />
-                  <span className="text-lg font-medium text-gray-600">Total de Produtos</span>
-                </div>
-                <p className="text-4xl font-bold text-gray-900">{totalProducts}</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center gap-3 mb-2">
-                  <TrendingUp size={28} className="text-green-500" />
-                  <span className="text-lg font-medium text-gray-600">Total de Itens</span>
-                </div>
-                <p className="text-4xl font-bold text-gray-900">{totalStock}</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center gap-3 mb-2">
-                  <Plus size={28} className="text-gray-500" />
-                  <span className="text-lg font-medium text-gray-600">Entradas</span>
-                </div>
-                <p className="text-4xl font-bold text-gray-900">{totalEntries}</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center gap-3 mb-2">
-                  <X size={28} className="text-red-500" />
-                  <span className="text-lg font-medium text-gray-600">Saídas</span>
-                </div>
-                <p className="text-4xl font-bold text-gray-900">{totalExits}</p>
-              </div>
-            </div>
+  const topMovedProducts = useMemo(() => {
+    const productStats = {};
+    
+    movements.forEach(movement => {
+      if (!productStats[movement.productId]) {
+        productStats[movement.productId] = {
+          productId: movement.productId,
+          productName: movement.product,
+          totalMovements: 0,
+          totalQuantity: 0,
+          currentStock: products.find(p => p.id === movement.productId)?.stock || 0
+        };
+      }
+      productStats[movement.productId].totalMovements++;
+      productStats[movement.productId].totalQuantity += movement.quantity;
+    });
+    
+    return Object.values(productStats).sort((a, b) => b.totalMovements - a.totalMovements);
+  }, [movements, products]);
 
-            {/* Alerta de estoque baixo */}
-            {companySettings.lowStockAlert && lowStockProducts.length > 0 && (
-              <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-lg flex items-start gap-4" role="alert">
-                <AlertTriangle size={24} className="mt-1 flex-shrink-0" />
-                <div>
-                  <h4 className="font-bold text-lg">⚠️ Alerta de Estoque Baixo ({lowStockProducts.length})</h4>
-                  <ul className="list-disc list-inside mt-2 space-y-1">
-                    {lowStockProducts.slice(0, 5).map(p => (
-                      <li key={p.id}>{p.name} - Estoque: {p.stock} ({p.minStock} mínimo)</li>
-                    ))}
-                    {lowStockProducts.length > 5 && (
-                      <li>E mais {lowStockProducts.length - 5} produtos...</li>
-                    )}
-                  </ul>
-                  <button 
-                    onClick={() => {
-                      setCurrentScreen('reports');
-                      setReportsTab('products');
-                      setProductsFilter('lowStock');
-                    }}
-                    className="mt-4 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors text-sm font-semibold"
-                  >
-                    Ver Relatório Completo
-                  </button>
-                </div>
-              </div>
-            )}
-            
-            {/* Gráficos ou listas */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-xl font-semibold text-gray-800 mb-4">Movimentações Recentes</h3>
-                <ul className="space-y-3">
-                  {recentMovements.length > 0 ? (
-                    recentMovements.map(m => (
-                      <li key={m.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="flex items-center gap-3">
-                          {m.type === 'entrada' ? (
-                            <div className="p-2 rounded-full bg-green-100 text-green-600">
-                              <Plus size={16} />
-                            </div>
-                          ) : (
-                            <div className="p-2 rounded-full bg-red-100 text-red-600">
-                              <X size={16} />
-                            </div>
-                          )}
-                          <div>
-                            <p className="text-gray-800 font-medium">
-                              {m.type === 'entrada' ? 'Entrada' : 'Saída'} de {m.product}
-                            </p>
-                            <p className="text-gray-500 text-sm">
-                              {m.date} - Qtd: {m.quantity}
-                            </p>
-                          </div>
-                        </div>
-                        <p className="text-sm text-gray-600 hidden sm:block">
-                          Por: {m.user}
-                        </p>
-                      </li>
-                    ))
-                  ) : (
-                    <div className="text-center p-8 text-gray-500">
-                      Nenhuma movimentação recente encontrada.
-                    </div>
-                  )}
-                </ul>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-xl font-semibold text-gray-800 mb-4">Produtos Mais Movimentados (Top 5)</h3>
-                <ul className="space-y-3">
-                  {mostMovedProducts.length > 0 ? (
-                    mostMovedProducts.map(p => (
-                      <li key={p.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <span className="text-gray-800 font-medium">{p.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-600">{p.quantity}</span>
-                          <span className="text-sm text-gray-500">unidades</span>
-                        </div>
-                      </li>
-                    ))
-                  ) : (
-                    <div className="text-center p-8 text-gray-500">
-                      Nenhum produto movimentado ainda.
-                    </div>
-                  )}
-                </ul>
-              </div>
-            </div>
-          </div>
-        );
+  const leastMovedProducts = useMemo(() => {
+    const allProducts = products.map(product => {
+      const productMovements = movements.filter(m => m.productId === product.id);
+      return {
+        productId: product.id,
+        productName: product.name,
+        totalMovements: productMovements.length,
+        totalQuantity: productMovements.reduce((sum, m) => sum + m.quantity, 0),
+        currentStock: product.stock
+      };
+    });
+    
+    return allProducts.sort((a, b) => a.totalMovements - b.totalMovements);
+  }, [movements, products]);
+
+  // Gerar QR Code e etiquetas
+  const generateQRCode = async (data, size = 200) => {
+    try {
+      const qrData = encodeURIComponent(JSON.stringify({
+        id: data.id,
+        name: data.name,
+        brand: data.brand || '',
+        category: data.category,
+        code: data.code,
+        qrCode: data.qrCode,
+        timestamp: new Date().toISOString()
+      }));
       
-      case 'products':
-        return (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-gray-800">Produtos</h2>
-            {success && (
-              <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4" role="alert">
-                <p className="font-bold">Sucesso!</p>
-                <p>{success}</p>
-              </div>
-            )}
-            <ProductSearch onSearchChange={handleSearchChange} searchTerm={searchTerm} />
-            <ProductList 
-              products={filteredProductsForList}
-              searchTerm={searchTerm} 
-              onEdit={handleEditProduct} 
-              onDelete={handleDeleteProduct}
-            />
-          </div>
-        );
-
-      case 'scan':
-        return (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-gray-800 mb-4">Leitor de QR Code</h2>
-            {errors.general && (
-              <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
-                <p className="font-bold">Erro!</p>
-                <p>{errors.general}</p>
-              </div>
-            )}
-            {success && (
-              <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4" role="alert">
-                <p className="font-bold">Sucesso!</p>
-                <p>{success}</p>
-              </div>
-            )}
-
-            {scannedProduct ? (
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="p-3 rounded-full bg-blue-100 text-blue-600">
-                    <CheckCircle size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-800">{scannedProduct.name}</h3>
-                    <p className="text-sm text-gray-500">
-                      Código: {scannedProduct.code} • Estoque Atual: {scannedProduct.stock}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Tipo de Movimentação
-                      </label>
-                      <select
-                        value={movementType}
-                        onChange={(e) => setMovementType(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="">Selecione...</option>
-                        <option value="entrada">Entrada</option>
-                        <option value="saída">Saída</option>
-                      </select>
-                      {errors.movement && (
-                        <p className="mt-1 text-sm text-red-600">{errors.movement}</p>
-                      )}
-                    </div>
-
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Quantidade
-                      </label>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={movementQuantity}
-                        onChange={(e) => setMovementQuantity(parseInt(e.target.value))}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        min="1"
-                        placeholder="1"
-                      />
-                      {errors.quantity && (
-                        <p className="mt-1 text-sm text-red-600">{errors.quantity}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => processMovement()}
-                    className="w-full bg-blue-500 text-white py-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-                    disabled={loading || !movementType}
-                  >
-                    {loading ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <Save size={16} />
-                    )}
-                    {loading ? 'Processando...' : 'Confirmar Movimentação'}
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setScannedProduct(null);
-                    setMovementType('');
-                    setMovementQuantity(1);
-                  }}
-                  className="mt-4 w-full text-center text-sm text-gray-500 hover:underline"
-                >
-                  Cancelar e Escanear Outro
-                </button>
-              </div>
-            ) : (
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 text-center space-y-4">
-                {scannerActive ? (
-                  <>
-                    <h3 className="text-xl font-semibold text-gray-800">
-                      {loading ? 'Ativando Câmera...' : 'Posicione o QR Code'}
-                    </h3>
-                    <p className="text-gray-500">
-                      O escaneamento começará automaticamente.
-                    </p>
-                    <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black flex items-center justify-center">
-                      <video
-                        ref={videoRef}
-                        className="w-full h-full object-cover"
-                        playsInline
-                        muted
-                        autoPlay
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="border-4 border-dashed border-white w-2/3 aspect-square rounded-lg animate-pulse" />
-                      </div>
-                    </div>
-                    {errors.camera && (
-                      <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
-                        <p className="font-bold">Erro na Câmera!</p>
-                        <p>{errors.camera}</p>
-                      </div>
-                    )}
-                    <button
-                      onClick={stopCamera}
-                      className="w-full bg-red-500 text-white py-3 rounded-lg font-semibold hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <X size={16} />
-                      Cancelar Escaneamento
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <Scan size={64} className="mx-auto text-gray-400 mb-2" />
-                    <p className="text-gray-600 font-medium">
-                      Para registrar entradas ou saídas, use o leitor de QR Code.
-                    </p>
-                    <button
-                      onClick={() => startRealQRScanner()}
-                      className="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Camera size={16} />
-                      Iniciar Leitor de QR Code
-                    </button>
-                    <div className="mt-4 text-gray-500">
-                      <span className="text-sm">ou</span>
-                      <button
-                        onClick={() => {
-                          setShowManualMovement(true);
-                          setCurrentScreen('manualMovement');
-                        }}
-                        className="block mt-2 text-blue-500 hover:underline mx-auto font-medium text-center"
-                      >
-                        Fazer Movimentação Manual
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        );
-
-      case 'manualMovement':
-        return (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-gray-800">Movimentação Manual</h2>
-            <ProductSearch 
-              onSearchChange={handleManualSearchChange} 
-              searchTerm={manualSearchTerm}
-            />
-            {success && (
-              <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4" role="alert">
-                <p className="font-bold">Sucesso!</p>
-                <p>{success}</p>
-              </div>
-            )}
-            
-            {manualSelectedProduct ? (
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="p-3 rounded-full bg-blue-100 text-blue-600">
-                    <Package size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-800">{manualSelectedProduct.name}</h3>
-                    <p className="text-sm text-gray-500">
-                      Código: {manualSelectedProduct.code} • Estoque Atual: {manualSelectedProduct.stock}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Tipo de Movimentação
-                      </label>
-                      <select
-                        value={movementType}
-                        onChange={(e) => setMovementType(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="">Selecione...</option>
-                        <option value="entrada">Entrada</option>
-                        <option value="saída">Saída</option>
-                      </select>
-                      {errors.movement && (
-                        <p className="mt-1 text-sm text-red-600">{errors.movement}</p>
-                      )}
-                    </div>
-
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Quantidade
-                      </label>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={movementQuantity}
-                        onChange={(e) => setMovementQuantity(parseInt(e.target.value))}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        min="1"
-                        placeholder="1"
-                      />
-                      {errors.quantity && (
-                        <p className="mt-1 text-sm text-red-600">{errors.quantity}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => processMovement(manualSelectedProduct)}
-                    className="w-full bg-blue-500 text-white py-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-                    disabled={loading || !movementType}
-                  >
-                    {loading ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <Save size={16} />
-                    )}
-                    {loading ? 'Processando...' : 'Confirmar Movimentação'}
-                  </button>
-                </div>
-                <button
-                  onClick={() => {
-                    setManualSelectedProduct(null);
-                    setMovementType('');
-                    setMovementQuantity(1);
-                  }}
-                  className="mt-4 w-full text-center text-sm text-gray-500 hover:underline"
-                >
-                  Cancelar e Selecionar Outro Produto
-                </button>
-              </div>
-            ) : (
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Selecione um produto</h3>
-                {filteredManualProducts.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredManualProducts.map(product => (
-                      <button 
-                        key={product.id}
-                        onClick={() => setManualSelectedProduct(product)}
-                        className="p-4 rounded-lg border border-gray-300 text-left hover:border-blue-500 hover:shadow-md transition-all duration-200"
-                      >
-                        <h4 className="font-semibold text-gray-800 text-lg">{product.name}</h4>
-                        <p className="text-sm text-gray-500">Cód: {product.code}</p>
-                        <p className="text-sm font-medium mt-2">Estoque: {product.stock}</p>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center p-8 text-gray-500">
-                    <Search size={48} className="mx-auto mb-4" />
-                    <p>Nenhum produto encontrado. Tente outra pesquisa.</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        );
-
-      case 'reports':
-        const movementsTitle = `Relatório de Movimentações${movementsPeriodFilter !== 'all' ? ` - ${movementsPeriodFilter}` : ''}`;
-        const productsTitle = `Relatório de Produtos${productsFilter !== 'all' ? ` - ${productsFilter === 'lowStock' ? 'Estoque Baixo' : 'Sem Estoque'}` : ''}`;
-        
-        return (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-gray-800">Relatórios</h2>
-            
-            {/* Tabs de relatórios */}
-            <div className="flex border-b border-gray-200">
-              <button
-                onClick={() => setReportsTab('movements')}
-                className={`px-4 py-2 font-medium transition-colors border-b-2 ${
-                  reportsTab === 'movements' ? 'text-blue-600 border-blue-600' : 'text-gray-500 hover:text-gray-700 border-transparent'
-                }`}
-              >
-                Movimentações
-              </button>
-              <button
-                onClick={() => setReportsTab('products')}
-                className={`px-4 py-2 font-medium transition-colors border-b-2 ${
-                  reportsTab === 'products' ? 'text-blue-600 border-blue-600' : 'text-gray-500 hover:text-gray-700 border-transparent'
-                }`}
-              >
-                Produtos
-              </button>
-            </div>
-            
-            {reportsTab === 'movements' && (
-              <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row items-center gap-4">
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Filtrar por Período
-                    </label>
-                    <select
-                      value={movementsPeriodFilter}
-                      onChange={(e) => setMovementsPeriodFilter(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="all">Todos os Períodos</option>
-                      <option value="today">Hoje</option>
-                      <option value="yesterday">Ontem</option>
-                      <option value="last7days">Últimos 7 dias</option>
-                      <option value="thisMonth">Este Mês</option>
-                      <option value="lastMonth">Mês Passado</option>
-                    </select>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => exportToPDF('movements', filteredMovements, movementsTitle)}
-                      className="px-4 py-3 bg-red-500 text-white rounded-lg flex items-center justify-center gap-2 hover:bg-red-600 transition-colors"
-                    >
-                      <FileText size={20} />
-                      PDF
-                    </button>
-                    <button
-                      onClick={() => exportToExcel('movements', filteredMovements, movementsTitle)}
-                      className="px-4 py-3 bg-green-600 text-white rounded-lg flex items-center justify-center gap-2 hover:bg-green-700 transition-colors"
-                    >
-                      <FileSpreadsheet size={20} />
-                      Excel
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <h3 className="text-xl font-semibold mb-4 text-gray-800">Tabela de Movimentações</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[600px] divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produto</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantidade</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuário</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredMovements.length > 0 ? (
-                          filteredMovements.map(m => (
-                            <tr key={m.id}>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{m.product}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${m.type === 'entrada' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                  {m.type === 'entrada' ? 'Entrada' : 'Saída'}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{m.quantity}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{m.user}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{m.date}</td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
-                              Nenhum registro encontrado para este período.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {reportsTab === 'products' && (
-              <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row items-center gap-4">
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Filtrar por Status
-                    </label>
-                    <select
-                      value={productsFilter}
-                      onChange={(e) => setProductsFilter(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="all">Todos os Produtos</option>
-                      <option value="lowStock">Estoque Baixo</option>
-                      <option value="noStock">Sem Estoque</option>
-                    </select>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => exportToPDF('products', filteredProductsByStatus, productsTitle)}
-                      className="px-4 py-3 bg-red-500 text-white rounded-lg flex items-center justify-center gap-2 hover:bg-red-600 transition-colors"
-                    >
-                      <FileText size={20} />
-                      PDF
-                    </button>
-                    <button
-                      onClick={() => exportToExcel('products', filteredProductsByStatus, productsTitle)}
-                      className="px-4 py-3 bg-green-600 text-white rounded-lg flex items-center justify-center gap-2 hover:bg-green-700 transition-colors"
-                    >
-                      <FileSpreadsheet size={20} />
-                      Excel
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <h3 className="text-xl font-semibold mb-4 text-gray-800">Tabela de Produtos</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[800px] divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Marca</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estoque</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mínimo</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredProductsByStatus.length > 0 ? (
-                          filteredProductsByStatus.map(p => (
-                            <tr key={p.id}>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{p.code || 'N/A'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{p.name}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{p.brand || 'N/A'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{p.category}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{p.stock}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{p.minStock}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                  p.stock <= p.minStock ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                                }`}>
-                                  {p.stock <= p.minStock ? 'Baixo' : 'OK'}
-                                </span>
-                              </td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
-                              Nenhum produto encontrado para este filtro.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-
-      case 'labels':
-        const generateLabels = (productsToPrint) => {
-          const doc = new jsPDF({
-            orientation: 'p',
-            unit: 'mm',
-            format: 'a4'
-          });
-
-          // Definir margens e layout para 3 colunas e 4 linhas
-          const marginX = 10;
-          const marginY = 10;
-          const labelWidth = 65; // Ajustado para A4
-          const labelHeight = 45; // Ajustado para A4
-          const paddingX = 4;
-          const paddingY = 4;
-
-          const cols = 3;
-          const rows = 6;
-          
-          let pageCount = 1;
-          
-          productsToPrint.forEach((item, index) => {
-            const product = products.find(p => p.id === item.id);
-            if (!product) return;
-            
-            const config = getProductLabelConfig(product.id);
-            const col = index % cols;
-            const row = Math.floor((index / cols) % rows);
-            
-            if (index > 0 && index % (cols * rows) === 0) {
-              doc.addPage();
-              pageCount++;
-            }
-            
-            const x = marginX + col * (labelWidth + 2);
-            const y = marginY + row * (labelHeight + 2);
-
-            // Adicionar uma borda sutil ao redor de cada etiqueta para visualização
-            doc.setDrawColor(200);
-            doc.rect(x, y, labelWidth, labelHeight);
-
-            // Conteúdo da etiqueta
-            let textY = y + paddingY;
-            
-            if (config.showBrand && product.brand) {
-              doc.setFontSize(config.brandFontSize);
-              doc.text(product.brand, x + paddingX, textY);
-              textY += config.brandFontSize * 0.35; // Altura da linha
-            }
-
-            const productNameAndCode = `${config.showCode ? product.code : ''}${config.showCode && config.showDescription ? ' - ' : ''}${config.showDescription ? product.name : ''}`;
-            if (productNameAndCode.trim()) {
-              doc.setFontSize(config.codeFontSize);
-              const splitText = doc.splitTextToSize(productNameAndCode, labelWidth - paddingX * 2);
-              doc.text(splitText, x + paddingX, textY);
-              textY += (doc.getLineHeight() / doc.internal.scaleFactor) * splitText.length;
-            }
-            
-            if (config.showQuantity) {
-              doc.setFontSize(config.quantityFontSize);
-              const quantityText = config.customQuantity.trim() || `Qtd: ${product.stock}`;
-              doc.text(quantityText, x + paddingX, y + labelHeight - paddingY);
-            }
-            
-            if (config.showQRCode) {
-              doc.setFillColor(0);
-              doc.rect(x + labelWidth - paddingX - config.qrSize, y + labelHeight - paddingY - config.qrSize, config.qrSize, config.qrSize, 'F');
-            }
-          });
-          
-          doc.save(`etiquetas_${new Date().toISOString().slice(0, 10)}.pdf`);
-        };
-        
-        return (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-gray-800">Etiquetas</h2>
-            <ProductSearch onSearchChange={handleLabelSearchChange} searchTerm={labelSearchTerm} />
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">Gerar Etiquetas</h3>
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <p className="text-gray-600">
-                  {filteredLabelProducts.length} produto(s) selecionado(s) para impressão.
-                </p>
-                <button
-                  onClick={() => generateLabels(filteredLabelProducts)}
-                  className="w-full sm:w-auto bg-purple-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-purple-600 transition-colors flex items-center justify-center gap-2"
-                  disabled={filteredLabelProducts.length === 0}
-                >
-                  <Download size={20} />
-                  Gerar Etiquetas ({filteredLabelProducts.length})
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">Configurar Etiquetas</h3>
-              <div className="space-y-4">
-                {products.length > 0 ? (
-                  products.map(product => (
-                    <div key={product.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-800">{product.name}</h4>
-                        <p className="text-sm text-gray-500">Cód: {product.code}</p>
-                      </div>
-                      <button
-                        onClick={() => openLabelEditorForProduct(product.id)}
-                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors font-medium text-sm"
-                      >
-                        Configurar
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center p-8 text-gray-500">
-                    Nenhum produto cadastrado para configurar etiquetas.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'settings':
-        const handleSaveSettings = () => {
-          setLoading(true);
-          setTimeout(() => {
-            setCompanySettings(prev => ({ ...prev, companyName: document.getElementById('companyName').value, responsibleName: document.getElementById('responsibleName').value, lowStockAlert: document.getElementById('lowStockAlert').checked }));
-            setLoading(false);
-            setSuccess('✅ Configurações salvas com sucesso!');
-            setTimeout(() => setSuccess(''), 3000);
-          }, 500);
-        };
-        
-        const handleExportData = () => {
-          setLoading(true);
-          setTimeout(() => {
-            const data = {
-              products,
-              movements,
-              companySettings,
-              productLabelConfigs
-            };
-            const dataStr = JSON.stringify(data, null, 2);
-            const blob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `estoqueff_backup_${new Date().toISOString().slice(0, 10)}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            setLoading(false);
-            setSuccess('✅ Backup de dados exportado com sucesso!');
-            setTimeout(() => setSuccess(''), 3000);
-          }, 500);
-        };
-        
-        const handleImportData = (event) => {
-          const file = event.target.files[0];
-          if (!file) return;
-          setLoading(true);
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            try {
-              const importedData = JSON.parse(e.target.result);
-              if (importedData.products && importedData.movements) {
-                if (window.confirm('Tem certeza que deseja importar estes dados? Isso substituirá todos os dados atuais.')) {
-                  setProducts(importedData.products);
-                  setMovements(importedData.movements);
-                  if (importedData.companySettings) setCompanySettings(importedData.companySettings);
-                  if (importedData.productLabelConfigs) setProductLabelConfigs(importedData.productLabelConfigs);
-                  setSuccess('✅ Dados importados com sucesso!');
-                }
-              } else {
-                throw new Error('Formato de arquivo JSON inválido.');
-              }
-            } catch (error) {
-              setErrors({ general: 'Erro ao importar arquivo. Verifique se é um arquivo JSON válido do EstoqueFF.' });
-            } finally {
-              setLoading(false);
-              setTimeout(() => setErrors({}), 3000);
-            }
-          };
-          reader.readAsText(file);
-        };
-        
-        return (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-gray-800">Configurações</h2>
-            {success && (
-              <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4" role="alert">
-                <p className="font-bold">Sucesso!</p>
-                <p>{success}</p>
-              </div>
-            )}
-            {errors.general && (
-              <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
-                <p className="font-bold">Erro!</p>
-                <p>{errors.general}</p>
-              </div>
-            )}
-            
-            {/* Seção de Informações da Empresa */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">Informações da Empresa</h3>
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">Nome da Empresa</label>
-                  <input
-                    type="text"
-                    id="companyName"
-                    defaultValue={companySettings.companyName}
-                    className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="responsibleName" className="block text-sm font-medium text-gray-700">Nome do Responsável</label>
-                  <input
-                    type="text"
-                    id="responsibleName"
-                    defaultValue={companySettings.responsibleName}
-                    className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div className="flex items-center">
-                  <input
-                    id="lowStockAlert"
-                    type="checkbox"
-                    defaultChecked={companySettings.lowStockAlert}
-                    className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <label htmlFor="lowStockAlert" className="ml-2 block text-sm text-gray-900">
-                    Habilitar alerta de estoque baixo na dashboard
-                  </label>
-                </div>
-                <div className="pt-4">
-                  <button
-                    onClick={handleSaveSettings}
-                    className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <Save size={16} />
-                    )}
-                    {loading ? 'Salvando...' : 'Salvar Alterações'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Seção de Backup e Importação */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">Backup e Restauração</h3>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                  onClick={handleExportData}
-                  className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600 transition-colors flex items-center justify-center gap-2"
-                  disabled={loading}
-                >
-                  <Download size={16} />
-                  Exportar Dados
-                </button>
-                <label className="flex-1 bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 cursor-pointer">
-                  <Upload size={16} />
-                  Importar Dados
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="application/json"
-                    onChange={handleImportData}
-                    disabled={loading}
-                  />
-                </label>
-              </div>
-              <p className="mt-4 text-sm text-gray-500">
-                O backup salvará todos os seus produtos, movimentações e configurações em um arquivo JSON.
-              </p>
-            </div>
-          </div>
-        );
-
-      default:
-        return null;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${qrData}&bgcolor=FFFFFF&color=000000&margin=10&format=png`;
+      
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = qrUrl;
+      });
+      
+    } catch (error) {
+      console.error('Erro ao gerar QR Code:', error);
+      return null;
     }
   };
 
+  const generateA4Label = async () => {
+    if (!selectedProduct) {
+      setErrors({ general: 'Selecione um produto' });
+      return;
+    }
+    
+    const product = products.find(p => p.id === selectedProduct);
+    if (!product) return;
+    
+    const currentLabelConfig = getProductLabelConfig(selectedProduct);
+    
+    setLoading(true);
+    setErrors({});
+    
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      const dpi = 300;
+      canvas.width = 2480;
+      canvas.height = 3508;
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      const ptToPx = dpi / 72;
+      const mmToPx = dpi / 25.4;
+      
+      let qrImage = null;
+      if (currentLabelConfig.showQRCode) {
+        const qrSizePx = currentLabelConfig.qrSize * mmToPx;
+        qrImage = await generateQRCode(product, qrSizePx);
+      }
+      
+      const drawLabel = async (x, y, width, height) => {
+        ctx.fillStyle = currentLabelConfig.backgroundColor;
+        ctx.fillRect(x, y, width, height);
+        
+        if (currentLabelConfig.showBorder) {
+          ctx.strokeStyle = currentLabelConfig.borderColor;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x, y, width, height);
+        }
+        
+        ctx.fillStyle = currentLabelConfig.textColor;
+        const centerX = x + width / 2;
+        const padding = 5 * mmToPx;
+        const fontScaleA4 = 4.5;
+        
+        let currentY = y + padding;
+        
+        if (currentLabelConfig.showBrand && product.brand) {
+          const brandSizeCanvas = (currentLabelConfig.brandFontSize * fontScaleA4) * ptToPx;
+          ctx.font = `bold ${brandSizeCanvas}px Arial`;
+          ctx.textAlign = 'center';
+          ctx.fillText(product.brand, centerX, currentY + brandSizeCanvas);
+          currentY += brandSizeCanvas + (15 * mmToPx);
+        }
+        
+        let productText = '';
+        if (currentLabelConfig.showCode && currentLabelConfig.showDescription) {
+          productText = `${product.code || ''} - ${product.name}`;
+        } else if (currentLabelConfig.showCode) {
+          productText = product.code || '';
+        } else if (currentLabelConfig.showDescription) {
+          productText = product.name;
+        }
+        
+        if (productText) {
+          const productSizeCanvas = (currentLabelConfig.codeFontSize * fontScaleA4) * ptToPx;
+          ctx.font = `${productSizeCanvas}px Arial`;
+          ctx.textAlign = 'center';
+          
+          const maxWidth = width - (padding * 2);
+          const words = productText.split(' ');
+          const lines = [];
+          let currentLine = words[0] || '';
+          
+          for (let i = 1; i < words.length; i++) {
+            const testLine = currentLine + ' ' + words[i];
+            const testWidth = ctx.measureText(testLine).width;
+            
+            if (testWidth > maxWidth && currentLine !== '') {
+              lines.push(currentLine);
+              currentLine = words[i];
+            } else {
+              currentLine = testLine;
+            }
+          }
+          if (currentLine !== '') {
+            lines.push(currentLine);
+          }
+          
+          const displayLines = lines.slice(0, 2);
+          
+          displayLines.forEach((line) => {
+            ctx.fillText(line, centerX, currentY + productSizeCanvas);
+            currentY += productSizeCanvas + (8 * mmToPx);
+          });
+          currentY += (10 * mmToPx);
+        }
+        
+        if (currentLabelConfig.showQuantity) {
+          const quantitySizeCanvas = (currentLabelConfig.quantityFontSize * fontScaleA4) * ptToPx;
+          ctx.font = `bold ${quantitySizeCanvas}px Arial`;
+          ctx.textAlign = 'left';
+          ctx.fillStyle = currentLabelConfig.textColor;
+          const quantityText = currentLabelConfig.customQuantity.trim() || `${product.stock}`;
+          ctx.fillText(quantityText, x + padding, y + height - padding);
+        }
+        
+        if (currentLabelConfig.showQRCode && qrImage) {
+          const qrSizePx = currentLabelConfig.qrSize * mmToPx;
+          const qrX = x + width - padding - qrSizePx;
+          const qrY = y + height - padding - qrSizePx;
+          ctx.drawImage(qrImage, qrX, qrY, qrSizePx, qrSizePx);
+        }
+      };
+      
+      const marginPx = 3 * mmToPx;
+      const labelWidthPx = 200 * mmToPx;
+      const labelHeightPx = 145 * mmToPx;
+      const centerX = (canvas.width - labelWidthPx) / 2;
+      const halfPageHeight = canvas.height / 2;
+      
+      const positions = [
+        { x: centerX, y: marginPx },
+        { x: centerX, y: halfPageHeight + marginPx }
+      ];
+      
+      for (let i = 0; i < positions.length; i++) {
+        const pos = positions[i];
+        await drawLabel(pos.x, pos.y, labelWidthPx, labelHeightPx);
+      }
+      
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const fileName = `etiquetas_${product.name.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.png`;
+      
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = canvas.toDataURL('image/png', 1.0);
+      link.click();
+      
+      setSuccess(`✅ Etiquetas PNG geradas com sucesso!`);
+      setTimeout(() => setSuccess(''), 3000);
+      
+    } catch (error) {
+      console.error('Erro ao gerar PNG:', error);
+      setErrors({ general: 'Erro ao gerar etiquetas.' });
+    }
+    
+    setLoading(false);
+  };
+
   return (
-    <div className="bg-gray-100 min-h-screen font-sans">
-      <nav className="bg-white shadow-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
-            <div className="flex items-center gap-4">
-              <QrCode size={32} className="text-blue-600" />
-              <div className="text-2xl font-bold text-gray-800 hidden sm:block">
-                Estoque<span className="text-blue-600">FF</span>
+    <div className="max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-gray-50 min-h-screen relative">
+      {/* Toast notifications */}
+      {success && (
+        <div className="fixed top-4 left-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg z-50 animate-slide-down">
+          <div className="flex items-center gap-2">
+            <CheckCircle size={20} />
+            <span className="text-sm font-medium">{success}</span>
+          </div>
+        </div>
+      )}
+      
+      {errors.general && (
+        <div className="fixed top-4 left-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg z-50 animate-slide-down">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={20} />
+            <span className="text-sm font-medium">{errors.general}</span>
+          </div>
+        </div>
+      )}
+      
+      {/* Loading overlay */}
+      {loading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 flex items-center gap-3">
+            <Loader2 size={24} className="animate-spin text-blue-500" />
+            <span className="text-gray-700 font-medium">Processando...</span>
+          </div>
+        </div>
+      )}
+      
+      {/* Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-auto md:left-0 md:w-64 md:h-full bg-white border-t md:border-t-0 md:border-r border-gray-200 px-4 py-2 md:py-4">
+        <div className="flex justify-around md:flex-col md:space-y-2">
+          {[
+            { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
+            { id: 'scanner', icon: Scan, label: 'Movimentação' },
+            { id: 'products', icon: Package, label: 'Produtos' },
+            { id: 'labels', icon: QrCode, label: 'Etiquetas' },
+            { id: 'reports', icon: TrendingUp, label: 'Relatórios' },
+            { id: 'settings', icon: Settings, label: 'Config' }
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={() => setCurrentScreen(item.id)}
+              className={`flex flex-col md:flex-row items-center py-1 px-2 md:py-3 md:px-4 rounded-lg transition-colors ${
+                currentScreen === item.id ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <item.icon size={18} />
+              <span className="text-xs md:text-sm mt-1 md:mt-0 md:ml-3">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      {/* Dashboard Screen */}
+      {currentScreen === 'dashboard' && (
+        <div className="p-4 pb-20 md:ml-64 md:pb-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">EstoqueFF Dashboard</h1>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                {companySettings.responsibleName.split(' ').map(n => n[0]).join('')}
+              </div>
+              <span className="text-sm text-gray-600">{companySettings.responsibleName}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-600 text-sm font-medium">Total Produtos</p>
+                  <p className="text-2xl font-bold text-blue-800">{stats.totalProducts}</p>
+                </div>
+                <Package className="text-blue-500" size={32} />
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <button 
-                onClick={() => {
-                  setCurrentScreen('dashboard');
-                  stopCamera();
-                  setScannedProduct(null);
-                }}
-                className={`flex flex-col items-center p-2 rounded-lg hover:bg-gray-200 transition-colors ${currentScreen === 'dashboard' ? 'text-blue-600' : 'text-gray-500'}`}
+            
+            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-red-600 text-sm font-medium">Estoque Baixo</p>
+                  <p className="text-2xl font-bold text-red-800">{stats.lowStockProducts}</p>
+                </div>
+                <AlertTriangle className="text-red-500" size={32} />
+              </div>
+            </div>
+            
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-green-600 text-sm font-medium">Total Itens</p>
+                  <p className="text-2xl font-bold text-green-800">{stats.totalItems}</p>
+                </div>
+                <TrendingUp className="text-green-500" size={32} />
+              </div>
+            </div>
+            
+            <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-purple-600 text-sm font-medium">Movimentações Hoje</p>
+                  <p className="text-2xl font-bold text-purple-800">{stats.todayMovements}</p>
+                </div>
+                <BarChart3 className="text-purple-500" size={32} />
+              </div>
+            </div>
+          </div>
+
+          {stats.lowStockProducts > 0 && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center mb-2">
+                <AlertTriangle className="text-orange-500 mr-2" size={20} />
+                <h3 className="font-semibold text-orange-800">Produtos com Estoque Baixo</h3>
+              </div>
+              {products.filter(p => p.stock <= p.minStock).map(product => (
+                <div key={product.id} className="flex justify-between items-center py-2 border-b border-orange-200 last:border-b-0">
+                  <span className="text-orange-700">{product.name}</span>
+                  <span className="text-orange-600 font-medium">{product.stock} unidades</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="font-semibold text-gray-800 mb-3">Últimas Movimentações</h3>
+            {movements.slice(0, 5).map(movement => (
+              <div key={movement.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
+                <div>
+                  <p className="font-medium text-gray-800">{movement.product}</p>
+                  <p className="text-sm text-gray-600">{movement.user} • {movement.date}</p>
+                </div>
+                <div className={`px-2 py-1 rounded text-xs font-medium ${
+                  movement.type === 'entrada' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Scanner Screen - Sistema Completo */}
+      {currentScreen === 'scanner' && (
+        <div className="p-4 pb-20 md:ml-64 md:pb-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Movimentação de Estoque</h1>
+            {scannerActive && (
+              <button
+                onClick={stopCamera}
+                className="bg-red-500 text-white p-2 rounded-lg hover:bg-red-600 transition-colors"
+                title="Parar Scanner"
               >
-                <BarChart3 size={24} />
-                <span className="text-xs mt-1 hidden md:inline">Dashboard</span>
+                <X size={20} />
               </button>
-              <button 
-                onClick={() => {
-                  setCurrentScreen('products');
-                  stopCamera();
-                  setScannedProduct(null);
-                }}
-                className={`flex flex-col items-center p-2 rounded-lg hover:bg-gray-200 transition-colors ${currentScreen === 'products' ? 'text-blue-600' : 'text-gray-500'}`}
+            )}
+          </div>
+
+          {/* Botões de opção */}
+          {!scannerActive && !scannedProduct && !showManualMovement && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <button
+                onClick={startRealQRScanner}
+                disabled={loading}
+                className="bg-blue-500 text-white p-6 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex flex-col items-center gap-3"
               >
-                <Package size={24} />
-                <span className="text-xs mt-1 hidden md:inline">Produtos</span>
+                <Camera size={32} />
+                <div className="text-center">
+                  <p className="font-medium">Scanner QR Code</p>
+                  <p className="text-xs opacity-80">Use a câmera</p>
+                </div>
               </button>
-              <button 
+              
+              <button
                 onClick={() => {
-                  setCurrentScreen('scan');
+                  setShowManualMovement(true);
+                  setMovementType('');
                 }}
-                className={`flex flex-col items-center p-2 rounded-lg hover:bg-gray-200 transition-colors ${currentScreen === 'scan' || currentScreen === 'manualMovement' ? 'text-blue-600' : 'text-gray-500'}`}
+                className="bg-green-500 text-white p-6 rounded-lg hover:bg-green-600 transition-colors flex flex-col items-center gap-3"
               >
-                <Scan size={24} />
-                <span className="text-xs mt-1 hidden md:inline">Escanear</span>
+                <Search size={32} />
+                <div className="text-center">
+                  <p className="font-medium">Busca Manual</p>
+                  <p className="text-xs opacity-80">Pesquisar produto</p>
+                </div>
               </button>
-              <button 
-                onClick={() => {
-                  setCurrentScreen('reports');
-                  stopCamera();
-                  setScannedProduct(null);
-                }}
-                className={`flex flex-col items-center p-2 rounded-lg hover:bg-gray-200 transition-colors ${currentScreen === 'reports' ? 'text-blue-600' : 'text-gray-500'}`}
-              >
-                <FileText size={24} />
-                <span className="text-xs mt-1 hidden md:inline">Relatórios</span>
-              </button>
-              <button 
-                onClick={() => {
-                  setCurrentScreen('labels');
-                  stopCamera();
-                  setScannedProduct(null);
-                }}
-                className={`flex flex-col items-center p-2 rounded-lg hover:bg-gray-200 transition-colors ${currentScreen === 'labels' ? 'text-blue-600' : 'text-gray-500'}`}
-              >
-                <QrCode size={24} />
-                <span className="text-xs mt-1 hidden md:inline">Etiquetas</span>
-              </button>
-              <button 
-                onClick={() => {
-                  setCurrentScreen('settings');
-                  stopCamera();
-                  setScannedProduct(null);
-                }}
-                className={`flex flex-col items-center p-2 rounded-lg hover:bg-gray-200 transition-colors ${currentScreen === 'settings' ? 'text-blue-600' : 'text-gray-500'}`}
-              >
-                <Settings size={24} />
-                <span className="text-xs mt-1 hidden md:inline">Configurações</span>
-              </button>
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+              <p className="text-green-800 text-sm">{success}</p>
+            </div>
+          )}
+          
+          {errors.camera && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-red-800 text-sm">{errors.camera}</p>
+            </div>
+          )}
+          
+          {/* Scanner Ativo */}
+          {scannerActive && (
+            <div className="text-center">
+              <div className="bg-black rounded-lg overflow-hidden mb-6 relative">
+                {cameraStream ? (
+                  <div className="relative">
+                    <video 
+                      ref={videoRef}
+                      className="w-full h-64 object-cover"
+                      autoPlay 
+                      playsInline 
+                      muted
+                    />
+                    
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-48 h-48 border-2 border-green-400 rounded-lg relative">
+                        <div className="absolute -top-2 -left-2 w-6 h-6 border-l-4 border-t-4 border-green-400"></div>
+                        <div className="absolute -top-2 -right-2 w-6 h-6 border-r-4 border-t-4 border-green-400"></div>
+                        <div className="absolute -bottom-2 -left-2 w-6 h-6 border-l-4 border-b-4 border-green-400"></div>
+                        <div className="absolute -bottom-2 -right-2 w-6 h-6 border-r-4 border-b-4 border-green-400"></div>
+                        
+                        <div className="absolute inset-4 border border-green-400 rounded animate-pulse opacity-50"></div>
+                        
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                          <div className="w-2 h-2 bg-green-400 rounded-full animate-ping"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8">
+                    <div className="animate-pulse flex items-center justify-center">
+                      <Loader2 size={48} className="text-green-400 animate-spin" />
+                    </div>
+                  </div>
+                )}
+                
+                <div className="bg-black bg-opacity-75 p-4">
+                  <p className="text-white text-sm">🔍 Posicione o QR Code dentro da área marcada</p>
+                  <p className="text-green-400 text-xs mt-1">Aguarde a detecção automática...</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Movimentação Manual */}
+          {showManualMovement && !manualSelectedProduct && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Busca Manual de Produto</h3>
+                <button
+                  onClick={() => {
+                    setShowManualMovement(false);
+                    setManualSearchTerm('');
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="relative mb-4">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search size={20} className="text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  inputMode="text"
+                  placeholder="Pesquisar produto por nome, código, marca..."
+                  value={manualSearchTerm}
+                  onChange={(e) => handleManualSearchChange(e.target.value)}
+                  className="w-full pl-10 pr-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  style={{ fontSize: '16px' }}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck="false"
+                />
+              </div>
+
+              <div className="space-y-2">
+                {products.filter(product => {
+                  if (!manualSearchTerm.trim()) return true;
+                  const term = manualSearchTerm.toLowerCase().trim();
+                  return product.name.toLowerCase().includes(term) ||
+                         (product.code && product.code.toLowerCase().includes(term)) ||
+                         (product.brand && product.brand.toLowerCase().includes(term)) ||
+                         product.category.toLowerCase().includes(term);
+                }).slice(0, 10).map(product => (
+                  <div 
+                    key={product.id} 
+                    className="bg-white border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => setManualSelectedProduct(product)}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-800">{product.name}</h4>
+                        <p className="text-sm text-gray-600">
+                          {product.brand && `${product.brand} • `}
+                          Código: {product.code || 'N/A'}
+                        </p>
+                        <p className="text-sm text-gray-600">Categoria: {product.category}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-600">Estoque:</p>
+                        <p className={`font-medium ${product.stock <= product.minStock ? 'text-red-600' : 'text-green-600'}`}>
+                          {product.stock} unid.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Formulário de Movimentação */}
+          {(scannedProduct || manualSelectedProduct) && (
+            <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+              <div className="flex items-center mb-4">
+                <CheckCircle className="text-green-500 mr-2" size={24} />
+                <h3 className="font-semibold text-green-800">
+                  {scannedProduct ? 'Produto Escaneado!' : 'Produto Selecionado!'}
+                </h3>
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <h4 className="font-semibold text-gray-800 mb-2">
+                  {(scannedProduct || manualSelectedProduct).name}
+                </h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Código:</span>
+                    <span className="ml-2 font-medium">
+                      {(scannedProduct || manualSelectedProduct).code || '-'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Marca:</span>
+                    <span className="ml-2 font-medium">
+                      {(scannedProduct || manualSelectedProduct).brand || '-'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Estoque:</span>
+                    <span className="ml-2 font-medium">
+                      {(scannedProduct || manualSelectedProduct).stock} unidades
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Categoria:</span>
+                    <span className="ml-2 font-medium">
+                      {(scannedProduct || manualSelectedProduct).category}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    {scannedProduct ? (
+                      <>
+                        <Camera size={12} />
+                        Produto encontrado via Scanner QR Code
+                      </>
+                    ) : (
+                      <>
+                        <Search size={12} />
+                        Produto encontrado via Busca Manual
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {(errors.quantity || errors.movement) && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                  {errors.quantity && <p className="text-red-800 text-sm">{errors.quantity}</p>}
+                  {errors.movement && <p className="text-red-800 text-sm">{errors.movement}</p>}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tipo de Movimentação *
+                    {!movementType && <span className="text-red-500 text-xs ml-1">(Obrigatório)</span>}
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setMovementType('entrada');
+                        if (errors.movement) setErrors({...errors, movement: ''});
+                      }}
+                      className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors border-2 ${
+                        movementType === 'entrada' 
+                          ? 'bg-green-500 text-white border-green-500' 
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:bg-green-50'
+                      }`}
+                    >
+                      ↗️ Entrada
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMovementType('saída');
+                        if (errors.movement) setErrors({...errors, movement: ''});
+                      }}
+                      className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors border-2 ${
+                        movementType === 'saída' 
+                          ? 'bg-red-500 text-white border-red-500' 
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:bg-red-50'
+                      }`}
+                    >
+                      ↙️ Saída
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={movementQuantity}
+                    onChange={(e) => {
+                      setMovementQuantity(e.target.value);
+                      if (errors.quantity) setErrors({...errors, quantity: ''});
+                    }}
+                    className={`w-full px-4 py-4 border rounded-lg focus:ring-2 focus:border-blue-500 ${
+                      errors.quantity ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    placeholder="Digite a quantidade"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setScannedProduct(null);
+                      setManualSelectedProduct(null);
+                      setShowManualMovement(false);
+                      setManualSearchTerm('');
+                      setMovementType('');
+                      setErrors({});
+                    }}
+                    className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => processMovement(scannedProduct || manualSelectedProduct)}
+                    disabled={loading || !movementType}
+                    className={`flex-1 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                      !movementType 
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                        : loading 
+                          ? 'bg-gray-400 text-white cursor-not-allowed'
+                          : 'bg-blue-500 text-white hover:bg-blue-600'
+                    }`}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Processando...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={16} />
+                        Confirmar Movimentação
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Products Screen */}
+      {currentScreen === 'products' && (
+        <div className="p-4 pb-20 md:ml-64 md:pb-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Gestão de Produtos</h1>
+            <button
+              onClick={() => setShowAddProduct(true)}
+              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+            >
+              <Plus size={16} />
+              Novo Produto
+            </button>
+          </div>
+
+          <ProductSearch onSearchChange={handleSearchChange} searchTerm={searchTerm} />
+          <ProductList 
+            products={products} 
+            searchTerm={searchTerm} 
+            onEdit={handleEditProduct} 
+            onDelete={handleDeleteProduct} 
+          />
+        </div>
+      )}
+
+      {/* Labels Screen - Gerador de Etiquetas */}
+      {currentScreen === 'labels' && (
+        <div className="p-4 pb-20 md:ml-64 md:pb-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Gerador de Etiquetas</h1>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+            <h3 className="font-semibold text-gray-800 mb-4">Selecionar Produto para Etiquetas</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Produto</label>
+                <select
+                  value={selectedProduct}
+                  onChange={(e) => setSelectedProduct(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  style={{ fontSize: '16px' }}
+                >
+                  <option value="">Selecione um produto</option>
+                  {products.map(product => (
+                    <option key={product.id} value={product.id}>
+                      {product.name} - {product.code || 'S/Código'} (Estoque: {product.stock})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedProduct && (
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => openLabelEditorForProduct(selectedProduct)}
+                    className="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                  >
+                    <Settings size={16} />
+                    Configurar Etiqueta
+                  </button>
+                  
+                  <button
+                    onClick={generateA4Label}
+                    disabled={loading}
+                    className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex items-center gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Gerando...
+                      </>
+                    ) : (
+                      <>
+                        <Download size={16} />
+                        Gerar Etiquetas A4
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            {!selectedProduct && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center mt-4">
+                <QrCode size={48} className="mx-auto text-gray-300 mb-4" />
+                <h3 className="text-lg font-medium text-gray-600 mb-2">Selecione um Produto</h3>
+                <p className="text-gray-500">
+                  Escolha um produto acima para configurar e gerar suas etiquetas com QR Code.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Preview das últimas etiquetas geradas */}
+          {selectedProduct && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h3 className="font-semibold text-gray-800 mb-4">Preview da Etiqueta</h3>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <LabelPreview 
+                  product={products.find(p => p.id === selectedProduct)}
+                  labelTemplate={getProductLabelConfig(selectedProduct)}
+                  companySettings={companySettings}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                * Esta é uma prévia da etiqueta que será gerada
+              </p>
+            </div>
+          )}
+
+          {/* Lista de produtos disponíveis com busca */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="font-semibold text-gray-800 mb-4">Produtos Disponíveis</h3>
+            
+            <ProductSearch onSearchChange={handleLabelSearchChange} searchTerm={labelSearchTerm} />
+            
+            <div className="space-y-3">
+              {products.filter(product => {
+                if (!labelSearchTerm.trim()) return true;
+                const term = labelSearchTerm.toLowerCase().trim();
+                return product.name.toLowerCase().includes(term) ||
+                       product.id.toLowerCase().includes(term) ||
+                       (product.brand && product.brand.toLowerCase().includes(term)) ||
+                       product.category.toLowerCase().includes(term) ||
+                       (product.code && product.code.toLowerCase().includes(term));
+              }).map(product => (
+                <div key={product.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-800">{product.name}</p>
+                    <p className="text-sm text-gray-600">
+                      {product.brand && `${product.brand} • `}Código: {product.code || 'N/A'} • Estoque: {product.stock}
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setSelectedProduct(product.id)}
+                      className={`px-3 py-2 rounded text-sm transition-colors ${
+                        selectedProduct === product.id 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {selectedProduct === product.id ? '✓ Selecionado' : 'Selecionar'}
+                    </button>
+                    
+                    <button 
+                      onClick={() => openLabelEditorForProduct(product.id)}
+                      className="p-2 bg-purple-100 text-purple-600 rounded hover:bg-purple-200 transition-colors"
+                      title="Configurar etiqueta"
+                    >
+                      <Settings size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
-      </nav>
-      
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {renderScreen()}
-      </main>
+      )}
 
-      {/* Modal Adicionar/Editar Produto */}
-      {(showAddProduct || editingProduct) && (
+      {/* Reports Screen - Relatórios Completos */}
+      {currentScreen === 'reports' && (
+        <div className="p-4 pb-20 md:ml-64 md:pb-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Relatórios</h1>
+            <div className="flex gap-2">
+              <button
+                onClick={createBackup}
+                className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
+              >
+                <Download size={16} />
+                Backup
+              </button>
+              <label className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 cursor-pointer">
+                <Upload size={16} />
+                Restaurar
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={restoreBackup}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Abas de relatórios */}
+          <div className="flex mb-6 border-b border-gray-200">
+            <button
+              onClick={() => setReportsTab('movements')}
+              className={`py-2 px-4 font-medium border-b-2 ${
+                reportsTab === 'movements' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Movimentações
+            </button>
+            <button
+              onClick={() => setReportsTab('products')}
+              className={`py-2 px-4 font-medium border-b-2 ${
+                reportsTab === 'products' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Produtos
+            </button>
+            <button
+              onClick={() => setReportsTab('analytics')}
+              className={`py-2 px-4 font-medium border-b-2 ${
+                reportsTab === 'analytics' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Análises
+            </button>
+          </div>
+
+          {/* Relatório de Movimentações */}
+          {reportsTab === 'movements' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-800">Relatório de Movimentações</h3>
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={movementsPeriodFilter}
+                      onChange={(e) => setMovementsPeriodFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    >
+                      <option value="all">Todas</option>
+                      <option value="7days">Últimos 7 dias</option>
+                      <option value="30days">Últimos 30 dias</option>
+                    </select>
+                    
+                    <button
+                      onClick={() => exportData('movements', 'excel')}
+                      className="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 text-sm"
+                    >
+                      <FileSpreadsheet size={14} />
+                      Excel
+                    </button>
+                    
+                    <button
+                      onClick={() => exportData('movements', 'pdf')}
+                      className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 text-sm"
+                    >
+                      <FileText size={14} />
+                      PDF
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {filteredMovements.slice(0, 10).map(movement => (
+                    <div key={movement.id} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
+                      <div>
+                        <p className="font-medium text-gray-800">{movement.product}</p>
+                        <p className="text-sm text-gray-600">{movement.user} • {movement.date}</p>
+                      </div>
+                      <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        movement.type === 'entrada' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-xs text-gray-500 mt-4 text-center">
+                  Mostrando {Math.min(10, filteredMovements.length)} de {filteredMovements.length} movimentações
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Relatório de Produtos */}
+          {reportsTab === 'products' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-800">Relatório de Produtos</h3>
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={productsFilter}
+                      onChange={(e) => setProductsFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    >
+                      <option value="all">Todos</option>
+                      <option value="low_stock">Estoque Baixo</option>
+                      <option value="no_stock">Sem Estoque</option>
+                    </select>
+                    
+                    <button
+                      onClick={() => exportData('products', 'excel')}
+                      className="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 text-sm"
+                    >
+                      <FileSpreadsheet size={14} />
+                      Excel
+                    </button>
+                    
+                    <button
+                      onClick={() => exportData('products', 'pdf')}
+                      className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 text-sm"
+                    >
+                      <FileText size={14} />
+                      PDF
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredProducts.slice(0, 12).map(product => (
+                    <div key={product.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h4 className="font-semibold text-gray-800">{product.name}</h4>
+                          <p className="text-sm text-gray-600">{product.brand || 'Sem marca'} • {product.category}</p>
+                        </div>
+                        <div className={`px-2 py-1 rounded text-xs font-medium ${
+                          product.stock <= 0 
+                            ? 'bg-red-100 text-red-800' 
+                            : product.stock <= product.minStock 
+                              ? 'bg-orange-100 text-orange-800'
+                              : 'bg-green-100 text-green-800'
+                        }`}>
+                          {product.stock <= 0 ? 'Sem estoque' : product.stock <= product.minStock ? 'Baixo' : 'Normal'}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-gray-600">Atual:</span>
+                          <span className="ml-1 font-medium">{product.stock}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Mín:</span>
+                          <span className="ml-1 font-medium">{product.minStock}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Análises */}
+          {reportsTab === 'analytics' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-800 mb-4">Produtos Mais Movimentados</h3>
+                <div className="space-y-3">
+                  {topMovedProducts.slice(0, 5).map((product, index) => (
+                    <div key={product.productId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                          index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-orange-600' : 'bg-blue-500'
+                        }`}>
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-800">{product.productName}</p>
+                          <p className="text-sm text-gray-600">Estoque atual: {product.currentStock}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-blue-600">{product.totalMovements}</p>
+                        <p className="text-xs text-gray-500">movimentações</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-800 mb-4">Produtos Menos Movimentados</h3>
+                <div className="space-y-3">
+                  {leastMovedProducts.slice(0, 5).map((product, index) => (
+                    <div key={product.productId} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-gray-800">{product.productName}</p>
+                        <p className="text-sm text-gray-600">Estoque atual: {product.currentStock}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-red-600">{product.totalMovements}</p>
+                        <p className="text-xs text-gray-500">movimentações</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Settings Screen */}
+      {currentScreen === 'settings' && (
+        <div className="p-4 pb-20 md:ml-64 md:pb-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Configurações</h1>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Dados da Empresa</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nome da Empresa</label>
+                <input
+                  type="text"
+                  value={companySettings.companyName}
+                  onChange={(e) => setCompanySettings({...companySettings, companyName: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  style={{ fontSize: '16px' }}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Responsável</label>
+                <input
+                  type="text"
+                  value={companySettings.responsibleName}
+                  onChange={(e) => setCompanySettings({...companySettings, responsibleName: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  style={{ fontSize: '16px' }}
+                />
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="lowStockAlert"
+                  checked={companySettings.lowStockAlert}
+                  onChange={(e) => setCompanySettings({...companySettings, lowStockAlert: e.target.checked})}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="lowStockAlert" className="ml-2 text-sm text-gray-700">
+                  Alertas de estoque baixo
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h4 className="text-md font-medium text-gray-800 mb-2">Informações do Sistema</h4>
+              <div className="text-sm text-gray-600 space-y-1">
+                <p>📦 Total de produtos: {stats.totalProducts}</p>
+                <p>📊 Total de movimentações: {movements.length}</p>
+                <p>🔄 Versão: EstoqueFF v2.0.0</p>
+                <p>✅ Status: Sistema funcionando com todas as funcionalidades</p>
+              </div>
+              
+              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <h5 className="font-medium text-green-800 mb-2">🎉 Funcionalidades Ativas:</h5>
+                <div className="text-sm text-green-700 space-y-1">
+                  <p>✅ Scanner QR Code com câmera real</p>
+                  <p>✅ Sistema completo de movimentações</p>
+                  <p>✅ Gerador de etiquetas personalizadas</p>
+                  <p>✅ Relatórios avançados (PDF/Excel)</p>
+                  <p>✅ Backup e restauração de dados</p>
+                  <p>✅ Análise de produtos e estatísticas</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Novo Produto */}
+      {showAddProduct && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">
-                  {editingProduct ? 'Editar Produto' : 'Adicionar Novo Produto'}
-                </h3>
+                <h3 className="text-lg font-semibold text-gray-800">Novo Produto</h3>
                 <button
                   onClick={() => {
                     setShowAddProduct(false);
+                    setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
+                    setErrors({});
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Produto *</label>
+                  <input
+                    type="text"
+                    value={newProduct.name}
+                    onChange={(e) => {
+                      setNewProduct({...newProduct, name: e.target.value});
+                      if (errors.name) setErrors({...errors, name: ''});
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
+                    placeholder="Ex: Notebook Dell Inspiron"
+                  />
+                  {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Marca</label>
+                  <input
+                    type="text"
+                    value={newProduct.brand}
+                    onChange={(e) => setNewProduct({...newProduct, brand: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    style={{ fontSize: '16px' }}
+                    placeholder="Ex: Dell"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Categoria *</label>
+                  <input
+                    type="text"
+                    value={newProduct.category}
+                    onChange={(e) => {
+                      setNewProduct({...newProduct, category: e.target.value});
+                      if (errors.category) setErrors({...errors, category: ''});
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.category ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
+                    placeholder="Ex: Eletrônicos"
+                  />
+                  {errors.category && <p className="text-red-600 text-xs mt-1">{errors.category}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Código do Produto *</label>
+                  <input
+                    type="text"
+                    value={newProduct.code}
+                    onChange={(e) => {
+                      setNewProduct({...newProduct, code: e.target.value});
+                      if (errors.code) setErrors({...errors, code: ''});
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.code ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
+                    placeholder="Ex: NB-DELL-001"
+                  />
+                  {errors.code && <p className="text-red-600 text-xs mt-1">{errors.code}</p>}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Atual *</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={newProduct.stock}
+                      onChange={(e) => {
+                        setNewProduct({...newProduct, stock: e.target.value});
+                        if (errors.stock) setErrors({...errors, stock: ''});
+                      }}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.stock ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                      }`}
+                      style={{ fontSize: '16px' }}
+                      placeholder="0"
+                    />
+                    {errors.stock && <p className="text-red-600 text-xs mt-1">{errors.stock}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Mínimo *</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={newProduct.minStock}
+                      onChange={(e) => {
+                        setNewProduct({...newProduct, minStock: e.target.value});
+                        if (errors.minStock) setErrors({...errors, minStock: ''});
+                      }}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.minStock ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                      }`}
+                      style={{ fontSize: '16px' }}
+                      placeholder="1"
+                    />
+                    {errors.minStock && <p className="text-red-600 text-xs mt-1">{errors.minStock}</p>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowAddProduct(false);
+                    setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
+                    setErrors({});
+                  }}
+                  className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={addProduct}
+                  disabled={loading}
+                  className="flex-1 bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={16} />
+                      Salvar Produto
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Produto */}
+      {editingProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Editar Produto</h3>
+                <button
+                  onClick={() => {
                     setEditingProduct(null);
                     setErrors({});
                   }}
@@ -2295,98 +2683,132 @@ const EstoqueFFApp = () => {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Nome do Produto <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Produto *</label>
                   <input
                     type="text"
-                    inputMode="text"
-                    value={editingProduct?.name || newProduct.name}
-                    onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, name: e.target.value }) : setNewProduct({ ...newProduct, name: e.target.value })}
-                    className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Ex: Teclado Gamer"
+                    value={editingProduct.name}
+                    onChange={(e) => {
+                      setEditingProduct({...editingProduct, name: e.target.value});
+                      if (errors.name) setErrors({...errors, name: ''});
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
                   />
-                  {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
+                  {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Código <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Marca</label>
                   <input
                     type="text"
-                    inputMode="text"
-                    value={editingProduct?.code || newProduct.code}
-                    onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, code: e.target.value }) : setNewProduct({ ...newProduct, code: e.target.value })}
-                    className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Ex: KB-GAMER-001"
-                  />
-                  {errors.code && <p className="mt-1 text-sm text-red-600">{errors.code}</p>}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Marca</label>
-                  <input
-                    type="text"
-                    inputMode="text"
-                    value={editingProduct?.brand || newProduct.brand}
-                    onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, brand: e.target.value }) : setNewProduct({ ...newProduct, brand: e.target.value })}
-                    className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Ex: Logitech"
+                    value={editingProduct.brand || ''}
+                    onChange={(e) => setEditingProduct({...editingProduct, brand: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    style={{ fontSize: '16px' }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Categoria <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Categoria *</label>
                   <input
                     type="text"
-                    inputMode="text"
-                    value={editingProduct?.category || newProduct.category}
-                    onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, category: e.target.value }) : setNewProduct({ ...newProduct, category: e.target.value })}
-                    className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Ex: Acessórios de Informática"
+                    value={editingProduct.category}
+                    onChange={(e) => {
+                      setEditingProduct({...editingProduct, category: e.target.value});
+                      if (errors.category) setErrors({...errors, category: ''});
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.category ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
                   />
-                  {errors.category && <p className="mt-1 text-sm text-red-600">{errors.category}</p>}
+                  {errors.category && <p className="text-red-600 text-xs mt-1">{errors.category}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Código do Produto *</label>
+                  <input
+                    type="text"
+                    value={editingProduct.code}
+                    onChange={(e) => {
+                      setEditingProduct({...editingProduct, code: e.target.value});
+                      if (errors.code) setErrors({...errors, code: ''});
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.code ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    style={{ fontSize: '16px' }}
+                  />
+                  {errors.code && <p className="text-red-600 text-xs mt-1">{errors.code}</p>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Estoque Atual <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Atual *</label>
                     <input
-                      type="number"
+                      type="text"
                       inputMode="numeric"
-                      value={editingProduct?.stock || newProduct.stock}
-                      onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, stock: parseInt(e.target.value) }) : setNewProduct({ ...newProduct, stock: parseInt(e.target.value) })}
-                      className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      min="0"
+                      pattern="[0-9]*"
+                      value={editingProduct.stock}
+                      onChange={(e) => {
+                        setEditingProduct({...editingProduct, stock: e.target.value});
+                        if (errors.stock) setErrors({...errors, stock: ''});
+                      }}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.stock ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                      }`}
+                      style={{ fontSize: '16px' }}
                     />
-                    {errors.stock && <p className="mt-1 text-sm text-red-600">{errors.stock}</p>}
+                    {errors.stock && <p className="text-red-600 text-xs mt-1">{errors.stock}</p>}
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Estoque Mínimo <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Mínimo *</label>
                     <input
-                      type="number"
+                      type="text"
                       inputMode="numeric"
-                      value={editingProduct?.minStock || newProduct.minStock}
-                      onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, minStock: parseInt(e.target.value) }) : setNewProduct({ ...newProduct, minStock: parseInt(e.target.value) })}
-                      className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      min="1"
+                      pattern="[0-9]*"
+                      value={editingProduct.minStock}
+                      onChange={(e) => {
+                        setEditingProduct({...editingProduct, minStock: e.target.value});
+                        if (errors.minStock) setErrors({...errors, minStock: ''});
+                      }}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.minStock ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                      }`}
+                      style={{ fontSize: '16px' }}
                     />
-                    {errors.minStock && <p className="mt-1 text-sm text-red-600">{errors.minStock}</p>}
+                    {errors.minStock && <p className="text-red-600 text-xs mt-1">{errors.minStock}</p>}
                   </div>
                 </div>
-                
-                {errors.general && (
-                  <p className="mt-1 text-sm text-red-600 text-center">{errors.general}</p>
-                )}
+              </div>
 
+              <div className="flex gap-3 mt-6">
                 <button
-                  onClick={editingProduct ? updateProduct : addProduct}
-                  className="w-full bg-blue-500 text-white py-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
+                  onClick={() => {
+                    setEditingProduct(null);
+                    setErrors({});
+                  }}
+                  className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={updateProduct}
                   disabled={loading}
+                  className="flex-1 bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex items-center justify-center gap-2"
                 >
                   {loading ? (
-                    <Loader2 size={16} className="animate-spin" />
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Salvando...
+                    </>
                   ) : (
                     <>
                       <Save size={16} />
-                      {editingProduct ? 'Salvar Alterações' : 'Adicionar Produto'}
+                      Salvar Alterações
                     </>
                   )}
                 </button>
