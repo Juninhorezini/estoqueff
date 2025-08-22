@@ -743,15 +743,46 @@ const scanQRCode = () => {
     
     if (code) {
       console.log('🎯 QR CODE ENCONTRADO!:', code.data);
+
+// Tentar fazer parse do JSON se for um JSON válido
+let productData;
+try {
+  productData = JSON.parse(code.data);
+  console.log('📋 Dados parseados:', productData);
+  
+  // Se tem um ID no JSON, usar esse ID para buscar
+  if (productData.id) {
+    console.log('🔍 Procurando produto com ID:', productData.id);
+    const product = findProductByQR(productData.id);
+    
+    if (product) {
+      console.log('✅ Produto encontrado via ID:', product.name);
       clearInterval(scanIntervalRef.current);
-      const product = findProductByQR(code.data);
-      if (product) {
-        setScannedProduct(product.id);
-        setSuccess(`Produto encontrado: ${product.name}`);
-      } else {
-        setErrors({ camera: 'Produto não encontrado' });
-      }
+      setScannedProduct(product.id);
+      setSuccess(`Produto encontrado: ${product.name}`);
       stopCamera();
+      return;
+    }
+  }
+} catch (parseError) {
+  console.log('⚠️ QR não é JSON válido, tentando busca direta');
+  productData = code.data;
+}
+
+// Fallback: busca direta com dados originais
+console.log('🔍 Tentando busca direta com:', productData);
+const product = findProductByQR(productData);
+
+if (product) {
+  console.log('✅ Produto encontrado via busca direta:', product.name);
+  clearInterval(scanIntervalRef.current);
+  setScannedProduct(product.id);
+  setSuccess(`Produto encontrado: ${product.name}`);
+} else {
+  console.log('❌ Produto não encontrado');
+  setErrors({ camera: 'Produto não encontrado' });
+}
+stopCamera();
     } else {
       // Só mostrar a cada 50 tentativas para não poluir o log
       if (Math.random() < 0.02) console.log('🔍 Procurando QR Code...');
@@ -843,6 +874,21 @@ const initScanner = async () => {
 };
 
   const findProductByQR = (qrCode) => {
+  console.log('🔍 findProductByQR recebeu:', qrCode);
+  console.log('📦 Produtos disponíveis:', products.length);
+  
+  // Se for JSON, tentar extrair ID
+  let searchTerm = qrCode;
+  try {
+    const parsed = JSON.parse(qrCode);
+    if (parsed.id) {
+      searchTerm = parsed.id;
+      console.log('📋 Extraído ID do JSON:', searchTerm);
+    }
+  } catch (e) {
+    // Não é JSON, usar como está
+    console.log('📝 Não é JSON, usando valor direto');
+  }  
     return products.find(p => p.qrCode === qrCode || p.id === qrCode);
   };
 
