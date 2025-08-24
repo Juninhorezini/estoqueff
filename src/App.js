@@ -6,29 +6,56 @@ import * as XLSX from 'xlsx';
 import jsQR from 'jsqr';
 import './App.css';
 
-// Hook para localStorage
-const useStoredState = (key, initialValue) => {
-  const [storedValue, setStoredValue] = useState(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.log(error);
-      return initialValue;
-    }
-  });
+// 🔥 FIREBASE CDN IMPORTS
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+import { getDatabase, ref, set, onValue, off, push, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
 
-  const setValue = (value) => {
-    try {
-      setStoredValue(value);
-      window.localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-      console.log(error);
-    }
-  };
+const { useStoredState } = hatch;
 
-  return [storedValue, setValue];
+// 🔥 FIREBASE CONFIGURATION
+const firebaseConfig = {
+  // 📍 COLE AQUI SUA CONFIGURAÇÃO DO FIREBASE CONSOLE
+  apiKey: "AIzaSyCRHuU6ykqjQ_ZX8pvCbCyn6rTh5MCPsw0",
+  authDomain: "estoqueff-931df.firebaseapp.com",
+  databaseURL: "https://estoqueff-931df-default-rtdb.firebaseio.com",
+  projectId: "estoqueff-931df",
+  storageBucket: "estoqueff-931df.firebasestorage.app",
+  messagingSenderId: "135827693859",
+  appId: "1:135827693859:web:e8bb0e85509efdd54aac96"
 };
+
+// 🔥 INITIALIZE FIREBASE
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
+
+// 🔥 HOOK useFirebaseState - SUBSTITUTO DO useStoredState
+function useFirebaseState(path, defaultValue = null) {
+  const [data, setData] = useState(defaultValue);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const dbRef = ref(database, path);
+    
+    // 👂 LISTENER PARA MUDANÇAS EM TEMPO REAL
+    const unsubscribe = onValue(dbRef, (snapshot) => {
+      const value = snapshot.val();
+      setData(value !== null ? value : defaultValue);
+      setLoading(false);
+    });
+
+    // 🧹 CLEANUP
+    return () => off(dbRef, 'value', unsubscribe);
+  }, [path, defaultValue]);
+
+  // 💾 FUNÇÃO PARA SALVAR DADOS
+  const updateData = useCallback((newData) => {
+    const dbRef = ref(database, path);
+    set(dbRef, newData);
+    setData(newData); // Atualização local otimística
+  }, [path]);
+
+  return [data, updateData, loading];
+}
 
 // Componente de pesquisa
 const ProductSearch = React.memo(({ onSearchChange, searchTerm }) => {
@@ -535,7 +562,7 @@ const EstoqueFFApp = () => {
   const [currentScreen, setCurrentScreen] = useState('dashboard');
   
   // Estados usando localStorage
-  const [products, setProducts] = useStoredState('estoqueff_products', [
+  const [products, setProducts] = useFirebaseState('estoqueff_products', [
     { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
     { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'Acessórios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
     { id: 'P003', name: 'Teclado Mecânico', brand: 'Razer', category: 'Acessórios', code: 'KB-RZR-003', stock: 8, minStock: 5, qrCode: 'QR003', createdAt: '2025-01-01' },
