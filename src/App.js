@@ -6,7 +6,27 @@ import * as XLSX from 'xlsx';
 import jsQR from 'jsqr';
 import './App.css';
 
-const { useStoredState } = hatch;
+function useStoredState(key, defaultValue) {
+  const [state, setState] = useState(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : defaultValue;
+    } catch (error) {
+      return defaultValue;
+    }
+  });
+
+  const setValue = useCallback((value) => {
+    try {
+      setState(value);
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.error(`Error saving to localStorage key "${key}":`, error);
+    }
+  }, [key]);
+
+  return [state, setValue];
+}
 
 // 🔥 HOOK FIREBASE USANDO WINDOW GLOBALS
 function useFirebaseState(path, defaultValue = null) {
