@@ -48,6 +48,351 @@ function useFirebaseState(path, defaultValue = null) {
   return [data, updateData, loading];
 }
 
+// 🔐 COMPONENTE DE LOGIN
+const LoginScreen = ({ onLogin, users }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    // Buscar usuário
+    const user = users.find(u => 
+      u.username.toLowerCase() === username.toLowerCase() && 
+      u.password === password && 
+      u.active
+    );
+
+    if (user) {
+      onLogin(user);
+      localStorage.setItem('currentUser', JSON.stringify(user));
+    } else {
+      setError('Usuário ou senha incorretos');
+    }
+    
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+        <div className="text-center mb-8">
+          <Package size={48} className="mx-auto text-blue-600 mb-4" />
+          <h1 className="text-2xl font-bold text-gray-800">EstoqueFF</h1>
+          <p className="text-gray-600">Controle de Estoque</p>
+        </div>
+
+        <form onSubmit={handleLogin}>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Usuário
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Digite seu usuário"
+              required
+            />
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Senha
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Digite sua senha"
+              required
+            />
+          </div>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          >
+            {loading ? (
+              <>
+                <Loader2 size={20} className="animate-spin mr-2" />
+                Entrando...
+              </>
+            ) : (
+              'Entrar'
+            )}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center text-sm text-gray-600">
+          <p>Usuários de teste:</p>
+          <p><strong>admin</strong> / senha: 123</p>
+          <p><strong>operador</strong> / senha: 123</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 👥 COMPONENTE DE GESTÃO DE USUÁRIOS
+const UserManagement = ({ users, setUsers, currentUser }) => {
+  const [showForm, setShowForm] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    username: '',
+    email: '',
+    password: '',
+    role: 'operator',
+    active: true
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    if (editingUser) {
+      // Editar usuário
+      const updatedUsers = users.map(user => 
+        user.id === editingUser.id 
+          ? { ...formData, id: editingUser.id }
+          : user
+      );
+      setUsers(updatedUsers);
+    } else {
+      // Novo usuário
+      const newUser = {
+        ...formData,
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString()
+      };
+      setUsers([...users, newUser]);
+    }
+
+    resetForm();
+  };
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      username: '',
+      email: '',
+      password: '',
+      role: 'operator',
+      active: true
+    });
+    setShowForm(false);
+    setEditingUser(null);
+  };
+
+  const handleEdit = (user) => {
+    setFormData({
+      name: user.name,
+      username: user.username,
+      email: user.email,
+      password: user.password,
+      role: user.role,
+      active: user.active
+    });
+    setEditingUser(user);
+    setShowForm(true);
+  };
+
+  const handleDelete = (userId) => {
+    if (window.confirm('Tem certeza que deseja excluir este usuário?')) {
+      setUsers(users.filter(user => user.id !== userId));
+    }
+  };
+
+  return (
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-800">Gestão de Usuários</h2>
+        <button
+          onClick={() => setShowForm(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center"
+        >
+          <Plus size={20} className="mr-2" />
+          Novo Usuário
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+          <h3 className="text-lg font-semibold mb-4">
+            {editingUser ? 'Editar Usuário' : 'Novo Usuário'}
+          </h3>
+          
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nome de Usuário</label>
+              <input
+                type="text"
+                value={formData.username}
+                onChange={(e) => setFormData({...formData, username: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({...formData, password: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Função</label>
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({...formData, role: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="admin">Administrador</option>
+                <option value="manager">Gerente</option>
+                <option value="operator">Operador</option>
+                <option value="viewer">Visualizador</option>
+              </select>
+            </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="active"
+                checked={formData.active}
+                onChange={(e) => setFormData({...formData, active: e.target.checked})}
+                className="mr-2"
+              />
+              <label htmlFor="active" className="text-sm font-medium text-gray-700">
+                Usuário Ativo
+              </label>
+            </div>
+
+            <div className="md:col-span-2 flex gap-2">
+              <button
+                type="submit"
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              >
+                {editingUser ? 'Atualizar' : 'Criar'}
+              </button>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Lista de usuários */}
+      <div className="bg-white rounded-lg shadow-md">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Nome</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Usuário</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Email</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Função</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {users.map(user => (
+                <tr key={user.id}>
+                  <td className="px-4 py-3 text-sm text-gray-800">{user.name}</td>
+                  <td className="px-4 py-3 text-sm text-gray-800">{user.username}</td>
+                  <td className="px-4 py-3 text-sm text-gray-800">{user.email}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <span className={`px-2 py-1 rounded-full text-xs ${
+                      user.role === 'admin' ? 'bg-red-100 text-red-800' :
+                      user.role === 'manager' ? 'bg-orange-100 text-orange-800' :
+                      user.role === 'operator' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {user.role === 'admin' ? 'Admin' :
+                       user.role === 'manager' ? 'Gerente' :
+                       user.role === 'operator' ? 'Operador' : 'Visualizador'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    <span className={`px-2 py-1 rounded-full text-xs ${
+                      user.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {user.active ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    <button
+                      onClick={() => handleEdit(user)}
+                      className="text-blue-600 hover:text-blue-800 mr-2"
+                      title="Editar"
+                    >
+                      <Edit size={16} />
+                    </button>
+                    {user.id !== currentUser.id && (
+                      <button
+                        onClick={() => handleDelete(user.id)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Excluir"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Componente de pesquisa
 const ProductSearch = React.memo(({ onSearchChange, searchTerm }) => {
   const handleChange = useCallback((e) => {
@@ -551,6 +896,14 @@ const defaultLabelConfig = {
 
 const EstoqueFFApp = () => {
   const [currentScreen, setCurrentScreen] = useState('dashboard');
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('currentUser');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   
   // Estados usando localStorage
   const [products, setProducts] = useFirebaseState('estoqueff_products', [
@@ -573,6 +926,30 @@ const EstoqueFFApp = () => {
   });
 
   const [productLabelConfigs, setProductLabelConfigs] = useFirebaseState('estoqueff_product_label_configs', {});
+
+  // 👥 USUÁRIOS DO SISTEMA
+const [users, setUsers] = useFirebaseState('users', [
+  {
+    id: 'user1',
+    name: 'Administrador',
+    username: 'admin',
+    email: 'admin@empresa.com',
+    password: '123',
+    role: 'admin',
+    active: true,
+    createdAt: '2025-01-01'
+  },
+  {
+    id: 'user2', 
+    name: 'Operador Sistema',
+    username: 'operador',
+    email: 'operador@empresa.com',
+    password: '123',
+    role: 'operator',
+    active: true,
+    createdAt: '2025-01-01'
+  }
+]);
   
   // Estados gerais
   const [scannerActive, setScannerActive] = useState(false);
@@ -641,6 +1018,12 @@ const EstoqueFFApp = () => {
   const handleEditProduct = useCallback((product) => {
     setEditingProduct(product);
   }, []);
+
+  // 🚪 FUNÇÃO DE LOGOUT
+const handleLogout = () => {
+  setCurrentUser(null);
+  localStorage.removeItem('currentUser');
+};
 
   const handleDeleteProduct = useCallback((productId) => {
     if (window.confirm('Tem certeza que deseja excluir este produto?')) {
@@ -1694,6 +2077,11 @@ const initScanner = async () => {
     setLoading(false);
   };
 
+  // 🔐 VERIFICAR SE USUÁRIO ESTÁ LOGADO
+  if (!currentUser) {
+    return <LoginScreen onLogin={setCurrentUser} users={users} />;
+  }
+
   return (
     <div className="max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-gray-50 min-h-screen relative">
       {/* Toast notifications */}
@@ -1734,7 +2122,9 @@ const initScanner = async () => {
             { id: 'products', icon: Package, label: 'Produtos' },
             { id: 'labels', icon: QrCode, label: 'Etiquetas' },
             { id: 'reports', icon: TrendingUp, label: 'Relatórios' },
-            { id: 'settings', icon: Settings, label: 'Config' }
+            { id: 'settings', icon: Settings, label: 'Config' },
+            { id: 'users', icon: Users, label: 'Usuários' },
+            { id: 'logout', icon: X, label: 'Sair' }
           ].map(item => (
             <button
               key={item.id}
@@ -2654,6 +3044,21 @@ const initScanner = async () => {
           </div>
         </div>
       )}
+
+      {/* USERS SCREEN */}
+      {currentScreen === 'users' && (
+        <UserManagement 
+          users={users} 
+          setUsers={setUsers} 
+          currentUser={currentUser} 
+        />
+      )}
+
+      {/* LOGOUT HANDLER */}
+      {currentScreen === 'logout' && (() => {
+        handleLogout();
+        return null;
+      })()}
 
       {/* Modal Novo Produto */}
       {showAddProduct && (
