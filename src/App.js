@@ -769,11 +769,6 @@ setNewProduct({
   stock: product.stock || 0
 });
       setSuccess(`Produto encontrado: ${product.name}`);
-
-// Auto-limpar mensagem após 3 segundos
-setTimeout(() => {
-  setSuccess('');
-}, 3000);
       stopCamera();
       return;
     }
