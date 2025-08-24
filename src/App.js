@@ -792,6 +792,11 @@ if (product) {
   clearInterval(scanIntervalRef.current);
   setScannedProduct(product.id);
   setSuccess(`Produto encontrado: ${product.name}`);
+  // Auto-limpar mensagem após 3 segundos
+setTimeout(() => {
+  console.log('🧹 Limpando mensagem de sucesso');
+  setSuccess('');
+}, 3000);
 } else {
   console.log('❌ Produto não encontrado');
   setErrors({ camera: 'Produto não encontrado' });
