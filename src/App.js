@@ -872,13 +872,19 @@ const initScanner = async () => {
   const stopCamera = () => {
   console.log('🛑 stopCamera CHAMADA!');
   
-  // Parar interval de escaneamento
+  // CORREÇÃO: Parar TODOS os intervals relacionados
   if (scanIntervalRef.current) {
-    console.log('⏹️ Parando interval');
+    console.log('⏹️ Parando interval principal');
     clearInterval(scanIntervalRef.current);
     scanIntervalRef.current = null;
   }
   
+  // FORÇA: Limpar qualquer interval órfão
+  console.log('🧹 Limpando intervals órfãos...');
+  for (let i = 1; i < 999999; i++) {
+    clearInterval(i);
+  }
+      
   // CORREÇÃO: Acessar stream do videoRef se cameraStream não estiver disponível
   let streamToStop = cameraStream;
   
