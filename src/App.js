@@ -6,52 +6,45 @@ import * as XLSX from 'xlsx';
 import jsQR from 'jsqr';
 import './App.css';
 
-// 🔥 FIREBASE CDN IMPORTS
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
-import { getDatabase, ref, set, onValue, off, push, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
-
 const { useStoredState } = hatch;
 
-// 🔥 FIREBASE CONFIGURATION
-const firebaseConfig = {
-  // 📍 COLE AQUI SUA CONFIGURAÇÃO DO FIREBASE CONSOLE
-  apiKey: "AIzaSyCRHuU6ykqjQ_ZX8pvCbCyn6rTh5MCPsw0",
-  authDomain: "estoqueff-931df.firebaseapp.com",
-  databaseURL: "https://estoqueff-931df-default-rtdb.firebaseio.com",
-  projectId: "estoqueff-931df",
-  storageBucket: "estoqueff-931df.firebasestorage.app",
-  messagingSenderId: "135827693859",
-  appId: "1:135827693859:web:e8bb0e85509efdd54aac96"
-};
-
-// 🔥 INITIALIZE FIREBASE
-const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
-
-// 🔥 HOOK useFirebaseState - SUBSTITUTO DO useStoredState
+// 🔥 HOOK FIREBASE USANDO WINDOW GLOBALS
 function useFirebaseState(path, defaultValue = null) {
   const [data, setData] = useState(defaultValue);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const dbRef = ref(database, path);
+    // Aguardar Firebase carregar
+    if (!window.firebaseDatabase) {
+      setTimeout(() => {
+        if (window.firebaseDatabase) {
+          setupFirebaseListener();
+        }
+      }, 1000);
+      return;
+    }
     
-    // 👂 LISTENER PARA MUDANÇAS EM TEMPO REAL
-    const unsubscribe = onValue(dbRef, (snapshot) => {
-      const value = snapshot.val();
-      setData(value !== null ? value : defaultValue);
-      setLoading(false);
-    });
+    setupFirebaseListener();
+    
+    function setupFirebaseListener() {
+      const dbRef = window.firebaseRef(window.firebaseDatabase, path);
+      
+      const unsubscribe = window.firebaseOnValue(dbRef, (snapshot) => {
+        const value = snapshot.val();
+        setData(value !== null ? value : defaultValue);
+        setLoading(false);
+      });
 
-    // 🧹 CLEANUP
-    return () => off(dbRef, 'value', unsubscribe);
+      return () => window.firebaseOff(dbRef, 'value', unsubscribe);
+    }
   }, [path, defaultValue]);
 
-  // 💾 FUNÇÃO PARA SALVAR DADOS
   const updateData = useCallback((newData) => {
-    const dbRef = ref(database, path);
-    set(dbRef, newData);
-    setData(newData); // Atualização local otimística
+    if (window.firebaseDatabase) {
+      const dbRef = window.firebaseRef(window.firebaseDatabase, path);
+      window.firebaseSet(dbRef, newData);
+      setData(newData);
+    }
   }, [path]);
 
   return [data, updateData, loading];
