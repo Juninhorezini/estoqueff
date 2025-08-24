@@ -871,9 +871,6 @@ const initScanner = async () => {
 };
   const stopCamera = () => {
   console.log('🛑 stopCamera CHAMADA!');
-  console.log('📡 cameraStream existe:', !!cameraStream);
-  console.log('🔄 scanInterval existe:', !!scanIntervalRef.current);
-  console.log('📹 videoRef existe:', !!videoRef.current);
   
   // Parar interval de escaneamento
   if (scanIntervalRef.current) {
@@ -882,28 +879,40 @@ const initScanner = async () => {
     scanIntervalRef.current = null;
   }
   
+  // CORREÇÃO: Acessar stream do videoRef se cameraStream não estiver disponível
+  let streamToStop = cameraStream;
+  
+  if (!streamToStop && videoRef.current && videoRef.current.srcObject) {
+    console.log('🔄 Usando stream do videoRef');
+    streamToStop = videoRef.current.srcObject;
+  }
+  
   // Parar todas as tracks do stream
-  if (cameraStream) {
+  if (streamToStop) {
     console.log('📹 Parando tracks da câmera');
-    cameraStream.getTracks().forEach(track => {
-      console.log('🔚 Parando track:', track.kind);
+    streamToStop.getTracks().forEach(track => {
+      console.log('🔚 Parando track:', track.kind, 'estado:', track.readyState);
       track.stop();
     });
-    setCameraStream(null);
+  } else {
+    console.log('⚠️ Nenhum stream encontrado para parar');
   }
   
   // Limpar srcObject do vídeo
   if (videoRef.current) {
     console.log('🧹 Limpando srcObject');
     videoRef.current.srcObject = null;
+    videoRef.current.load(); // Força reload do elemento
   }
   
   // Resetar estados
+  setCameraStream(null);
   setScannerActive(false);
   setLoading(false);
   
-  console.log('✅ Câmera parada completamente');
+  console.log('✅ stopCamera finalizada');
 };
+  
   const findProductByQR = (qrCode) => {
   console.log('🔍 findProductByQR recebeu:', qrCode);
   console.log('📦 Produtos disponíveis:', products.length);
