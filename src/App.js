@@ -758,7 +758,7 @@ try {
     if (product) {
       console.log('✅ Produto encontrado via ID:', product.name);
       clearInterval(scanIntervalRef.current);
-      setScannedProduct(product.id);
+      setScannedProduct(product);
       setSelectedProduct(product.id); // Se existe esse estado
 setNewProduct({
   ...newProduct,
@@ -784,7 +784,7 @@ const product = findProductByQR(productData);
 if (product) {
   console.log('✅ Produto encontrado via busca direta:', product.name);
   clearInterval(scanIntervalRef.current);
-  setScannedProduct(product.id);
+  setScannedProduct(product);
   } else {
   console.log('❌ Produto não encontrado');
   setErrors({ camera: 'Produto não encontrado' });
