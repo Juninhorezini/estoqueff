@@ -870,7 +870,10 @@ const initScanner = async () => {
   }
 };
   const stopCamera = () => {
-  console.log('🛑 Parando câmera...');
+  console.log('🛑 stopCamera CHAMADA!');
+  console.log('📡 cameraStream existe:', !!cameraStream);
+  console.log('🔄 scanInterval existe:', !!scanIntervalRef.current);
+  console.log('📹 videoRef existe:', !!videoRef.current);
   
   // Parar interval de escaneamento
   if (scanIntervalRef.current) {
