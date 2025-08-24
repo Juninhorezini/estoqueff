@@ -6,28 +6,6 @@ import * as XLSX from 'xlsx';
 import jsQR from 'jsqr';
 import './App.css';
 
-function useStoredState(key, defaultValue) {
-  const [state, setState] = useState(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : defaultValue;
-    } catch (error) {
-      return defaultValue;
-    }
-  });
-
-  const setValue = useCallback((value) => {
-    try {
-      setState(value);
-      window.localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-      console.error(`Error saving to localStorage key "${key}":`, error);
-    }
-  }, [key]);
-
-  return [state, setValue];
-}
-
 // 🔥 HOOK FIREBASE USANDO WINDOW GLOBALS
 function useFirebaseState(path, defaultValue = null) {
   const [data, setData] = useState(defaultValue);
@@ -582,19 +560,19 @@ const EstoqueFFApp = () => {
     { id: 'P004', name: 'Monitor 24"', brand: 'Samsung', category: 'Eletrônicos', code: 'MN-SAM-004', stock: 12, minStock: 3, qrCode: 'QR004', createdAt: '2025-01-01' }
   ]);
   
-  const [movements, setMovements] = useStoredState('estoqueff_movements', [
+  const [movements, setMovements] = useFirebaseState('estoqueff_movements', [
     { id: '1', product: 'Notebook Dell', type: 'saída', quantity: 2, user: 'João Silva', date: '2025-08-04 14:30' },
     { id: '2', product: 'Mouse Logitech', type: 'entrada', quantity: 5, user: 'Maria Santos', date: '2025-08-04 12:15' },
     { id: '3', product: 'Monitor 24"', type: 'saída', quantity: 1, user: 'Pedro Costa', date: '2025-08-04 10:45' }
   ]);
 
-  const [companySettings, setCompanySettings] = useStoredState('estoqueff_settings', {
+  const [companySettings, setCompanySettings] = useFirebaseState('estoqueff_settings', {
     companyName: 'Minha Empresa',
     responsibleName: 'Juninho Rezini',
     lowStockAlert: true
   });
 
-  const [productLabelConfigs, setProductLabelConfigs] = useStoredState('estoqueff_product_label_configs', {});
+  const [productLabelConfigs, setProductLabelConfigs] = useFirebaseState('estoqueff_product_label_configs', {});
   
   // Estados gerais
   const [scannerActive, setScannerActive] = useState(false);
@@ -602,7 +580,7 @@ const EstoqueFFApp = () => {
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [movementType, setMovementType] = useState('');
-  const [movementQuantity, setMovementQuantity] = useState(1);
+  const [movementQuantity, setMovementQuantity] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState('');
   const [showLabelEditor, setShowLabelEditor] = useState(false);
   const [editingLabelForProduct, setEditingLabelForProduct] = useState(null);
@@ -1158,7 +1136,7 @@ const initScanner = async () => {
       setManualSelectedProduct(null);
       setShowManualMovement(false);
       setManualSearchTerm('');
-      setMovementQuantity(1);
+      setMovementQuantity(0);
       setMovementType('');
       setSuccess(`✅ ${movementType === 'entrada' ? 'Entrada' : 'Saída'} de ${quantity} unidades registrada com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
