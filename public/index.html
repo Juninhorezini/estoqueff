@@ -1,5 +1,33 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+<!-- 🔥 FIREBASE CDN -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+  import { getDatabase, ref, set, onValue, off } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
+  
+  // 🔥 FIREBASE CONFIG - SUBSTITUA PELOS SEUS DADOS!
+  const firebaseConfig = {
+     apiKey: "AIzaSyCRHuU6ykqjQ_ZX8pvCbCyn6rTh5MCPsw0",
+  authDomain: "estoqueff-931df.firebaseapp.com",
+  databaseURL: "https://estoqueff-931df-default-rtdb.firebaseio.com",
+  projectId: "estoqueff-931df",
+  storageBucket: "estoqueff-931df.firebasestorage.app",
+  messagingSenderId: "135827693859",
+  appId: "1:135827693859:web:e8bb0e85509efdd54aac96"
+};
+
+  // 🔥 INITIALIZE FIREBASE
+  const app = initializeApp(firebaseConfig);
+  const database = getDatabase(app);
+  
+  // 🔥 DISPONIBILIZAR GLOBALMENTE
+  window.firebaseApp = app;
+  window.firebaseDatabase = database;
+  window.firebaseRef = ref;
+  window.firebaseSet = set;
+  window.firebaseOnValue = onValue;
+  window.firebaseOff = off;
+</script>  
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
