@@ -914,9 +914,9 @@ const EstoqueFFApp = () => {
   ]);
   
   const [movements, setMovements] = useFirebaseState('estoqueff_movements', [
-    { id: '1', product: 'Notebook Dell', type: 'saída', quantity: 2, user: 'João Silva', date: '2025-08-04 14:30' },
-    { id: '2', product: 'Mouse Logitech', type: 'entrada', quantity: 5, user: 'Maria Santos', date: '2025-08-04 12:15' },
-    { id: '3', product: 'Monitor 24"', type: 'saída', quantity: 1, user: 'Pedro Costa', date: '2025-08-04 10:45' }
+    { id: '1', product: 'Notebook Dell', type: 'saída', quantity: 2, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 14:30' },
+    { id: '2', product: 'Mouse Logitech', type: 'entrada', quantity: 5, user: 'Operador Sistema', userId: 'user2', userName: 'Operador Sistema', userRole: 'operator', date: '2025-08-04 12:15' },
+    { id: '3', product: 'Monitor 24"', type: 'saída', quantity: 1, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 10:45' }
   ]);
 
   const [companySettings, setCompanySettings] = useFirebaseState('estoqueff_settings', {
@@ -1499,7 +1499,10 @@ const initScanner = async () => {
         productId: targetProduct.id,
         type: movementType,
         quantity,
-        user: companySettings.responsibleName,
+        user: currentUser.name,
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
         date: new Date().toLocaleString('pt-BR'),
         timestamp: new Date().toISOString()
       };
