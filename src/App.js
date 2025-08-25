@@ -217,7 +217,7 @@ const UserManagement = ({ users, setUsers, currentUser }) => {
   };
 
   return (
-    <div className="p-2 pb-20 md:ml-64 md:pb-2">
+    <div className="p-8 pb-20 md:ml-64 md:pb-8">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Gestão de Usuários</h2>
         <button
