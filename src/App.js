@@ -2954,11 +2954,14 @@ const initScanner = async () => {
                           {index + 1}
                         </div>
                         <div>
-                              <p className="font-medium text-gray-800">{product.productName}</p>
-                              <p className="text-xs text-gray-500">
-                                {product.brand ? `${product.brand} • ` : ''}Estoque atual: {product.currentStock}
-                              </p>
-                            </div>
+                        <p className="font-medium text-gray-800">{product.productName}</p>
+                        <p className="text-xs text-gray-500">
+                        {(() => {
+                         const prod = products.find(p => p.id === product.productId);
+                         return prod?.brand ? `${prod.brand} • ` : '';
+                         })()}Estoque atual: {product.currentStock}
+                          </p>
+                        </div>
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-blue-600">{product.totalMovements}</p>
@@ -2977,8 +2980,11 @@ const initScanner = async () => {
                       <div>
                               <p className="font-medium text-gray-800">{product.productName}</p>
                               <p className="text-xs text-gray-500">
-                                {product.brand ? `${product.brand} • ` : ''}Estoque atual: {product.currentStock}
-                              </p>
+                              {(() => {
+                               const prod = products.find(p => p.id === product.productId);
+                               return prod?.brand ? `${prod.brand} • ` : '';
+                              })()}Estoque atual: {product.currentStock}
+                             </p>
                             </div>
                       <div className="text-right">
                         <p className="font-bold text-red-600">{product.totalMovements}</p>
