@@ -2217,10 +2217,17 @@ const initScanner = async () => {
             <h3 className="font-semibold text-gray-800 mb-3">Últimas Movimentações</h3>
             {movements.slice(0, 5).map(movement => (
               <div key={movement.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-                <div>
-                  <p className="font-medium text-gray-800">{movement.product}</p>
-                  <p className="text-sm text-gray-600">{movement.user} • {movement.date}</p>
-                </div>
+          <div>
+                      <p className="font-medium text-gray-800">{movement.product}</p>
+                      <p className="text-xs text-gray-500">
+                        {(() => {
+                          const product = products.find(p => p.id === movement.productId);
+                          return product?.brand ? `${product.brand} • ` : '';
+                        })()} 
+                        {movement.user} • {movement.date}
+                      </p>
+                    </div>
+
                 <div className={`px-2 py-1 rounded text-xs font-medium ${
                   movement.type === 'entrada' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                 }`}>
@@ -2705,7 +2712,7 @@ const initScanner = async () => {
                   <div className="flex-1">
                     <p className="font-medium text-gray-800">{product.name}</p>
                     <p className="text-sm text-gray-600">
-                      {product.brand && `${product.brand} • `}Código: {product.code || 'N/A'} • Estoque: {product.stock}
+                      Marca: {product.brand || 'N/A'} • Código: {product.code || 'N/A'} • Estoque: {product.stock}
                     </p>
                   </div>
                   
@@ -2835,9 +2842,15 @@ const initScanner = async () => {
                   {filteredMovements.slice(0, 10).map(movement => (
                     <div key={movement.id} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
                       <div>
-                        <p className="font-medium text-gray-800">{movement.product}</p>
-                        <p className="text-sm text-gray-600">{movement.user} • {movement.date}</p>
-                      </div>
+                      <p className="font-medium text-gray-800">{movement.product}</p>
+                      <p className="text-sm text-gray-600">
+                        {(() => {
+                          const product = products.find(p => p.id === movement.productId);
+                          return product?.brand ? `${product.brand} • ` : '';
+                        })()}
+                        {movement.user} • {movement.date}
+                      </p>
+                    </div>
                       <div className={`px-3 py-1 rounded-full text-sm font-medium ${
                         movement.type === 'entrada' 
                           ? 'bg-green-100 text-green-800' 
@@ -2941,9 +2954,11 @@ const initScanner = async () => {
                           {index + 1}
                         </div>
                         <div>
-                          <p className="font-medium text-gray-800">{product.productName}</p>
-                          <p className="text-sm text-gray-600">Estoque atual: {product.currentStock}</p>
-                        </div>
+                              <p className="font-medium text-gray-800">{product.productName}</p>
+                              <p className="text-xs text-gray-500">
+                                {product.brand ? `${product.brand} • ` : ''}Estoque atual: {product.currentStock}
+                              </p>
+                            </div>
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-blue-600">{product.totalMovements}</p>
@@ -2960,9 +2975,11 @@ const initScanner = async () => {
                   {leastMovedProducts.slice(0, 5).map((product, index) => (
                     <div key={product.productId} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
                       <div>
-                        <p className="font-medium text-gray-800">{product.productName}</p>
-                        <p className="text-sm text-gray-600">Estoque atual: {product.currentStock}</p>
-                      </div>
+                              <p className="font-medium text-gray-800">{product.productName}</p>
+                              <p className="text-xs text-gray-500">
+                                {product.brand ? `${product.brand} • ` : ''}Estoque atual: {product.currentStock}
+                              </p>
+                            </div>
                       <div className="text-right">
                         <p className="font-bold text-red-600">{product.totalMovements}</p>
                         <p className="text-xs text-gray-500">movimentações</p>
