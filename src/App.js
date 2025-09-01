@@ -2743,11 +2743,10 @@ const initScanner = async () => {
                     </button>
                   </div>
                 </div>
-              ))}
             </div>
           </div>      
         </div>
-        )}
+        ))}
 
       {/* Reports Screen - Relatórios Completos */}
       {currentScreen === 'reports' && (
