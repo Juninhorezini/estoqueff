@@ -39,10 +39,19 @@ function useFirebaseState(path, defaultValue = null) {
 
   const updateData = useCallback((newData) => {
     if (window.firebaseDatabase) {
-      const dbRef = window.firebaseRef(window.firebaseDatabase, path);
-      window.firebaseSet(dbRef, newData);
-      setData(newData);
+      try {
+        // Limpa o objeto antes de salvar no Firebase removendo funções e prototypes
+        const cleanData = JSON.parse(JSON.stringify(newData));
+        const dbRef = window.firebaseRef(window.firebaseDatabase, path);
+        window.firebaseSet(dbRef, cleanData);
+        setData(cleanData);
+        return true;
+      } catch (error) {
+        console.error('Error updating Firebase data:', error);
+        return false;
+      }
     }
+    return false;
   }, [path]);
 
   return [data, updateData, loading];
@@ -533,17 +542,23 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
   
   const saveConfig = () => {
   try {
-    // Log para debug
-    console.log('Saving config for product:', productId, localConfig);
+    // Limpa o objeto de configuração antes de salvar
+    const cleanConfig = JSON.parse(JSON.stringify(localConfig));
+    
+    console.log('Saving config for product:', productId, cleanConfig);
     
     // Chama a função de atualização
-    onConfigUpdate(productId, localConfig);
+    const success = onConfigUpdate(productId, cleanConfig);
     
-    // Fecha o editor
-    onClose();
+    if (success) {
+      onClose();
+    } else {
+      throw new Error('Failed to save configuration');
+    }
   } catch (error) {
     console.error('Error saving label config:', error);
-    // Opcionalmente, você pode adicionar um feedback visual de erro aqui
+    // Você pode adicionar um feedback visual de erro aqui
+    alert('Erro ao salvar a configuração. Por favor, tente novamente.');
   }
 };
   
@@ -1060,26 +1075,31 @@ const handleLogout = () => {
   }, [productLabelConfigs]);
 
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
-  setProductLabelConfigs(prevConfigs => {
+  try {
+    // Cria o objeto de configuração atualizado
     const updatedConfigs = {
-      ...prevConfigs,
+      ...productLabelConfigs,
       [productId]: {
         ...defaultLabelConfig,
-        ...prevConfigs[productId],
+        ...productLabelConfigs[productId],
         ...newConfig
       }
     };
-    
-    // Log para debug
-    console.log('Saving label config:', {
+
+    // Atualiza o estado com o novo objeto
+    setProductLabelConfigs(updatedConfigs);
+
+    console.log('Label config saved:', {
       productId,
-      newConfig,
-      updatedConfigs
+      config: updatedConfigs[productId]
     });
-    
-    return updatedConfigs;
-  });
-}, [setProductLabelConfigs]);
+
+    return true;
+  } catch (error) {
+    console.error('Error updating label config:', error);
+    return false;
+  }
+}, [productLabelConfigs, setProductLabelConfigs]);
 
   const openLabelEditorForProduct = useCallback((productId) => {
     setEditingLabelForProduct(productId);
