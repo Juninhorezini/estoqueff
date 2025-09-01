@@ -2709,17 +2709,18 @@ const initScanner = async () => {
                        (product.code && product.code.toLowerCase().includes(term));
               }).map(product => (
                 <div key={product.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                  <div className="flex-1">
-                <div>
-                  <p className="font-medium text-gray-800">{product.name}</p>
-                  <p className="text-xs text-gray-600">
-                    {(() => {
-                      const prod = products.find(p => p.id === product.id);
-                      return prod?.brand ? `${prod.brand} • ` : '';
-                    })()}
-                    Código: {product.code || 'N/A'}
-                  </p>
-                  <p className="text-sm text-red-700">{product.stock} unidades</p>
+                  {filteredProducts.map(product => (
+  <div key={product.id} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+    <div>
+      <p className="font-medium text-gray-800">{product.productName}</p>
+      <p className="text-xs text-gray-500">
+        {(() => {
+          const prod = products.find(p => p.id === product.productId);
+          return prod?.brand ? `${prod.brand} • ` : '';
+        })()}
+        Estoque atual: {product.currentStock}
+      </p>
+    </div>
                   
                   <div className="flex gap-2">
                     <button 
