@@ -2710,6 +2710,7 @@ const initScanner = async () => {
               }).map(product => (
                 <div key={product.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                   <div className="flex-1">
+                <div>
                   <p className="font-medium text-gray-800">{product.name}</p>
                   <p className="text-xs text-gray-600">
                     {(() => {
