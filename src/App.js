@@ -2745,6 +2745,7 @@ const initScanner = async () => {
                 </div>
               ))}
             </div>
+          </div>      
         </div>
       )}
 
