@@ -2710,10 +2710,17 @@ const initScanner = async () => {
               }).map(product => (
                 <div key={product.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                   <div className="flex-1">
-                <p className="font-medium text-gray-800">{product.name}</p>
-                <p className="text-sm text-gray-600">{product.brand ? `${product.brand} • ` : ''}Código: {product.code || 'N/A'} • Estoque: {product.stock}
-                   </p>
-                  </div>
+                <div>
+                  <p className="font-medium text-gray-800">{product.name}</p>
+                  <p className="text-xs text-gray-600">
+                    {(() => {
+                      const prod = products.find(p => p.id === product.id);
+                      return prod?.brand ? `${prod.brand} • ` : '';
+                    })()}
+                    Código: {product.code || 'N/A'}
+                  </p>
+                  <p className="text-sm text-red-700">{product.stock} unidades</p>
+                </div>
                   
                   <div className="flex gap-2">
                     <button 
