@@ -530,39 +530,51 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
 
 // Editor de etiquetas individual por produto
 const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpdate, onClose, companySettings }) => {
-  // Use useEffect para atualizar o estado local quando currentConfig mudar
-  const [localConfig, setLocalConfig] = useState(currentConfig);
+  // Inicialize o estado local com uma cópia limpa do currentConfig
+  const [localConfig, setLocalConfig] = useState(() => ({
+    ...defaultLabelConfig,
+    ...JSON.parse(JSON.stringify(currentConfig))
+  }));
   
-  // Adicione este useEffect para sincronizar o estado local
+  // Atualize o estado local quando currentConfig mudar
   useEffect(() => {
-    setLocalConfig(currentConfig);
+    setLocalConfig({
+      ...defaultLabelConfig,
+      ...JSON.parse(JSON.stringify(currentConfig))
+    });
   }, [currentConfig]);
   
   const handleConfigChange = (key, value) => {
     setLocalConfig(prev => {
-      const updated = { ...prev, [key]: value };
-      console.log('Local config updated:', updated);
+      const updated = {
+        ...prev,
+        [key]: value
+      };
+      // Log simplificado para debug
+      console.log(`Updating ${key}:`, value);
       return updated;
     });
   };
   
   const saveConfig = () => {
     try {
-      // Limpa o objeto de configuração antes de salvar
-      const cleanConfig = JSON.parse(JSON.stringify(localConfig));
+      // Remova propriedades desnecessárias e prototypes
+      const cleanConfig = Object.keys(localConfig).reduce((acc, key) => {
+        if (localConfig[key] !== undefined) {
+          acc[key] = localConfig[key];
+        }
+        return acc;
+      }, {});
       
-      console.log('Saving config for product:', productId, cleanConfig);
-      
-      // Chama a função de atualização
+      console.log('Saving clean config:', cleanConfig);
       onConfigUpdate(productId, cleanConfig);
       onClose();
-      
     } catch (error) {
       console.error('Error saving label config:', error);
       alert('Erro ao salvar a configuração. Por favor, tente novamente.');
     }
   };
-  
+
   return (
     <div className="p-4 space-y-6">
       {/* Preview em tempo real */}
@@ -1065,38 +1077,61 @@ const handleLogout = () => {
 
   // Funções para configurações de etiquetas
   const getProductLabelConfig = useCallback((productId) => {
-  const currentConfig = productLabelConfigs[productId];
+  if (!productLabelConfigs || !productId) {
+    return { ...defaultLabelConfig };
+  }
+
+  const savedConfig = productLabelConfigs[productId];
+  if (!savedConfig) {
+    return { ...defaultLabelConfig };
+  }
+
+  // Retorna uma cópia limpa mesclando as configurações
   return {
     ...defaultLabelConfig,
-    ...(currentConfig || {})
+    ...Object.keys(savedConfig).reduce((acc, key) => {
+      if (savedConfig[key] !== undefined) {
+        acc[key] = savedConfig[key];
+      }
+      return acc;
+    }, {})
   };
 }, [productLabelConfigs]);
 
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
   try {
-    // Cria uma cópia limpa do estado atual
-    const currentConfigs = JSON.parse(JSON.stringify(productLabelConfigs));
-    
-    // Atualiza a configuração específica do produto
-    const updatedConfigs = {
-      ...currentConfigs,
-      [productId]: {
-        ...defaultLabelConfig,
-        ...(currentConfigs[productId] || {}),
-        ...newConfig
+    // Crie uma cópia limpa do estado atual
+    const cleanNewConfig = Object.keys(newConfig).reduce((acc, key) => {
+      if (newConfig[key] !== undefined) {
+        acc[key] = newConfig[key];
       }
-    };
+      return acc;
+    }, {});
 
-    // Atualiza o estado
-    setProductLabelConfigs(updatedConfigs);
+    setProductLabelConfigs(prev => {
+      const updatedConfigs = {
+        ...prev,
+        [productId]: {
+          ...defaultLabelConfig,
+          ...(prev[productId] || {}),
+          ...cleanNewConfig
+        }
+      };
+      
+      console.log('Saving to Firebase:', {
+        productId,
+        config: updatedConfigs[productId]
+      });
+      
+      return updatedConfigs;
+    });
 
-    console.log('Label config saved for product:', productId);
     return true;
   } catch (error) {
     console.error('Error updating label config:', error);
     return false;
   }
-}, [productLabelConfigs, setProductLabelConfigs]);
+}, [setProductLabelConfigs]);
 
   const openLabelEditorForProduct = useCallback((productId) => {
     setEditingLabelForProduct(productId);
@@ -3470,7 +3505,7 @@ const initScanner = async () => {
               </div>
 
               <LabelEditor
-                key={editingLabelForProduct}
+                key={`label-editor-${editingLabelForProduct}-${Date.now()}`}
                 productId={editingLabelForProduct}
                 product={products.find(p => p.id === editingLabelForProduct)}
                 currentConfig={getProductLabelConfig(editingLabelForProduct)}
