@@ -2746,7 +2746,6 @@ const initScanner = async () => {
             </div>
           </div>      
         </div>
-      )}
 
       {/* Reports Screen - Relatórios Completos */}
       {currentScreen === 'reports' && (
