@@ -532,9 +532,20 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
   };
   
   const saveConfig = () => {
+  try {
+    // Log para debug
+    console.log('Saving config for product:', productId, localConfig);
+    
+    // Chama a função de atualização
     onConfigUpdate(productId, localConfig);
+    
+    // Fecha o editor
     onClose();
-  };
+  } catch (error) {
+    console.error('Error saving label config:', error);
+    // Opcionalmente, você pode adicionar um feedback visual de erro aqui
+  }
+};
   
   return (
     <div className="p-4 space-y-6">
@@ -927,6 +938,13 @@ const EstoqueFFApp = () => {
 
   const [productLabelConfigs, setProductLabelConfigs] = useFirebaseState('estoqueff_product_label_configs', {});
 
+  // ADICIONE O NOVO useEffect AQUI
+  useEffect(() => {
+    if (productLabelConfigs && Object.keys(productLabelConfigs).length > 0) {
+      console.log('Label configs updated:', productLabelConfigs);
+    }
+  }, [productLabelConfigs]);
+
   // 👥 USUÁRIOS DO SISTEMA
 const [users, setUsers] = useFirebaseState('users', [
   {
@@ -1042,15 +1060,26 @@ const handleLogout = () => {
   }, [productLabelConfigs]);
 
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
-    setProductLabelConfigs(prevConfigs => ({
+  setProductLabelConfigs(prevConfigs => {
+    const updatedConfigs = {
       ...prevConfigs,
       [productId]: {
         ...defaultLabelConfig,
         ...prevConfigs[productId],
         ...newConfig
       }
-    }));
-  }, [setProductLabelConfigs]);
+    };
+    
+    // Log para debug
+    console.log('Saving label config:', {
+      productId,
+      newConfig,
+      updatedConfigs
+    });
+    
+    return updatedConfigs;
+  });
+}, [setProductLabelConfigs]);
 
   const openLabelEditorForProduct = useCallback((productId) => {
     setEditingLabelForProduct(productId);
