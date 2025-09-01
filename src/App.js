@@ -530,37 +530,38 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
 
 // Editor de etiquetas individual por produto
 const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpdate, onClose, companySettings }) => {
+  // Use useEffect para atualizar o estado local quando currentConfig mudar
   const [localConfig, setLocalConfig] = useState(currentConfig);
   
+  // Adicione este useEffect para sincronizar o estado local
   useEffect(() => {
     setLocalConfig(currentConfig);
   }, [currentConfig]);
   
   const handleConfigChange = (key, value) => {
-    setLocalConfig(prev => ({ ...prev, [key]: value }));
+    setLocalConfig(prev => {
+      const updated = { ...prev, [key]: value };
+      console.log('Local config updated:', updated);
+      return updated;
+    });
   };
   
   const saveConfig = () => {
-  try {
-    // Limpa o objeto de configuração antes de salvar
-    const cleanConfig = JSON.parse(JSON.stringify(localConfig));
-    
-    console.log('Saving config for product:', productId, cleanConfig);
-    
-    // Chama a função de atualização
-    const success = onConfigUpdate(productId, cleanConfig);
-    
-    if (success) {
+    try {
+      // Limpa o objeto de configuração antes de salvar
+      const cleanConfig = JSON.parse(JSON.stringify(localConfig));
+      
+      console.log('Saving config for product:', productId, cleanConfig);
+      
+      // Chama a função de atualização
+      onConfigUpdate(productId, cleanConfig);
       onClose();
-    } else {
-      throw new Error('Failed to save configuration');
+      
+    } catch (error) {
+      console.error('Error saving label config:', error);
+      alert('Erro ao salvar a configuração. Por favor, tente novamente.');
     }
-  } catch (error) {
-    console.error('Error saving label config:', error);
-    // Você pode adicionar um feedback visual de erro aqui
-    alert('Erro ao salvar a configuração. Por favor, tente novamente.');
-  }
-};
+  };
   
   return (
     <div className="p-4 space-y-6">
@@ -953,14 +954,7 @@ const EstoqueFFApp = () => {
 
   const [productLabelConfigs, setProductLabelConfigs] = useFirebaseState('estoqueff_product_label_configs', {});
 
-  // ADICIONE O NOVO useEffect AQUI
-  useEffect(() => {
-    if (productLabelConfigs && Object.keys(productLabelConfigs).length > 0) {
-      console.log('Label configs updated:', productLabelConfigs);
-    }
-  }, [productLabelConfigs]);
-
-  // 👥 USUÁRIOS DO SISTEMA
+    // 👥 USUÁRIOS DO SISTEMA
 const [users, setUsers] = useFirebaseState('users', [
   {
     id: 'user1',
@@ -1071,29 +1065,32 @@ const handleLogout = () => {
 
   // Funções para configurações de etiquetas
   const getProductLabelConfig = useCallback((productId) => {
-    return productLabelConfigs[productId] || defaultLabelConfig;
-  }, [productLabelConfigs]);
+  const currentConfig = productLabelConfigs[productId];
+  return {
+    ...defaultLabelConfig,
+    ...(currentConfig || {})
+  };
+}, [productLabelConfigs]);
 
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
   try {
-    // Cria o objeto de configuração atualizado
+    // Cria uma cópia limpa do estado atual
+    const currentConfigs = JSON.parse(JSON.stringify(productLabelConfigs));
+    
+    // Atualiza a configuração específica do produto
     const updatedConfigs = {
-      ...productLabelConfigs,
+      ...currentConfigs,
       [productId]: {
         ...defaultLabelConfig,
-        ...productLabelConfigs[productId],
+        ...(currentConfigs[productId] || {}),
         ...newConfig
       }
     };
 
-    // Atualiza o estado com o novo objeto
+    // Atualiza o estado
     setProductLabelConfigs(updatedConfigs);
 
-    console.log('Label config saved:', {
-      productId,
-      config: updatedConfigs[productId]
-    });
-
+    console.log('Label config saved for product:', productId);
     return true;
   } catch (error) {
     console.error('Error updating label config:', error);
@@ -3473,6 +3470,7 @@ const initScanner = async () => {
               </div>
 
               <LabelEditor
+                key={editingLabelForProduct}
                 productId={editingLabelForProduct}
                 product={products.find(p => p.id === editingLabelForProduct)}
                 currentConfig={getProductLabelConfig(editingLabelForProduct)}
