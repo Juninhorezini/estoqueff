@@ -2743,7 +2743,6 @@ const initScanner = async () => {
                     </button>
                   </div>
                 </div>
-            </div>
           </div>      
         </div>
         ))}
