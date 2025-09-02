@@ -530,18 +530,24 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
 
 // Editor de etiquetas individual por produto
 const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpdate, onClose, companySettings }) => {
-  // Inicialize o estado local com uma cópia limpa do currentConfig
+  // Use uma referência para rastrear se é a primeira renderização
+  const isFirstRender = useRef(true);
+  
+  // Inicialize o estado local com uma cópia profunda do currentConfig
   const [localConfig, setLocalConfig] = useState(() => ({
     ...defaultLabelConfig,
-    ...JSON.parse(JSON.stringify(currentConfig))
+    ...currentConfig
   }));
   
-  // Atualize o estado local quando currentConfig mudar
+  // Só atualize o estado local com currentConfig na primeira renderização
   useEffect(() => {
-    setLocalConfig({
-      ...defaultLabelConfig,
-      ...JSON.parse(JSON.stringify(currentConfig))
-    });
+    if (isFirstRender.current) {
+      setLocalConfig({
+        ...defaultLabelConfig,
+        ...currentConfig
+      });
+      isFirstRender.current = false;
+    }
   }, [currentConfig]);
   
   const handleConfigChange = (key, value) => {
@@ -550,27 +556,23 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
         ...prev,
         [key]: value
       };
-      // Log simplificado para debug
-      console.log(`Updating ${key}:`, value);
+      console.log(`Updating ${key} from ${prev[key]} to ${value}`);
       return updated;
     });
   };
+
+  useEffect(() => {
+    console.log('LocalConfig updated:', localConfig);
+  }, [localConfig]);
   
   const saveConfig = () => {
     try {
-      // Remova propriedades desnecessárias e prototypes
-      const cleanConfig = Object.keys(localConfig).reduce((acc, key) => {
-        if (localConfig[key] !== undefined) {
-          acc[key] = localConfig[key];
-        }
-        return acc;
-      }, {});
-      
-      console.log('Saving clean config:', cleanConfig);
+      const cleanConfig = { ...localConfig };
+      console.log('Saving config:', cleanConfig);
       onConfigUpdate(productId, cleanConfig);
       onClose();
     } catch (error) {
-      console.error('Error saving label config:', error);
+      console.error('Error saving config:', error);
       alert('Erro ao salvar a configuração. Por favor, tente novamente.');
     }
   };
@@ -688,7 +690,9 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
         <div className="space-y-3">
           {localConfig.showBrand && (
             <div>
-              <label className="block text-sm font-medium mb-1">Marca: {localConfig.brandFontSize}pt</label>
+              <label className="block text-sm font-medium mb-1">
+                Marca: {localConfig.brandFontSize}pt
+              </label>
               <input
                 type="range"
                 min="12"
@@ -703,7 +707,9 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
           
           {(localConfig.showCode || localConfig.showDescription) && (
             <div>
-              <label className="block text-sm font-medium mb-1">Produto: {localConfig.codeFontSize}pt</label>
+              <label className="block text-sm font-medium mb-1">
+                Produto: {localConfig.codeFontSize}pt
+              </label>
               <input
                 type="range"
                 min="8"
@@ -718,7 +724,9 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
           
           {localConfig.showQuantity && (
             <div>
-              <label className="block text-sm font-medium mb-1">Quantidade: {localConfig.quantityFontSize}pt</label>
+              <label className="block text-sm font-medium mb-1">
+                Quantidade: {localConfig.quantityFontSize}pt
+              </label>
               <input
                 type="range"
                 min="10"
@@ -733,7 +741,9 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
           
           {localConfig.showQRCode && (
             <div>
-              <label className="block text-sm font-medium mb-1">QR Code: {localConfig.qrSize}mm</label>
+              <label className="block text-sm font-medium mb-1">
+                QR Code: {localConfig.qrSize}mm
+              </label>
               <input
                 type="range"
                 min="15"
