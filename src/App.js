@@ -530,27 +530,14 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
 
 // Editor de etiquetas individual por produto
 const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpdate, onClose, companySettings }) => {
-  // Use uma referência para rastrear se é a primeira renderização
-  const isFirstRender = useRef(true);
-  
+    
   // Inicialize o estado local com uma cópia profunda do currentConfig
   const [localConfig, setLocalConfig] = useState(() => ({
     ...defaultLabelConfig,
     ...currentConfig
   }));
   
-  // Só atualize o estado local com currentConfig na primeira renderização
-  useEffect(() => {
-    if (isFirstRender.current) {
-      setLocalConfig({
-        ...defaultLabelConfig,
-        ...currentConfig
-      });
-      isFirstRender.current = false;
-    }
-  }, [currentConfig]);
-  
-  const handleConfigChange = (key, value) => {
+    const handleConfigChange = (key, value) => {
     setLocalConfig(prev => {
       const updated = {
         ...prev,
