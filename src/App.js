@@ -39,19 +39,10 @@ function useFirebaseState(path, defaultValue = null) {
 
   const updateData = useCallback((newData) => {
     if (window.firebaseDatabase) {
-      try {
-        // Limpa o objeto antes de salvar no Firebase removendo funções e prototypes
-        const cleanData = JSON.parse(JSON.stringify(newData));
-        const dbRef = window.firebaseRef(window.firebaseDatabase, path);
-        window.firebaseSet(dbRef, cleanData);
-        setData(cleanData);
-        return true;
-      } catch (error) {
-        console.error('Error updating Firebase data:', error);
-        return false;
-      }
+      const dbRef = window.firebaseRef(window.firebaseDatabase, path);
+      window.firebaseSet(dbRef, newData);
+      setData(newData);
     }
-    return false;
   }, [path]);
 
   return [data, updateData, loading];
@@ -530,40 +521,21 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
 
 // Editor de etiquetas individual por produto
 const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpdate, onClose, companySettings }) => {
-    
-  // Inicialize o estado local com uma cópia profunda do currentConfig
-  const [localConfig, setLocalConfig] = useState(() => ({
-    ...defaultLabelConfig,
-    ...currentConfig
-  }));
+  const [localConfig, setLocalConfig] = useState(currentConfig);
   
-    const handleConfigChange = (key, value) => {
-    setLocalConfig(prev => {
-      const updated = {
-        ...prev,
-        [key]: value
-      };
-      console.log(`Updating ${key} from ${prev[key]} to ${value}`);
-      return updated;
-    });
-  };
-
   useEffect(() => {
-    console.log('LocalConfig updated:', localConfig);
-  }, [localConfig]);
+    setLocalConfig(currentConfig);
+  }, [currentConfig]);
+  
+  const handleConfigChange = (key, value) => {
+    setLocalConfig(prev => ({ ...prev, [key]: value }));
+  };
   
   const saveConfig = () => {
-    try {
-      const cleanConfig = { ...localConfig };
-      console.log('Saving config:', cleanConfig);
-      onConfigUpdate(productId, cleanConfig);
-      onClose();
-    } catch (error) {
-      console.error('Error saving config:', error);
-      alert('Erro ao salvar a configuração. Por favor, tente novamente.');
-    }
+    onConfigUpdate(productId, localConfig);
+    onClose();
   };
-
+  
   return (
     <div className="p-4 space-y-6">
       {/* Preview em tempo real */}
@@ -677,9 +649,7 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
         <div className="space-y-3">
           {localConfig.showBrand && (
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Marca: {localConfig.brandFontSize}pt
-              </label>
+              <label className="block text-sm font-medium mb-1">Marca: {localConfig.brandFontSize}pt</label>
               <input
                 type="range"
                 min="12"
@@ -694,9 +664,7 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
           
           {(localConfig.showCode || localConfig.showDescription) && (
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Produto: {localConfig.codeFontSize}pt
-              </label>
+              <label className="block text-sm font-medium mb-1">Produto: {localConfig.codeFontSize}pt</label>
               <input
                 type="range"
                 min="8"
@@ -711,9 +679,7 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
           
           {localConfig.showQuantity && (
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Quantidade: {localConfig.quantityFontSize}pt
-              </label>
+              <label className="block text-sm font-medium mb-1">Quantidade: {localConfig.quantityFontSize}pt</label>
               <input
                 type="range"
                 min="10"
@@ -728,9 +694,7 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
           
           {localConfig.showQRCode && (
             <div>
-              <label className="block text-sm font-medium mb-1">
-                QR Code: {localConfig.qrSize}mm
-              </label>
+              <label className="block text-sm font-medium mb-1">QR Code: {localConfig.qrSize}mm</label>
               <input
                 type="range"
                 min="15"
@@ -963,7 +927,7 @@ const EstoqueFFApp = () => {
 
   const [productLabelConfigs, setProductLabelConfigs] = useFirebaseState('estoqueff_product_label_configs', {});
 
-    // 👥 USUÁRIOS DO SISTEMA
+  // 👥 USUÁRIOS DO SISTEMA
 const [users, setUsers] = useFirebaseState('users', [
   {
     id: 'user1',
@@ -1074,61 +1038,19 @@ const handleLogout = () => {
 
   // Funções para configurações de etiquetas
   const getProductLabelConfig = useCallback((productId) => {
-  if (!productLabelConfigs || !productId) {
-    return { ...defaultLabelConfig };
-  }
-
-  const savedConfig = productLabelConfigs[productId];
-  if (!savedConfig) {
-    return { ...defaultLabelConfig };
-  }
-
-  // Retorna uma cópia limpa mesclando as configurações
-  return {
-    ...defaultLabelConfig,
-    ...Object.keys(savedConfig).reduce((acc, key) => {
-      if (savedConfig[key] !== undefined) {
-        acc[key] = savedConfig[key];
-      }
-      return acc;
-    }, {})
-  };
-}, [productLabelConfigs]);
+    return productLabelConfigs[productId] || defaultLabelConfig;
+  }, [productLabelConfigs]);
 
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
-  try {
-    // Crie uma cópia limpa do estado atual
-    const cleanNewConfig = Object.keys(newConfig).reduce((acc, key) => {
-      if (newConfig[key] !== undefined) {
-        acc[key] = newConfig[key];
+    setProductLabelConfigs(prevConfigs => ({
+      ...prevConfigs,
+      [productId]: {
+        ...defaultLabelConfig,
+        ...prevConfigs[productId],
+        ...newConfig
       }
-      return acc;
-    }, {});
-
-    setProductLabelConfigs(prev => {
-      const updatedConfigs = {
-        ...prev,
-        [productId]: {
-          ...defaultLabelConfig,
-          ...(prev[productId] || {}),
-          ...cleanNewConfig
-        }
-      };
-      
-      console.log('Saving to Firebase:', {
-        productId,
-        config: updatedConfigs[productId]
-      });
-      
-      return updatedConfigs;
-    });
-
-    return true;
-  } catch (error) {
-    console.error('Error updating label config:', error);
-    return false;
-  }
-}, [setProductLabelConfigs]);
+    }));
+  }, [setProductLabelConfigs]);
 
   const openLabelEditorForProduct = useCallback((productId) => {
     setEditingLabelForProduct(productId);
@@ -2277,24 +2199,19 @@ const initScanner = async () => {
           </div>
 
           {stats.lowStockProducts > 0 && (
-  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-    <div className="flex items-center mb-2">
-      <AlertTriangle className="text-orange-500 mr-2" size={20} />
-      <h3 className="font-semibold text-orange-800">Produtos com Estoque Baixo</h3>
-    </div>
-    {products.filter(p => p.stock <= p.minStock).map(product => (
-      <div key={product.id} className="flex justify-between items-center py-2 border-b border-orange-200 last:border-b-0">
-        <div>
-          <span className="text-orange-700">{product.name}</span>
-          {product.brand && (
-            <span className="text-orange-600 text-sm ml-1">• {product.brand}</span>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center mb-2">
+                <AlertTriangle className="text-orange-500 mr-2" size={20} />
+                <h3 className="font-semibold text-orange-800">Produtos com Estoque Baixo</h3>
+              </div>
+              {products.filter(p => p.stock <= p.minStock).map(product => (
+                <div key={product.id} className="flex justify-between items-center py-2 border-b border-orange-200 last:border-b-0">
+                  <span className="text-orange-700">{product.name}</span>
+                  <span className="text-orange-600 font-medium">{product.stock} unidades</span>
+                </div>
+              ))}
+            </div>
           )}
-        </div>
-        <span className="text-orange-600 font-medium">{product.stock} unidades</span>
-      </div>
-    ))}
-  </div>
-)}
 
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <h3 className="font-semibold text-gray-800 mb-3">Últimas Movimentações</h3>
@@ -3502,7 +3419,6 @@ const initScanner = async () => {
               </div>
 
               <LabelEditor
-                key={`label-editor-${editingLabelForProduct}-${Date.now()}`}
                 productId={editingLabelForProduct}
                 product={products.find(p => p.id === editingLabelForProduct)}
                 currentConfig={getProductLabelConfig(editingLabelForProduct)}
