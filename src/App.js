@@ -1076,6 +1076,7 @@ const handleLogout = () => {
 
   const memoizedConfig = useMemo(() => 
     getProductLabelConfig(editingLabelForProduct), 
+// eslint-disable-next-line react-hooks/exhaustive-deps
     [editingLabelForProduct, productLabelConfigs]
 );
 
