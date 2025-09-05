@@ -2199,19 +2199,24 @@ const initScanner = async () => {
           </div>
 
           {stats.lowStockProducts > 0 && (
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-              <div className="flex items-center mb-2">
-                <AlertTriangle className="text-orange-500 mr-2" size={20} />
-                <h3 className="font-semibold text-orange-800">Produtos com Estoque Baixo</h3>
-              </div>
-              {products.filter(p => p.stock <= p.minStock).map(product => (
-                <div key={product.id} className="flex justify-between items-center py-2 border-b border-orange-200 last:border-b-0">
-                  <span className="text-orange-700">{product.name}</span>
-                  <span className="text-orange-600 font-medium">{product.stock} unidades</span>
-                </div>
-              ))}
-            </div>
+  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+    <div className="flex items-center mb-2">
+      <AlertTriangle className="text-orange-500 mr-2" size={20} />
+      <h3 className="font-semibold text-orange-800">Produtos com Estoque Baixo</h3>
+    </div>
+    {products.filter(p => p.stock <= p.minStock).map(product => (
+      <div key={product.id} className="flex justify-between items-center py-2 border-b border-orange-200 last:border-b-0">
+        <div>
+          <span className="text-orange-700">{product.name}</span>
+          {product.brand && (
+            <span className="text-orange-600 text-sm ml-1">• {product.brand}</span>
           )}
+        </div>
+        <span className="text-orange-600 font-medium">{product.stock} unidades</span>
+      </div>
+    ))}
+  </div>
+)}
 
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <h3 className="font-semibold text-gray-800 mb-3">Últimas Movimentações</h3>
