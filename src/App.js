@@ -7,12 +7,12 @@ import jsQR from 'jsqr';
 import './App.css';
 
 // 🔥 HOOK FIREBASE USANDO WINDOW GLOBALS
+// Modifique o useFirebaseState para incluir uma sanitização dos dados
 function useFirebaseState(path, defaultValue = null) {
   const [data, setData] = useState(defaultValue);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Aguardar Firebase carregar
     if (!window.firebaseDatabase) {
       setTimeout(() => {
         if (window.firebaseDatabase) {
@@ -37,11 +37,31 @@ function useFirebaseState(path, defaultValue = null) {
     }
   }, [path, defaultValue]);
 
+  // Função para sanitizar os dados antes de salvar
+  const sanitizeData = (data) => {
+    if (!data) return data;
+    if (typeof data !== 'object') return data;
+    
+    const sanitized = {};
+    Object.keys(data).forEach(key => {
+      const value = data[key];
+      if (typeof value === 'function') {
+        return; // Pula funções
+      } else if (typeof value === 'object' && value !== null) {
+        sanitized[key] = sanitizeData(value); // Recursivamente sanitiza objetos
+      } else {
+        sanitized[key] = value;
+      }
+    });
+    return sanitized;
+  };
+
   const updateData = useCallback((newData) => {
     if (window.firebaseDatabase) {
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
-      window.firebaseSet(dbRef, newData);
-      setData(newData);
+      const sanitizedData = sanitizeData(newData);
+      window.firebaseSet(dbRef, sanitizedData);
+      setData(sanitizedData);
     }
   }, [path]);
 
@@ -528,13 +548,23 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
   }, [currentConfig]);
   
   const handleConfigChange = (key, value) => {
-    setLocalConfig(prev => ({ ...prev, [key]: value }));
-  };
+  // Certifique-se de que o valor é um tipo primitivo
+  const sanitizedValue = typeof value === 'function' ? null : value;
+  setLocalConfig(prev => ({ ...prev, [key]: sanitizedValue }));
+};
+
+const saveConfig = () => {
+  // Remova funções antes de salvar
+  const configToSave = {};
+  Object.keys(localConfig).forEach(key => {
+    if (typeof localConfig[key] !== 'function') {
+      configToSave[key] = localConfig[key];
+    }
+  });
   
-  const saveConfig = () => {
-    onConfigUpdate(productId, localConfig);
-    onClose();
-  };
+  onConfigUpdate(productId, configToSave);
+  onClose();
+};
   
   return (
     <div className="p-4 space-y-6">
@@ -1042,15 +1072,31 @@ const handleLogout = () => {
   }, [productLabelConfigs]);
 
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
-    setProductLabelConfigs(prevConfigs => ({
+  setProductLabelConfigs(prevConfigs => {
+    // Criamos um novo objeto com as configurações atualizadas
+    const updatedConfigs = {
       ...prevConfigs,
       [productId]: {
         ...defaultLabelConfig,
-        ...prevConfigs[productId],
+        ...(prevConfigs[productId] || {}),
         ...newConfig
       }
-    }));
-  }, [setProductLabelConfigs]);
+    };
+    
+    // Removemos qualquer função que possa existir
+    const cleanConfig = {};
+    Object.keys(updatedConfigs[productId]).forEach(key => {
+      if (typeof updatedConfigs[productId][key] !== 'function') {
+        cleanConfig[key] = updatedConfigs[productId][key];
+      }
+    });
+    
+    return {
+      ...prevConfigs,
+      [productId]: cleanConfig
+    };
+  });
+}, [setProductLabelConfigs]);
 
   const openLabelEditorForProduct = useCallback((productId) => {
     setEditingLabelForProduct(productId);
