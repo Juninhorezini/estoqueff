@@ -933,8 +933,8 @@ const EstoqueFFApp = () => {
 useEffect(() => {
     const loadConfigs = async () => {
         try {
-            const dbRef = database.ref('estoqueff_product_label_configs');
-const snapshot = await dbRef.once('value');
+        const dbRef = firebase.database().ref('estoqueff_product_label_configs');
+const snapshot = await dbRef.once('value');    
             if (snapshot.exists()) {
                 setProductLabelConfigs(snapshot.val());
             }
@@ -1081,7 +1081,7 @@ const handleLogout = () => {
     
     // Salvar no Firebase manualmente
     try {
-        const dbRef = database.ref(`estoqueff_product_label_configs/${productId}`);
+        const dbRef = firebase.database().ref(`estoqueff_product_label_configs/${productId}`);
 await dbRef.set(cleanConfig);
     } catch (error) {
         console.error('Erro ao salvar no Firebase:', error);
