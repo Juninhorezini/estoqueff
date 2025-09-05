@@ -5,6 +5,7 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import jsQR from 'jsqr';
 import './App.css';
+import { ref, get, set } from 'firebase/database';
 
 // 🔥 HOOK FIREBASE USANDO WINDOW GLOBALS
 function useFirebaseState(path, defaultValue = null) {
@@ -925,7 +926,23 @@ const EstoqueFFApp = () => {
     lowStockAlert: true
   });
 
-  const [productLabelConfigs, setProductLabelConfigs] = useFirebaseState('estoqueff_product_label_configs', {});
+  const [productLabelConfigs, setProductLabelConfigs] = useState({});
+
+// Carregar dados do Firebase na inicialização
+useEffect(() => {
+    const loadConfigs = async () => {
+        try {
+            const dbRef = ref(database, 'estoqueff_product_label_configs');
+            const snapshot = await get(dbRef);
+            if (snapshot.exists()) {
+                setProductLabelConfigs(snapshot.val());
+            }
+        } catch (error) {
+            console.error('Erro ao carregar configs:', error);
+        }
+    };
+    loadConfigs();
+}, []);
 
   // 👥 USUÁRIOS DO SISTEMA
 const [users, setUsers] = useFirebaseState('users', [
@@ -1041,8 +1058,7 @@ const handleLogout = () => {
     return productLabelConfigs[productId] || defaultLabelConfig;
   }, [productLabelConfigs]);
 
-  const updateProductLabelConfig = useCallback((productId, newConfig) => {
-    // 🧹 LIMPAR dados - só salvar propriedades básicas
+  const updateProductLabelConfig = useCallback(async (productId, newConfig) => {
     const cleanConfig = {
         fontSize: newConfig.fontSize || defaultLabelConfig.fontSize,
         fontFamily: newConfig.fontFamily || defaultLabelConfig.fontFamily,
@@ -1054,14 +1070,22 @@ const handleLogout = () => {
         showBorder: newConfig.showBorder ?? defaultLabelConfig.showBorder,
         borderColor: newConfig.borderColor || defaultLabelConfig.borderColor,
         borderWidth: newConfig.borderWidth || defaultLabelConfig.borderWidth
-        // ⚠️ SÓ PROPRIEDADES BÁSICAS - NADA DE FUNÇÕES!
     };
     
+    // Atualizar estado local
     setProductLabelConfigs(prevConfigs => ({
         ...prevConfigs,
-        [productId]: cleanConfig // ✅ Só dados limpos!
+        [productId]: cleanConfig
     }));
-}, [setProductLabelConfigs]);
+    
+    // Salvar no Firebase manualmente
+    try {
+        const dbRef = ref(database, `estoqueff_product_label_configs/${productId}`);
+        await set(dbRef, cleanConfig);
+    } catch (error) {
+        console.error('Erro ao salvar no Firebase:', error);
+    }
+}, []);
   
 
   const openLabelEditorForProduct = useCallback((productId) => {
