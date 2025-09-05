@@ -5,7 +5,6 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import jsQR from 'jsqr';
 import './App.css';
-import { database } from './firebase';
 
 
 // 🔥 HOOK FIREBASE USANDO WINDOW GLOBALS
@@ -929,22 +928,6 @@ const EstoqueFFApp = () => {
 
   const [productLabelConfigs, setProductLabelConfigs] = useState({});
 
-// Carregar dados do Firebase na inicialização
-useEffect(() => {
-    const loadConfigs = async () => {
-        try {
-        const dbRef = firebase.database().ref('estoqueff_product_label_configs');
-const snapshot = await dbRef.once('value');    
-            if (snapshot.exists()) {
-                setProductLabelConfigs(snapshot.val());
-            }
-        } catch (error) {
-            console.error('Erro ao carregar configs:', error);
-        }
-    };
-    loadConfigs();
-}, []);
-
   // 👥 USUÁRIOS DO SISTEMA
 const [users, setUsers] = useFirebaseState('users', [
   {
@@ -1059,8 +1042,9 @@ const handleLogout = () => {
     return productLabelConfigs[productId] || defaultLabelConfig;
   }, [productLabelConfigs]);
 
-  const updateProductLabelConfig = useCallback(async (productId, newConfig) => {
-    const cleanConfig = {
+  const updateProductLabelConfig = useCallback((productId, newConfig) => {
+    // Criar objeto limpo SEM funções
+    const cleanConfig = JSON.parse(JSON.stringify({
         fontSize: newConfig.fontSize || defaultLabelConfig.fontSize,
         fontFamily: newConfig.fontFamily || defaultLabelConfig.fontFamily,
         fontWeight: newConfig.fontWeight || defaultLabelConfig.fontWeight,
@@ -1071,22 +1055,13 @@ const handleLogout = () => {
         showBorder: newConfig.showBorder ?? defaultLabelConfig.showBorder,
         borderColor: newConfig.borderColor || defaultLabelConfig.borderColor,
         borderWidth: newConfig.borderWidth || defaultLabelConfig.borderWidth
-    };
+    }));
     
-    // Atualizar estado local
     setProductLabelConfigs(prevConfigs => ({
         ...prevConfigs,
         [productId]: cleanConfig
     }));
-    
-    // Salvar no Firebase manualmente
-    try {
-        const dbRef = firebase.database().ref(`estoqueff_product_label_configs/${productId}`);
-await dbRef.set(cleanConfig);
-    } catch (error) {
-        console.error('Erro ao salvar no Firebase:', error);
-    }
-}, []);
+}, [setProductLabelConfigs]);
   
 
   const openLabelEditorForProduct = useCallback((productId) => {
