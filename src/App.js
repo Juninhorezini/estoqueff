@@ -7,105 +7,43 @@ import jsQR from 'jsqr';
 import './App.css';
 
 // 🔥 HOOK FIREBASE USANDO WINDOW GLOBALS
-// Substitua a implementação existente do hook por esta
 function useFirebaseState(path, defaultValue = null) {
   const [data, setData] = useState(defaultValue);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Aguardar Firebase carregar
     if (!window.firebaseDatabase) {
-      const t = setTimeout(() => {
+      setTimeout(() => {
         if (window.firebaseDatabase) {
           setupFirebaseListener();
         }
       }, 1000);
-      return () => clearTimeout(t);
+      return;
     }
+    
     setupFirebaseListener();
-
+    
     function setupFirebaseListener() {
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
-
+      
       const unsubscribe = window.firebaseOnValue(dbRef, (snapshot) => {
         const value = snapshot.val();
-        // DEBUG: ver o que vem do Firebase para este path
-        console.log(`[useFirebaseState] snapshot for ${path}:`, value);
         setData(value !== null ? value : defaultValue);
         setLoading(false);
       });
 
-      return () => {
-        try {
-          window.firebaseOff(dbRef, 'value', unsubscribe);
-        } catch (e) {
-          // ignore
-        }
-      };
+      return () => window.firebaseOff(dbRef, 'value', unsubscribe);
     }
   }, [path, defaultValue]);
 
-  // Sanitização recursiva: remove funções e prototypes
-  const sanitize = (v) => {
-    if (v === null || v === undefined) return v;
-    const t = typeof v;
-    if (t === 'string' || t === 'number' || t === 'boolean') return v;
-    if (Array.isArray(v)) return v.map(sanitize);
-    if (t === 'object') {
-      const out = {};
-      Object.keys(v).forEach(k => {
-        const val = v[k];
-        if (typeof val === 'function') {
-          // pular funções
-          return;
-        }
-        out[k] = sanitize(val);
-      });
-      return out;
-    }
-    // outros tipos (symbol, function) -> omit
-    return undefined;
-  };
-
   const updateData = useCallback((newData) => {
-    if (!window.firebaseDatabase) {
-      console.warn('[useFirebaseState] firebaseDatabase not ready yet for path', path);
-      return;
-    }
-
-    // Se newData for função (updater), aplicamos ao estado atual
-    let resolved;
-    try {
-      if (typeof newData === 'function') {
-        resolved = newData(data);
-      } else {
-        resolved = newData;
-      }
-    } catch (err) {
-      console.error('[useFirebaseState] error resolving newData (function):', err);
-      return;
-    }
-
-    // Sanitizar e clonar profundamente para garantir serializável
-    let cleaned;
-    try {
-      cleaned = sanitize(resolved);
-      // como garantia extra, usar JSON para remover protótipos indesejados
-      cleaned = JSON.parse(JSON.stringify(cleaned));
-    } catch (err) {
-      console.error('[useFirebaseState] error sanitizing data for path', path, err);
-      return;
-    }
-
-    try {
+    if (window.firebaseDatabase) {
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
-      window.firebaseSet(dbRef, cleaned);
-      setData(cleaned);
-      // DEBUG
-      console.log(`[useFirebaseState] wrote to ${path}:`, cleaned);
-    } catch (err) {
-      console.error('[useFirebaseState] firebaseSet error for path', path, err);
+      window.firebaseSet(dbRef, newData);
+      setData(newData);
     }
-  }, [path, data]);
+  }, [path]);
 
   return [data, updateData, loading];
 }
@@ -583,55 +521,20 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
 
 // Editor de etiquetas individual por produto
 const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpdate, onClose, companySettings }) => {
-  const [localConfig, setLocalConfig] = useState(() => ({ ...defaultLabelConfig, ...currentConfig }));
-
-useEffect(() => {
-  setLocalConfig({ ...defaultLabelConfig, ...currentConfig });
-}, [currentConfig, productId]);
+  const [localConfig, setLocalConfig] = useState(currentConfig);
+  
+  useEffect(() => {
+    setLocalConfig(currentConfig);
+  }, [currentConfig]);
   
   const handleConfigChange = (key, value) => {
     setLocalConfig(prev => ({ ...prev, [key]: value }));
   };
   
   const saveConfig = () => {
-  try {
-    // DEBUG: conferir o estado atual antes de salvar
-    console.log('LabelEditor: saving localConfig for product', productId, localConfig);
-
-    // 1) sanitizar: remover funções/valores não serializáveis
-    const sanitize = (v) => {
-      if (v === null || v === undefined) return v;
-      const t = typeof v;
-      if (t === 'string' || t === 'number' || t === 'boolean') return v;
-      if (Array.isArray(v)) return v.map(sanitize);
-      if (t === 'object') {
-        const out = {};
-        Object.keys(v).forEach(k => {
-          const val = v[k];
-          if (typeof val === 'function') return; // pula funções
-          out[k] = sanitize(val);
-        });
-        return out;
-      }
-      return undefined;
-    };
-
-    // 2) sanitize + deep clone para remover protótipos
-    const cleaned = JSON.parse(JSON.stringify(sanitize(localConfig)));
-
-    // DEBUG: conferir payload que será enviado ao parent
-    console.log('LabelEditor: cleaned config to send:', cleaned);
-
-    // 3) chamar a callback do pai com objeto plano e serializável
-    onConfigUpdate(productId, cleaned);
-
-    // 4) fechar modal
+    onConfigUpdate(productId, localConfig);
     onClose();
-  } catch (err) {
-    console.error('LabelEditor: erro ao salvar config', err);
-    alert('Erro ao salvar a configuração. Veja o console para detalhes.');
-  }
-};
+  };
   
   return (
     <div className="p-4 space-y-6">
