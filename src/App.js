@@ -5,6 +5,8 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import jsQR from 'jsqr';
 import './App.css';
+import { database } from './firebase';
+
 
 // 🔥 HOOK FIREBASE USANDO WINDOW GLOBALS
 function useFirebaseState(path, defaultValue = null) {
