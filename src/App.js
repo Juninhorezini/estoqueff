@@ -1041,17 +1041,34 @@ const handleLogout = () => {
     return productLabelConfigs[productId] || defaultLabelConfig;
   }, [productLabelConfigs]);
 
+  console.log('=== DEBUG PRODUTOS ===');
+console.log('Todos produtos:', products);
+console.log('Produto editando:', editingLabelForProduct);
+console.log('Config atual:', getProductLabelConfig(editingLabelForProduct));
+console.log('=== FIM DEBUG ===');
+
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
+    // 🧹 LIMPAR dados - só salvar propriedades básicas
+    const cleanConfig = {
+        fontSize: newConfig.fontSize || defaultLabelConfig.fontSize,
+        fontFamily: newConfig.fontFamily || defaultLabelConfig.fontFamily,
+        fontWeight: newConfig.fontWeight || defaultLabelConfig.fontWeight,
+        textColor: newConfig.textColor || defaultLabelConfig.textColor,
+        backgroundColor: newConfig.backgroundColor || defaultLabelConfig.backgroundColor,
+        padding: newConfig.padding || defaultLabelConfig.padding,
+        borderRadius: newConfig.borderRadius || defaultLabelConfig.borderRadius,
+        showBorder: newConfig.showBorder ?? defaultLabelConfig.showBorder,
+        borderColor: newConfig.borderColor || defaultLabelConfig.borderColor,
+        borderWidth: newConfig.borderWidth || defaultLabelConfig.borderWidth
+        // ⚠️ SÓ PROPRIEDADES BÁSICAS - NADA DE FUNÇÕES!
+    };
+    
     setProductLabelConfigs(prevConfigs => ({
         ...prevConfigs,
-        [productId]: {
-            ...defaultLabelConfig,
-            ...prevConfigs[productId],
-            ...newConfig
-        }
+        [productId]: cleanConfig // ✅ Só dados limpos!
     }));
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, []); // Intencionalmente sem dependências para evitar função no Firebase
+}, [setProductLabelConfigs]);
+  
 
   const openLabelEditorForProduct = useCallback((productId) => {
     setEditingLabelForProduct(productId);
