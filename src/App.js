@@ -1,3 +1,4 @@
+// arquivo App(22).js original - controles e salvamento funcionam mas etiqueta alterada fica em branco
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { QrCode, Package, Users, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload } from 'lucide-react';
 import { jsPDF } from 'jspdf';
@@ -6,6 +7,39 @@ import * as XLSX from 'xlsx';
 import jsQR from 'jsqr';
 import './App.css';
 
+
+// Função auxiliar para sanitizar objetos antes de salvar no Firebase
+const sanitizeConfig = (config) => {
+  if (!config) return null;
+  const clean = {};
+  
+  // Lista de propriedades permitidas
+  const allowedProps = [
+    'showBrand',
+    'showCode',
+    'showDescription',
+    'showQuantity',
+    'showQRCode',
+    'showBorder',
+    'customQuantity',
+    'brandFontSize',
+    'codeFontSize',
+    'quantityFontSize',
+    'qrSize',
+    'textColor',
+    'backgroundColor',
+    'borderColor'
+  ];
+  
+  // Copia apenas as propriedades permitidas
+  allowedProps.forEach(prop => {
+    if (config.hasOwnProperty(prop)) {
+      clean[prop] = config[prop];
+    }
+  });
+  
+  return clean;
+};
 
 // 🔥 HOOK FIREBASE USANDO WINDOW GLOBALS
 function useFirebaseState(path, defaultValue = null) {
@@ -522,21 +556,45 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
 
 // Editor de etiquetas individual por produto
 const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpdate, onClose, companySettings }) => {
-  const [localConfig, setLocalConfig] = useState(currentConfig);
+  // Inicialize com valores padrão mesclados com currentConfig
+  const [localConfig, setLocalConfig] = useState(() => ({
+    ...defaultLabelConfig,
+    ...currentConfig
+  }));
   
+  // Mantenha sincronizado quando currentConfig mudar
   useEffect(() => {
-    setLocalConfig(currentConfig);
+    setLocalConfig(prev => ({
+      ...defaultLabelConfig,
+      ...currentConfig,
+      ...prev
+    }));
   }, [currentConfig]);
   
   const handleConfigChange = (key, value) => {
-    setLocalConfig(prev => ({ ...prev, [key]: value }));
+    setLocalConfig(prev => ({
+      ...prev,
+      [key]: value
+    }));
   };
   
   const saveConfig = () => {
-    onConfigUpdate(productId, localConfig);
-    onClose();
+    try {
+      // Sanitiza e limpa o config antes de salvar
+      const cleanConfig = sanitizeConfig(localConfig);
+      
+      // Debug: verifique o objeto limpo
+      console.log('Saving sanitized config:', cleanConfig);
+      
+      // Envia para o parent
+      onConfigUpdate(productId, cleanConfig);
+      onClose();
+    } catch (error) {
+      console.error('Error saving config:', error);
+      alert('Erro ao salvar configuração. Verifique o console.');
+    }
   };
-  
+
   return (
     <div className="p-4 space-y-6">
       {/* Preview em tempo real */}
@@ -886,7 +944,7 @@ const defaultLabelConfig = {
   codeFontSize: 12,
   descriptionFontSize: 10,
   quantityFontSize: 14,
-  qrSize: 20,
+  qrSize: 30,
   backgroundColor: '#ffffff',
   textColor: '#000000',
   borderColor: '#cccccc',
@@ -1043,25 +1101,34 @@ const handleLogout = () => {
   }, [productLabelConfigs]);
 
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
-    // Criar objeto limpo SEM funções
-    const cleanConfig = JSON.parse(JSON.stringify({
-        fontSize: newConfig.fontSize || defaultLabelConfig.fontSize,
-        fontFamily: newConfig.fontFamily || defaultLabelConfig.fontFamily,
-        fontWeight: newConfig.fontWeight || defaultLabelConfig.fontWeight,
-        textColor: newConfig.textColor || defaultLabelConfig.textColor,
-        backgroundColor: newConfig.backgroundColor || defaultLabelConfig.backgroundColor,
-        padding: newConfig.padding || defaultLabelConfig.padding,
-        borderRadius: newConfig.borderRadius || defaultLabelConfig.borderRadius,
-        showBorder: newConfig.showBorder ?? defaultLabelConfig.showBorder,
-        borderColor: newConfig.borderColor || defaultLabelConfig.borderColor,
-        borderWidth: newConfig.borderWidth || defaultLabelConfig.borderWidth
-    }));
+  try {
+    // Garantir que newConfig é um objeto limpo
+    const cleanConfig = sanitizeConfig(newConfig);
     
-    setProductLabelConfigs(prevConfigs => ({
-        ...prevConfigs,
+    // Debug: verifique o objeto que será salvo
+    console.log('Updating config for product:', productId, cleanConfig);
+    
+    // Atualiza o estado local
+    setProductLabelConfigs(prev => {
+      const next = {
+        ...prev,
         [productId]: cleanConfig
-    }));
-}, [setProductLabelConfigs]);
+      };
+      return next;
+    });
+    
+    // Se você grava manualmente no Firebase, use cleanConfig
+    if (window.firebaseDatabase) {
+      const dbRef = window.firebaseRef(
+        window.firebaseDatabase, 
+        `estoqueff_product_label_configs/${productId}`
+      );
+      window.firebaseSet(dbRef, cleanConfig);
+    }
+  } catch (error) {
+    console.error('Error updating product label config:', error);
+  }
+}, []);
   
 
   const openLabelEditorForProduct = useCallback((productId) => {
