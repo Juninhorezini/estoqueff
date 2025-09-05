@@ -1074,6 +1074,11 @@ const handleLogout = () => {
     setShowLabelEditor(false);
   }, []);
 
+  const memoizedConfig = useMemo(() => 
+    getProductLabelConfig(editingLabelForProduct), 
+    [editingLabelForProduct, productLabelConfigs]
+);
+
   // Scanner QR Code com câmera real
 const startRealQRScanner = async () => {
   console.log('🎬 Iniciando scanner de câmera...');
@@ -3438,14 +3443,7 @@ const initScanner = async () => {
               <LabelEditor
                 productId={editingLabelForProduct}
                 product={products.find(p => p.id === editingLabelForProduct)}
-      // SOLUÇÃO: useMemo para parar re-criação
-const memoizedConfig = useMemo(() => 
-    getProductLabelConfig(editingLabelForProduct), 
-    [editingLabelForProduct, productLabelConfigs]
-);
-
-// Usar:
-currentConfig={memoizedConfig}
+                currentConfig={memoizedConfig}
                 onConfigUpdate={updateProductLabelConfig}
                 onClose={closeLabelEditor}
                 companySettings={companySettings}
