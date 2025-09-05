@@ -1,4 +1,4 @@
-// arquivo App(22).js original - controles e salvamento funcionam mas etiqueta alterada fica em branco
+// arquivo App(23).js original - controles e salvamento funcionam nas etiquetas
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { QrCode, Package, Users, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload } from 'lucide-react';
 import { jsPDF } from 'jspdf';
