@@ -1050,7 +1050,7 @@ const handleLogout = () => {
         ...newConfig
       }
     }));
-  }, [setProductLabelConfigs]);
+  }, []);
 
   const openLabelEditorForProduct = useCallback((productId) => {
     setEditingLabelForProduct(productId);
