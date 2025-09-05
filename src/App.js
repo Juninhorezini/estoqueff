@@ -1043,14 +1043,15 @@ const handleLogout = () => {
 
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
     setProductLabelConfigs(prevConfigs => ({
-      ...prevConfigs,
-      [productId]: {
-        ...defaultLabelConfig,
-        ...prevConfigs[productId],
-        ...newConfig
-      }
+        ...prevConfigs,
+        [productId]: {
+            ...defaultLabelConfig,
+            ...prevConfigs[productId],
+            ...newConfig
+        }
     }));
-  }, []);
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, []); // Intencionalmente sem dependências para evitar função no Firebase
 
   const openLabelEditorForProduct = useCallback((productId) => {
     setEditingLabelForProduct(productId);
