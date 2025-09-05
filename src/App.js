@@ -1041,12 +1041,6 @@ const handleLogout = () => {
     return productLabelConfigs[productId] || defaultLabelConfig;
   }, [productLabelConfigs]);
 
-  console.log('=== DEBUG PRODUTOS ===');
-console.log('Todos produtos:', products);
-console.log('Produto editando:', editingLabelForProduct);
-console.log('Config atual:', getProductLabelConfig(editingLabelForProduct));
-console.log('=== FIM DEBUG ===');
-
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
     // 🧹 LIMPAR dados - só salvar propriedades básicas
     const cleanConfig = {
@@ -3444,7 +3438,14 @@ const initScanner = async () => {
               <LabelEditor
                 productId={editingLabelForProduct}
                 product={products.find(p => p.id === editingLabelForProduct)}
-                currentConfig={getProductLabelConfig(editingLabelForProduct)}
+      // SOLUÇÃO: useMemo para parar re-criação
+const memoizedConfig = useMemo(() => 
+    getProductLabelConfig(editingLabelForProduct), 
+    [editingLabelForProduct, productLabelConfigs]
+);
+
+// Usar:
+currentConfig={memoizedConfig}
                 onConfigUpdate={updateProductLabelConfig}
                 onClose={closeLabelEditor}
                 companySettings={companySettings}
