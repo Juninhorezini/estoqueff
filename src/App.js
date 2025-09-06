@@ -2928,7 +2928,7 @@ const initScanner = async () => {
                 </div>
 
                 <div className="space-y-2">
-                  {filteredMovements.slice(0, 10).map(movement => (
+                  {filteredMovements.slice(0, 100).map(movement => (
                     <div key={movement.id} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
                       <div>
                       <p className="font-medium text-gray-800">{movement.product}</p>
