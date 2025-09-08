@@ -1090,7 +1090,7 @@ const EstoqueFFApp = () => {
 
   const memoizedConfig = useMemo(() => 
     getProductLabelConfig(editingLabelForProduct), 
-    [editingLabelForProduct, productLabelConfigs]
+    [editingLabelForProduct, productLabelConfigs, getProductLabelConfig]
   );
 
   const startRealQRScanner = async () => {
