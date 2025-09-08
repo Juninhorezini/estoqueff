@@ -1432,41 +1432,41 @@ const initScanner = async () => {
 
   // Validação de produtos
   const validateProduct = (product, isEdit = false) => {
-    const newErrors = {};
-    
-    if (!product.name || product.name.trim().length < 2) {
-      newErrors.name = 'Nome deve ter pelo menos 2 caracteres';
+  const newErrors = {};
+  
+  if (!product.name || product.name.trim().length < 2) {
+    newErrors.name = 'Nome deve ter pelo menos 2 caracteres';
+  }
+  
+  if (!product.category || product.category.trim().length < 2) {
+    newErrors.category = 'Categoria deve ter pelo menos 2 caracteres';
+  }
+  
+  const stock = parseInt(product.stock);
+  if (isNaN(stock) || stock < 0) {
+    newErrors.stock = 'Estoque deve ser um número válido maior ou igual a 0';
+  }
+  
+  const minStock = parseInt(product.minStock);
+  if (isNaN(minStock) || minStock < 1) {
+    newErrors.minStock = 'Estoque mínimo deve ser um número válido maior que 0';
+  }
+  
+  if (!product.code || product.code.trim().length < 2) {
+    newErrors.code = 'Código deve ter pelo menos 2 caracteres';
+  } else {
+    // Verificação de unicidade do código
+    const codeExists = products.some(p => 
+      p.code.toLowerCase().trim() === product.code.toLowerCase().trim() &&
+      (isEdit ? p.id !== product.id : true)  // Ignora o próprio produto na edição
+    );
+    if (codeExists) {
+      newErrors.code = 'Já existe um produto com este código';
     }
-    
-    if (!product.category || product.category.trim().length < 2) {
-      newErrors.category = 'Categoria deve ter pelo menos 2 caracteres';
-    }
-    
-    const stock = parseInt(product.stock);
-    if (isNaN(stock) || stock < 0) {
-      newErrors.stock = 'Estoque deve ser um número válido maior ou igual a 0';
-    }
-    
-    const minStock = parseInt(product.minStock);
-    if (isNaN(minStock) || minStock < 1) {
-      newErrors.minStock = 'Estoque mínimo deve ser um número válido maior que 0';
-    }
-    
-    if (!product.code || product.code.trim().length < 2) {
-      newErrors.code = 'Código deve ter pelo menos 2 caracteres';
-    }
-    
-    if (!isEdit) {
-      const nameExists = products.some(p => 
-        p.name.toLowerCase().trim() === product.name.toLowerCase().trim()
-      );
-      if (nameExists) {
-        newErrors.name = 'Já existe um produto com este nome';
-      }
-    }
-    
-    return newErrors;
-  };
+  }
+  
+  return newErrors;
+};
 
   // Adicionar produto
   const addProduct = () => {
