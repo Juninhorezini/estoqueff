@@ -1,4 +1,6 @@
 // arquivo App(23).js original - controles e salvamento funcionam nas etiquetas
+// arquivo App(24).js usa o codigo como validador unico por produto
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { QrCode, Package, Users, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload } from 'lucide-react';
 import { jsPDF } from 'jspdf';
@@ -7,13 +9,11 @@ import * as XLSX from 'xlsx';
 import jsQR from 'jsqr';
 import './App.css';
 
-
 // Função auxiliar para sanitizar objetos antes de salvar no Firebase
 const sanitizeConfig = (config) => {
   if (!config) return null;
   const clean = {};
   
-  // Lista de propriedades permitidas
   const allowedProps = [
     'showBrand',
     'showCode',
@@ -31,7 +31,6 @@ const sanitizeConfig = (config) => {
     'borderColor'
   ];
   
-  // Copia apenas as propriedades permitidas
   allowedProps.forEach(prop => {
     if (config.hasOwnProperty(prop)) {
       clean[prop] = config[prop];
@@ -41,13 +40,12 @@ const sanitizeConfig = (config) => {
   return clean;
 };
 
-// 🔥 HOOK FIREBASE USANDO WINDOW GLOBALS
+// Hook Firebase usando window globals
 function useFirebaseState(path, defaultValue = null) {
   const [data, setData] = useState(defaultValue);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Aguardar Firebase carregar
     if (!window.firebaseDatabase) {
       setTimeout(() => {
         if (window.firebaseDatabase) {
@@ -83,7 +81,7 @@ function useFirebaseState(path, defaultValue = null) {
   return [data, updateData, loading];
 }
 
-// 🔐 COMPONENTE DE LOGIN
+// Componente de Login
 const LoginScreen = ({ onLogin, users }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -95,7 +93,6 @@ const LoginScreen = ({ onLogin, users }) => {
     setLoading(true);
     setError('');
 
-    // Buscar usuário
     const user = users.find(u => 
       u.username.toLowerCase() === username.toLowerCase() && 
       u.password === password && 
@@ -123,9 +120,7 @@ const LoginScreen = ({ onLogin, users }) => {
 
         <form onSubmit={handleLogin}>
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Usuário
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Usuário</label>
             <input
               type="text"
               value={username}
@@ -137,9 +132,7 @@ const LoginScreen = ({ onLogin, users }) => {
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Senha
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Senha</label>
             <input
               type="password"
               value={password}
@@ -182,7 +175,7 @@ const LoginScreen = ({ onLogin, users }) => {
   );
 };
 
-// 👥 COMPONENTE DE GESTÃO DE USUÁRIOS
+// Componente de Gestão de Usuários
 const UserManagement = ({ users, setUsers, currentUser }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -199,7 +192,6 @@ const UserManagement = ({ users, setUsers, currentUser }) => {
     e.preventDefault();
     
     if (editingUser) {
-      // Editar usuário
       const updatedUsers = users.map(user => 
         user.id === editingUser.id 
           ? { ...formData, id: editingUser.id }
@@ -207,7 +199,6 @@ const UserManagement = ({ users, setUsers, currentUser }) => {
       );
       setUsers(updatedUsers);
     } else {
-      // Novo usuário
       const newUser = {
         ...formData,
         id: Date.now().toString(),
@@ -361,7 +352,6 @@ const UserManagement = ({ users, setUsers, currentUser }) => {
         </div>
       )}
 
-      {/* Lista de usuários */}
       <div className="bg-white rounded-lg shadow-md">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -556,13 +546,11 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
 
 // Editor de etiquetas individual por produto
 const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpdate, onClose, companySettings }) => {
-  // Inicialize com valores padrão mesclados com currentConfig
   const [localConfig, setLocalConfig] = useState(() => ({
     ...defaultLabelConfig,
     ...currentConfig
   }));
   
-  // Mantenha sincronizado quando currentConfig mudar
   useEffect(() => {
     setLocalConfig(prev => ({
       ...defaultLabelConfig,
@@ -580,13 +568,8 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
   
   const saveConfig = () => {
     try {
-      // Sanitiza e limpa o config antes de salvar
       const cleanConfig = sanitizeConfig(localConfig);
-      
-      // Debug: verifique o objeto limpo
       console.log('Saving sanitized config:', cleanConfig);
-      
-      // Envia para o parent
       onConfigUpdate(productId, cleanConfig);
       onClose();
     } catch (error) {
@@ -597,7 +580,6 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
 
   return (
     <div className="p-4 space-y-6">
-      {/* Preview em tempo real */}
       <div>
         <h4 className="font-medium mb-3">Preview da Etiqueta</h4>
         <div className="bg-gray-50 p-4 rounded-lg">
@@ -612,7 +594,6 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
         </p>
       </div>
       
-      {/* Elementos da etiqueta */}
       <div>
         <h4 className="font-medium mb-3">Elementos da Etiqueta</h4>
         <div className="space-y-3">
@@ -678,7 +659,6 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
         </div>
       </div>
       
-      {/* Configuração de quantidade personalizada */}
       {localConfig.showQuantity && (
         <div>
           <label className="block text-sm font-medium mb-2">
@@ -702,7 +682,6 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
         </div>
       )}
       
-      {/* Tamanhos de fonte */}
       <div>
         <h4 className="font-medium mb-3">Tamanhos de Fonte (pontos)</h4>
         <div className="space-y-3">
@@ -768,7 +747,6 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
         </div>
       </div>
       
-      {/* Cores */}
       <div>
         <h4 className="font-medium mb-3">Cores</h4>
         <div className="space-y-3">
@@ -806,7 +784,6 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
         </div>
       </div>
       
-      {/* Botões de ação */}
       <div className="flex gap-3 pt-4 border-t border-gray-200">
         <button
           onClick={onClose}
@@ -860,8 +837,6 @@ const LabelPreview = React.memo(({ product, labelTemplate, companySettings }) =>
           justifyContent: 'space-between'
         }}
       >
-        
-        {/* Área superior centralizada */}
         <div className="text-center" style={{ flex: '1', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
           {labelTemplate.showBrand && product.brand && (
             <div 
@@ -890,7 +865,6 @@ const LabelPreview = React.memo(({ product, labelTemplate, companySettings }) =>
           </div>
         </div>
         
-        {/* Área inferior */}
         <div className="flex justify-between items-end" style={{ height: '32px', marginTop: '8px' }}>
           {labelTemplate.showQuantity && (
             <div className="flex items-end">
@@ -932,7 +906,7 @@ const LabelPreview = React.memo(({ product, labelTemplate, companySettings }) =>
   );
 });
 
-// Mova defaultLabelConfig para fora do componente
+// Configuração padrão para etiquetas
 const defaultLabelConfig = {
   showBrand: true,
   showCode: false, 
@@ -964,7 +938,6 @@ const EstoqueFFApp = () => {
     }
   });
   
-  // Estados usando localStorage
   const [products, setProducts] = useFirebaseState('estoqueff_products', [
     { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
     { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'Acessórios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
@@ -985,32 +958,29 @@ const EstoqueFFApp = () => {
   });
 
   const [productLabelConfigs, setProductLabelConfigs] = useState({});
-
-  // 👥 USUÁRIOS DO SISTEMA
-const [users, setUsers] = useFirebaseState('users', [
-  {
-    id: 'user1',
-    name: 'Administrador',
-    username: 'admin',
-    email: 'admin@empresa.com',
-    password: '123',
-    role: 'admin',
-    active: true,
-    createdAt: '2025-01-01'
-  },
-  {
-    id: 'user2', 
-    name: 'Operador Sistema',
-    username: 'operador',
-    email: 'operador@empresa.com',
-    password: '123',
-    role: 'operator',
-    active: true,
-    createdAt: '2025-01-01'
-  }
-]);
+  const [users, setUsers] = useFirebaseState('users', [
+    {
+      id: 'user1',
+      name: 'Administrador',
+      username: 'admin',
+      email: 'admin@empresa.com',
+      password: '123',
+      role: 'admin',
+      active: true,
+      createdAt: '2025-01-01'
+    },
+    {
+      id: 'user2', 
+      name: 'Operador Sistema',
+      username: 'operador',
+      email: 'operador@empresa.com',
+      password: '123',
+      role: 'operator',
+      active: true,
+      createdAt: '2025-01-01'
+    }
+  ]);
   
-  // Estados gerais
   const [scannerActive, setScannerActive] = useState(false);
   const [scannedProduct, setScannedProduct] = useState(null);
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -1026,17 +996,11 @@ const [users, setUsers] = useFirebaseState('users', [
   const [cameraStream, setCameraStream] = useState(null);
   const videoRef = useRef(null);
   const scanIntervalRef = useRef(null);
-
-  // Estados para movimentação manual
   const [showManualMovement, setShowManualMovement] = useState(false);
   const [manualSearchTerm, setManualSearchTerm] = useState('');
   const [manualSelectedProduct, setManualSelectedProduct] = useState(null);
-
-  // Estados de pesquisa
   const [searchTerm, setSearchTerm] = useState('');
   const [labelSearchTerm, setLabelSearchTerm] = useState('');
-
-  // Estados para novo produto
   const [newProduct, setNewProduct] = useState({
     name: '',
     brand: '',
@@ -1045,13 +1009,10 @@ const [users, setUsers] = useFirebaseState('users', [
     stock: 0,
     minStock: 1
   });
-
-  // Estados para relatórios
   const [reportsTab, setReportsTab] = useState('movements');
   const [movementsPeriodFilter, setMovementsPeriodFilter] = useState('all');
   const [productsFilter, setProductsFilter] = useState('all');
 
-  // Fix para teclado mobile
   useEffect(() => {
     const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
     viewport.name = 'viewport';
@@ -1061,7 +1022,6 @@ const [users, setUsers] = useFirebaseState('users', [
     }
   }, []);
 
-  // Handlers estáveis
   const handleSearchChange = useCallback((newSearchTerm) => {
     setSearchTerm(newSearchTerm);
   }, []);
@@ -1078,11 +1038,10 @@ const [users, setUsers] = useFirebaseState('users', [
     setEditingProduct(product);
   }, []);
 
-  // 🚪 FUNÇÃO DE LOGOUT
-const handleLogout = () => {
-  setCurrentUser(null);
-  localStorage.removeItem('currentUser');
-};
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('currentUser');
+  };
 
   const handleDeleteProduct = useCallback((productId) => {
     if (window.confirm('Tem certeza que deseja excluir este produto?')) {
@@ -1095,41 +1054,29 @@ const handleLogout = () => {
     }
   }, [setProducts, setProductLabelConfigs]);
 
-  // Funções para configurações de etiquetas
   const getProductLabelConfig = useCallback((productId) => {
     return productLabelConfigs[productId] || defaultLabelConfig;
   }, [productLabelConfigs]);
 
   const updateProductLabelConfig = useCallback((productId, newConfig) => {
-  try {
-    // Garantir que newConfig é um objeto limpo
-    const cleanConfig = sanitizeConfig(newConfig);
-    
-    // Debug: verifique o objeto que será salvo
-    console.log('Updating config for product:', productId, cleanConfig);
-    
-    // Atualiza o estado local
-    setProductLabelConfigs(prev => {
-      const next = {
+    try {
+      const cleanConfig = sanitizeConfig(newConfig);
+      console.log('Updating config for product:', productId, cleanConfig);
+      setProductLabelConfigs(prev => ({
         ...prev,
         [productId]: cleanConfig
-      };
-      return next;
-    });
-    
-    // Se você grava manualmente no Firebase, use cleanConfig
-    if (window.firebaseDatabase) {
-      const dbRef = window.firebaseRef(
-        window.firebaseDatabase, 
-        `estoqueff_product_label_configs/${productId}`
-      );
-      window.firebaseSet(dbRef, cleanConfig);
+      }));
+      if (window.firebaseDatabase) {
+        const dbRef = window.firebaseRef(
+          window.firebaseDatabase, 
+          `estoqueff_product_label_configs/${productId}`
+        );
+        window.firebaseSet(dbRef, cleanConfig);
+      }
+    } catch (error) {
+      console.error('Error updating product label config:', error);
     }
-  } catch (error) {
-    console.error('Error updating product label config:', error);
-  }
-}, []);
-  
+  }, []);
 
   const openLabelEditorForProduct = useCallback((productId) => {
     setEditingLabelForProduct(productId);
@@ -1143,282 +1090,260 @@ const handleLogout = () => {
 
   const memoizedConfig = useMemo(() => 
     getProductLabelConfig(editingLabelForProduct), 
-// eslint-disable-next-line react-hooks/exhaustive-deps
     [editingLabelForProduct, productLabelConfigs]
-);
+  );
 
-  // Scanner QR Code com câmera real
-const startRealQRScanner = async () => {
-  console.log('🎬 Iniciando scanner de câmera...');
-  setLoading(true);
-  setScannerActive(true);
-  setErrors({});
-  setMovementType('');
-  setScannedProduct(null);
-  
-  try {
-    // Obter stream da câmera
-    let stream;
+  const startRealQRScanner = async () => {
+    console.log('🎬 Iniciando scanner de câmera...');
+    setLoading(true);
+    setScannerActive(true);
+    setErrors({});
+    setMovementType('');
+    setScannedProduct(null);
+    
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-      });
-    } catch (envError) {
+      let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
         });
-      } catch (genericError) {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      }
-    }
-
-    setCameraStream(stream);
-    console.log('📡 CameraStream definido:', !!stream);
-    console.log('📡 Tracks do stream:', stream.getTracks().length);
-
-    // Aguardar elemento de vídeo estar disponível
-let attempts = 0;
-while (!videoRef.current && attempts < 20) {
-  console.log(`⏳ Aguardando videoRef... tentativa ${attempts + 1}`);
-  await new Promise(resolve => setTimeout(resolve, 100));
-  attempts++;
-}
-
-if (!videoRef.current) {
-  throw new Error('Elemento de vídeo não foi renderizado após 2 segundos');
-}
-
-console.log('✅ VideoRef disponível:', !!videoRef.current);
-
-    // Configurar vídeo
-    videoRef.current.srcObject = stream;
-    videoRef.current.muted = true;
-    videoRef.current.playsInline = true;
-
-    // Função de escaneamento
-const scanQRCode = () => {
-  console.log('🔄 scanQRCode executando...');
-  console.log('📹 videoRef.current:', !!videoRef.current);
-  console.log('📡 cameraStream:', !!cameraStream);
-  console.log('📊 readyState:', videoRef.current?.readyState);
-  
-  if (!videoRef.current || videoRef.current.readyState < 2) {
-    console.log('⚠️ Condições não atendidas para scan');
-    return;
-  }
-  
-  console.log('✅ Tentando scan...');
-  
-  try {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = videoRef.current.videoWidth || 640;
-    canvas.height = videoRef.current.videoHeight || 480;
-    
-    console.log('📐 Canvas:', canvas.width, 'x', canvas.height);
-    
-    if (canvas.width === 0 || canvas.height === 0) {
-      console.log('⚠️ Dimensões inválidas');
-      return;
-    }
-    
-    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
-    
-    if (code) {
-      console.log('🎯 QR CODE ENCONTRADO!:', code.data);
-
-// Tentar fazer parse do JSON se for um JSON válido
-let productData;
-try {
-  productData = JSON.parse(code.data);
-  console.log('📋 Dados parseados:', productData);
-  
-  // Se tem um ID no JSON, usar esse ID para buscar
-  if (productData.id) {
-    console.log('🔍 Procurando produto com ID:', productData.id);
-    const product = findProductByQR(productData.id);
-    
-    if (product) {
-      console.log('✅ Produto encontrado via ID:', product.name);
-      clearInterval(scanIntervalRef.current);
-      setScannedProduct(product);
-      setSelectedProduct(product.id); // Se existe esse estado
-setNewProduct({
-  ...newProduct,
-  name: product.name,
-  brand: product.brand || '',
-  category: product.category || '',
-  code: product.code || '',
-  stock: product.stock || 0
-});
-      stopCamera();
-      return;
-    }
-  }
-} catch (parseError) {
-  console.log('⚠️ QR não é JSON válido, tentando busca direta');
-  productData = code.data;
-}
-
-// Fallback: busca direta com dados originais
-console.log('🔍 Tentando busca direta com:', productData);
-const product = findProductByQR(productData);
-
-if (product) {
-  console.log('✅ Produto encontrado via busca direta:', product.name);
-  clearInterval(scanIntervalRef.current);
-  setScannedProduct(product);
-  } else {
-  console.log('❌ Produto não encontrado');
-  setErrors({ camera: 'Produto não encontrado' });
-}
-stopCamera();
-    } else {
-      // Só mostrar a cada 50 tentativas para não poluir o log
-      if (Math.random() < 0.02) console.log('🔍 Procurando QR Code...');
-    }
-  } catch (scanError) {
-    console.error('❌ Erro no scan:', scanError);
-  }
-};
-
-    // Inicializar scanner
-const initScanner = async () => {
-  try {
-    console.log('▶️ Iniciando initScanner...');
-    await videoRef.current.play();
-    console.log('✅ Play executado');
-    
-    // Aguardar vídeo estar pronto
-    let attempts = 0;
-    while (videoRef.current.readyState < 2 && attempts < 50) {
-      console.log(`⏳ Aguardando readyState >= 2, atual: ${videoRef.current.readyState}, tentativa: ${attempts + 1}`);
-      await new Promise(resolve => setTimeout(resolve, 100));
-      attempts++;
-    }
-    
-    if (videoRef.current.readyState >= 2) {
-      console.log('🚀 INICIANDO INTERVAL DE ESCANEAMENTO!');
-      scanIntervalRef.current = setInterval(scanQRCode, 100);
-      console.log('✅ Interval criado:', !!scanIntervalRef.current);
-    } else {
-      throw new Error('Vídeo não ficou pronto após 5 segundos');
-    }
-  } catch (playError) {
-    console.error('❌ Erro no initScanner:', playError);
-    throw new Error(`Erro no play: ${playError.message}`);
-  }
-};
-
-    // Iniciar com eventos
-    if (videoRef.current.readyState >= 2) {
-      await initScanner();
-    } else {
-      videoRef.current.addEventListener('loadedmetadata', initScanner, { once: true });
-      videoRef.current.addEventListener('canplay', initScanner, { once: true });
-      
-      // Fallback
-      setTimeout(async () => {
-        if (videoRef.current && !scanIntervalRef.current) {
-          try {
-            await initScanner();
-          } catch (err) {
-            console.log('Fallback falhou:', err);
-          }
+      } catch (envError) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+          });
+        } catch (genericError) {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
         }
-      }, 2000);
-    }
+      }
 
-  } catch (error) {
-    console.error('❌ Erro geral:', error);
-    let errorMessage = 'Erro ao acessar câmera';
-    if (error.name === 'NotAllowedError') {
-      errorMessage = 'Permissão da câmera negada';
-    } else if (error.name === 'NotFoundError') {
-      errorMessage = 'Câmera não encontrada';
-    } else if (error.message) {
-      errorMessage = error.message;
+      setCameraStream(stream);
+      console.log('📡 CameraStream definido:', !!stream);
+      console.log('📡 Tracks do stream:', stream.getTracks().length);
+
+      let attempts = 0;
+      while (!videoRef.current && attempts < 20) {
+        console.log(`⏳ Aguardando videoRef... tentativa ${attempts + 1}`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+
+      if (!videoRef.current) {
+        throw new Error('Elemento de vídeo não foi renderizado após 2 segundos');
+      }
+
+      console.log('✅ VideoRef disponível:', !!videoRef.current);
+
+      videoRef.current.srcObject = stream;
+      videoRef.current.muted = true;
+      videoRef.current.playsInline = true;
+
+      const scanQRCode = () => {
+        console.log('🔄 scanQRCode executando...');
+        console.log('📹 videoRef.current:', !!videoRef.current);
+        console.log('📡 cameraStream:', !!cameraStream);
+        console.log('📊 readyState:', videoRef.current?.readyState);
+        
+        if (!videoRef.current || videoRef.current.readyState < 2) {
+          console.log('⚠️ Condições não atendidas para scan');
+          return;
+        }
+        
+        console.log('✅ Tentando scan...');
+        
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = videoRef.current.videoWidth || 640;
+          canvas.height = videoRef.current.videoHeight || 480;
+          
+          console.log('📐 Canvas:', canvas.width, 'x', canvas.height);
+          
+          if (canvas.width === 0 || canvas.height === 0) {
+            console.log('⚠️ Dimensões inválidas');
+            return;
+          }
+          
+          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          
+          if (code) {
+            console.log('🎯 QR CODE ENCONTRADO!:', code.data);
+
+            let productData;
+            try {
+              productData = JSON.parse(code.data);
+              console.log('📋 Dados parseados:', productData);
+              
+              if (productData.code) {
+                console.log('🔍 Procurando produto com code:', productData.code);
+                const product = findProductByQR(productData.code);
+                
+                if (product) {
+                  console.log('✅ Produto encontrado via code:', product.name);
+                  clearInterval(scanIntervalRef.current);
+                  setScannedProduct(product);
+                  setSelectedProduct(product.id);
+                  setNewProduct({
+                    ...newProduct,
+                    name: product.name,
+                    brand: product.brand || '',
+                    category: product.category || '',
+                    code: product.code || '',
+                    stock: product.stock || 0
+                  });
+                  stopCamera();
+                  return;
+                }
+              }
+            } catch (parseError) {
+              console.log('⚠️ QR não é JSON válido, tentando busca direta');
+              productData = code.data;
+            }
+
+            console.log('🔍 Tentando busca direta com:', productData);
+            const product = findProductByQR(productData);
+
+            if (product) {
+              console.log('✅ Produto encontrado via busca direta:', product.name);
+              clearInterval(scanIntervalRef.current);
+              setScannedProduct(product);
+            } else {
+              console.log('❌ Produto não encontrado');
+              setErrors({ camera: 'Produto não encontrado' });
+            }
+            stopCamera();
+          } else {
+            if (Math.random() < 0.02) console.log('🔍 Procurando QR Code...');
+          }
+        } catch (scanError) {
+          console.error('❌ Erro no scan:', scanError);
+        }
+      };
+
+      const initScanner = async () => {
+        try {
+          console.log('▶️ Iniciando initScanner...');
+          await videoRef.current.play();
+          console.log('✅ Play executado');
+          
+          let attempts = 0;
+          while (videoRef.current.readyState < 2 && attempts < 50) {
+            console.log(`⏳ Aguardando readyState >= 2, atual: ${videoRef.current.readyState}, tentativa: ${attempts + 1}`);
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+          }
+          
+          if (videoRef.current.readyState >= 2) {
+            console.log('🚀 INICIANDO INTERVAL DE ESCANEAMENTO!');
+            scanIntervalRef.current = setInterval(scanQRCode, 100);
+            console.log('✅ Interval criado:', !!scanIntervalRef.current);
+          } else {
+            throw new Error('Vídeo não ficou pronto após 5 segundos');
+          }
+        } catch (playError) {
+          console.error('❌ Erro no initScanner:', playError);
+          throw new Error(`Erro no play: ${playError.message}`);
+        }
+      };
+
+      if (videoRef.current.readyState >= 2) {
+        await initScanner();
+      } else {
+        videoRef.current.addEventListener('loadedmetadata', initScanner, { once: true });
+        videoRef.current.addEventListener('canplay', initScanner, { once: true });
+        
+        setTimeout(async () => {
+          if (videoRef.current && !scanIntervalRef.current) {
+            try {
+              await initScanner();
+            } catch (err) {
+              console.log('Fallback falhou:', err);
+            }
+          }
+        }, 2000);
+      }
+
+    } catch (error) {
+      console.error('❌ Erro geral:', error);
+      let errorMessage = 'Erro ao acessar câmera';
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Permissão da câmera negada';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'Câmera não encontrada';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      setErrors({ camera: errorMessage });
+      stopCamera();
+    } finally {
+      setLoading(false);
     }
-    setErrors({ camera: errorMessage });
-    stopCamera();
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
   const stopCamera = () => {
-  console.log('🛑 stopCamera CHAMADA!');
-  
-  // CORREÇÃO: Parar TODOS os intervals relacionados
-  if (scanIntervalRef.current) {
-    console.log('⏹️ Parando interval principal');
-    clearInterval(scanIntervalRef.current);
-    scanIntervalRef.current = null;
-  }
-  
-  // FORÇA: Limpar qualquer interval órfão
-  console.log('🧹 Limpando intervals órfãos...');
-  for (let i = 1; i < 999999; i++) {
-    clearInterval(i);
-  }
-      
-  // CORREÇÃO: Acessar stream do videoRef se cameraStream não estiver disponível
-  let streamToStop = cameraStream;
-  
-  if (!streamToStop && videoRef.current && videoRef.current.srcObject) {
-    console.log('🔄 Usando stream do videoRef');
-    streamToStop = videoRef.current.srcObject;
-  }
-  
-  // Parar todas as tracks do stream
-  if (streamToStop) {
-    console.log('📹 Parando tracks da câmera');
-    streamToStop.getTracks().forEach(track => {
-      console.log('🔚 Parando track:', track.kind, 'estado:', track.readyState);
-      track.stop();
-    });
-  } else {
-    console.log('⚠️ Nenhum stream encontrado para parar');
-  }
-  
-  // Limpar srcObject do vídeo
-  if (videoRef.current) {
-    console.log('🧹 Limpando srcObject');
-    videoRef.current.srcObject = null;
-    videoRef.current.load(); // Força reload do elemento
-  }
-  
-  // Resetar estados
-  setCameraStream(null);
-  setScannerActive(false);
-  setLoading(false);
-  
-  console.log('✅ stopCamera finalizada');
-};
+    console.log('🛑 stopCamera CHAMADA!');
+    if (scanIntervalRef.current) {
+      console.log('⏹️ Parando interval principal');
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    
+    console.log('🧹 Limpando intervals órfãos...');
+    for (let i = 1; i < 999999; i++) {
+      clearInterval(i);
+    }
+        
+    let streamToStop = cameraStream;
+    
+    if (!streamToStop && videoRef.current && videoRef.current.srcObject) {
+      console.log('🔄 Usando stream do videoRef');
+      streamToStop = videoRef.current.srcObject;
+    }
+    
+    if (streamToStop) {
+      console.log('📹 Parando tracks da câmera');
+      streamToStop.getTracks().forEach(track => {
+        console.log('🔚 Parando track:', track.kind, 'estado:', track.readyState);
+        track.stop();
+      });
+    } else {
+      console.log('⚠️ Nenhum stream encontrado para parar');
+    }
+    
+    if (videoRef.current) {
+      console.log('🧹 Limpando srcObject');
+      videoRef.current.srcObject = null;
+      videoRef.current.load();
+    }
+    
+    setCameraStream(null);
+    setScannerActive(false);
+    setLoading(false);
+    
+    console.log('✅ stopCamera finalizada');
+  };
   
   const findProductByQR = (qrCode) => {
-  console.log('🔍 findProductByQR recebeu:', qrCode);
-  console.log('📦 Produtos disponíveis:', products.length);
-  
-  // Se for JSON, tentar extrair ID
-  let searchTerm = qrCode;
-  try {
-    const parsed = JSON.parse(qrCode);
-    if (parsed.id) {
-      searchTerm = parsed.id;
-      console.log('📋 Extraído ID do JSON:', searchTerm);
-    }
-  } catch (e) {
-    // Não é JSON, usar como está
-    console.log('📝 Não é JSON, usando valor direto');
-  }  
-    return products.find(p => p.qrCode === qrCode || p.id === qrCode);
+    console.log('🔍 findProductByQR recebeu:', qrCode);
+    console.log('📦 Produtos disponíveis:', products.length);
+    
+    let searchTerm = qrCode;
+    try {
+      const parsed = JSON.parse(qrCode);
+      if (parsed.code) {
+        searchTerm = parsed.code;
+        console.log('📋 Extraído code do JSON:', searchTerm);
+      }
+    } catch (e) {
+      console.log('📝 Não é JSON, usando valor direto');
+    }  
+    return products.find(p => p.qrCode === qrCode || p.code === searchTerm);
   };
 
   useEffect(() => {
-    const currentVideoRef = videoRef.current; // Armazena o valor atual
+    const currentVideoRef = videoRef.current;
     return () => {
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
@@ -1430,45 +1355,42 @@ const initScanner = async () => {
     };
   }, [cameraStream]);
 
-  // Validação de produtos
   const validateProduct = (product, isEdit = false) => {
-  const newErrors = {};
-  
-  if (!product.name || product.name.trim().length < 2) {
-    newErrors.name = 'Nome deve ter pelo menos 2 caracteres';
-  }
-  
-  if (!product.category || product.category.trim().length < 2) {
-    newErrors.category = 'Categoria deve ter pelo menos 2 caracteres';
-  }
-  
-  const stock = parseInt(product.stock);
-  if (isNaN(stock) || stock < 0) {
-    newErrors.stock = 'Estoque deve ser um número válido maior ou igual a 0';
-  }
-  
-  const minStock = parseInt(product.minStock);
-  if (isNaN(minStock) || minStock < 1) {
-    newErrors.minStock = 'Estoque mínimo deve ser um número válido maior que 0';
-  }
-  
-  if (!product.code || product.code.trim().length < 2) {
-    newErrors.code = 'Código deve ter pelo menos 2 caracteres';
-  } else {
-    // Verificação de unicidade do código
-    const codeExists = products.some(p => 
-      p.code.toLowerCase().trim() === product.code.toLowerCase().trim() &&
-      (isEdit ? p.id !== product.id : true)  // Ignora o próprio produto na edição
-    );
-    if (codeExists) {
-      newErrors.code = 'Já existe um produto com este código';
+    const newErrors = {};
+    
+    if (!product.name || product.name.trim().length < 2) {
+      newErrors.name = 'Nome deve ter pelo menos 2 caracteres';
     }
-  }
-  
-  return newErrors;
-};
+    
+    if (!product.category || product.category.trim().length < 2) {
+      newErrors.category = 'Categoria deve ter pelo menos 2 caracteres';
+    }
+    
+    const stock = parseInt(product.stock);
+    if (isNaN(stock) || stock < 0) {
+      newErrors.stock = 'Estoque deve ser um número válido maior ou igual a 0';
+    }
+    
+    const minStock = parseInt(product.minStock);
+    if (isNaN(minStock) || minStock < 1) {
+      newErrors.minStock = 'Estoque mínimo deve ser um número válido maior que 0';
+    }
+    
+    if (!product.code || product.code.trim().length < 2) {
+      newErrors.code = 'Código deve ter pelo menos 2 caracteres';
+    } else {
+      const codeExists = products.some(p => 
+        p.code.toLowerCase().trim() === product.code.toLowerCase().trim() &&
+        (isEdit ? p.id !== product.id : true)
+      );
+      if (codeExists) {
+        newErrors.code = 'Já existe um produto com este código';
+      }
+    }
+    
+    return newErrors;
+  };
 
-  // Adicionar produto
   const addProduct = () => {
     setLoading(true);
     setErrors({});
@@ -1483,7 +1405,7 @@ const initScanner = async () => {
     
     try {
       const productId = 'P' + String(Date.now()).slice(-6);
-      const qrCode = `ESTOQUEFF_${productId}_${newProduct.name.replace(/\s+/g, '_').toUpperCase()}`;
+      const qrCode = `ESTOQUEFF_${productId}_${newProduct.code.replace(/\s+/g, '_').toUpperCase()}`;
       
       const product = {
         ...newProduct,
@@ -1511,7 +1433,6 @@ const initScanner = async () => {
     setLoading(false);
   };
 
-  // Atualizar produto
   const updateProduct = () => {
     setLoading(true);
     setErrors({});
