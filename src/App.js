@@ -509,7 +509,11 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
                 <Edit size={16} />
               </button>
               <button 
-                onClick={() => onDelete(product.id)}
+                onClick={() => {
+                  if (window.confirm(`Tem certeza que deseja excluir o produto "${product.name}"?`)) {
+                    onDelete(product.id);
+                  }
+                }}
                 className="p-1 text-gray-400 hover:text-red-500"
                 title="Excluir produto"
               >
