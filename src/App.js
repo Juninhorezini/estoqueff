@@ -1050,26 +1050,32 @@ const EstoqueFFApp = () => {
   const handleDeleteProduct = useCallback((productId) => {
   if (window.confirm('Tem certeza que deseja excluir este produto?')) {
     try {
-      // Primeiro, filtra os produtos
-      const updatedProducts = products.filter(p => p.id !== productId);
-      
-      // Atualiza no Firebase
+      // Remove from Firebase
       if (window.firebaseDatabase) {
+        // Remove o produto
         const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
+        const updatedProducts = products.filter(p => p.id !== productId);
         window.firebaseSet(productsRef, updatedProducts)
           .then(() => {
-            // Atualiza o estado local após sucesso no Firebase
+            // Atualiza estado local
             setProducts(updatedProducts);
             
-            // Remove a configuração da etiqueta se existir
-            const labelConfigRef = window.firebaseRef(window.firebaseDatabase, `estoqueff_product_label_configs/${productId}`);
-            window.firebaseRemove(labelConfigRef);
-            
-            setProductLabelConfigs(prevConfigs => {
-              const newConfigs = { ...prevConfigs };
-              delete newConfigs[productId];
-              return newConfigs;
-            });
+            // Remove configuração de etiqueta se existir
+            if (productLabelConfigs[productId]) {
+              const labelConfigRef = window.firebaseRef(
+                window.firebaseDatabase, 
+                `estoqueff_product_label_configs/${productId}`
+              );
+              window.firebaseSet(labelConfigRef, null) // Usa null para remover
+                .then(() => {
+                  setProductLabelConfigs(prevConfigs => {
+                    const newConfigs = { ...prevConfigs };
+                    delete newConfigs[productId];
+                    return newConfigs;
+                  });
+                })
+                .catch(error => console.error('Erro ao remover config:', error));
+            }
             
             setSuccess('✅ Produto excluído com sucesso!');
             setTimeout(() => setSuccess(''), 3000);
@@ -1080,8 +1086,13 @@ const EstoqueFFApp = () => {
             setTimeout(() => setErrors({}), 3000);
           });
       } else {
-        // Fallback para estado local apenas
-        setProducts(updatedProducts);
+        // Fallback para estado local
+        setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
+        setProductLabelConfigs(prevConfigs => {
+          const newConfigs = { ...prevConfigs };
+          delete newConfigs[productId];
+          return newConfigs;
+        });
         setSuccess('✅ Produto excluído com sucesso!');
         setTimeout(() => setSuccess(''), 3000);
       }
@@ -1091,7 +1102,7 @@ const EstoqueFFApp = () => {
       setTimeout(() => setErrors({}), 3000);
     }
   }
-}, [products, setProducts, setErrors, setSuccess]);
+}, [products, setProducts, setErrors, setSuccess, productLabelConfigs]);
 
   const getProductLabelConfig = useCallback((productId) => {
     return productLabelConfigs[productId] || defaultLabelConfig;
