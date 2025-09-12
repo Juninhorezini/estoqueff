@@ -482,60 +482,9 @@ const ProductSearch = React.memo(({ onSearchChange, searchTerm }) => {
   );
 });
 
-// Adicionar antes do componente ProductList
-const MemoizedProductCard = memo(({ product, onEdit, onDelete }) => {
-  const handleEdit = useCallback(() => {
-    onEdit(product);
-  }, [product, onEdit]);
-
-  const handleDelete = useCallback(() => {
-    onDelete(product.id);
-  }, [product.id, onDelete]);
-
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
-      <div className="flex justify-between items-start">
-        <div>
-          <h3 className="font-semibold text-gray-800">{product.name}</h3>
-          <p className="text-sm text-gray-600">{product.brand}</p>
-          <p className="text-sm text-gray-600">{product.category}</p>
-          <p className="text-sm text-gray-600">Código: {product.code}</p>
-          <p className={`text-sm font-medium ${
-            product.stock <= product.minStock ? 'text-red-600' : 'text-green-600'
-          }`}>
-            Estoque: {product.stock}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={handleEdit} className="text-blue-600 hover:text-blue-800">
-            <Edit size={16} />
-          </button>
-          <button onClick={handleDelete} className="text-red-600 hover:text-red-800">
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}, (prevProps, nextProps) => {
-  return prevProps.product.id === nextProps.product.id &&
-         prevProps.product.stock === nextProps.product.stock;
-});
-
 // Componente de lista de produtos
 const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
-  const filteredProducts = useMemo(() => {
-    if (!searchTerm.trim()) return products;
-    
-    const term = searchTerm.toLowerCase().trim();
-    return products.filter(product => 
-      product.name.toLowerCase().includes(term) ||
-      product.id.toLowerCase().includes(term) ||
-      (product.brand && product.brand.toLowerCase().includes(term)) ||
-      product.category.toLowerCase().includes(term) ||
-      (product.code && product.code.toLowerCase().includes(term))
-    );
-  }, [products, searchTerm]);
+ [products, searchTerm]);
 
   if (filteredProducts.length === 0 && searchTerm) {
     return (
@@ -1108,16 +1057,7 @@ const EstoqueFFApp = () => {
   const [movementsPeriodFilter, setMovementsPeriodFilter] = useState('all');
   const [productsFilter, setProductsFilter] = useState('all');
 
-  const updateFilteredProducts = useCallback((searchTerm) => {
-  const filtered = products.filter(product => 
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  // Aqui usamos o resultado do useMemo ao invés de setState
-  filteredProducts = filtered;
-}, [products]);
-  
-  // Função para limpar listeners do Firebase
+    // Função para limpar listeners do Firebase
 const cleanupFirebaseListeners = useCallback(() => {
   if (window.firebaseDatabase) {
     const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
@@ -1136,10 +1076,6 @@ const revokeObjectURLs = useCallback((products) => {
     }
   });
 }, []);
-
-// Estado para paginação
-const [currentPage, setCurrentPage] = useState(1);
-const [itemsPerPage] = useState(50);
 
 // Função de debounce para otimizar buscas
 const debounce = (func, wait) => {
