@@ -41,40 +41,63 @@ const sanitizeConfig = (config) => {
 };
 
 // Hook Firebase usando window globals
+// Atualizar a função useFirebaseState
 function useFirebaseState(path, defaultValue = null) {
   const [data, setData] = useState(defaultValue);
   const [loading, setLoading] = useState(true);
+  const listenerRef = useRef(null);
 
   useEffect(() => {
     if (!window.firebaseDatabase) {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (window.firebaseDatabase) {
           setupFirebaseListener();
         }
       }, 1000);
-      return;
+      return () => clearTimeout(timer);
     }
     
     setupFirebaseListener();
     
     function setupFirebaseListener() {
-      const dbRef = window.firebaseRef(window.firebaseDatabase, path);
+      // Limpar listener anterior se existir
+      if (listenerRef.current) {
+        listenerRef.current();
+      }
       
-      const unsubscribe = window.firebaseOnValue(dbRef, (snapshot) => {
-        const value = snapshot.val();
-        setData(value !== null ? value : defaultValue);
+      const dbRef = window.firebaseRef(window.firebaseDatabase, path);
+      // Limitar quantidade de dados
+      const query = window.firebaseQuery(
+        dbRef,
+        window.firebaseLimitToFirst(100)
+      );
+      
+      listenerRef.current = window.firebaseOnValue(query, (snapshot) => {
+        const val = snapshot.val();
+        if (val) {
+          // Converter para array se necessário
+          const dataArray = Array.isArray(val) ? val : Object.values(val);
+          setData(dataArray);
+        } else {
+          setData(defaultValue);
+        }
         setLoading(false);
       });
-
-      return () => window.firebaseOff(dbRef, 'value', unsubscribe);
     }
+    
+    // Cleanup
+    return () => {
+      if (listenerRef.current) {
+        listenerRef.current();
+        listenerRef.current = null;
+      }
+    };
   }, [path, defaultValue]);
 
   const updateData = useCallback((newData) => {
     if (window.firebaseDatabase) {
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
       window.firebaseSet(dbRef, newData);
-      setData(newData);
     }
   }, [path]);
 
@@ -457,6 +480,46 @@ const ProductSearch = React.memo(({ onSearchChange, searchTerm }) => {
       )}
     </div>
   );
+});
+
+// Adicionar antes do componente ProductList
+const MemoizedProductCard = memo(({ product, onEdit, onDelete }) => {
+  const handleEdit = useCallback(() => {
+    onEdit(product);
+  }, [product, onEdit]);
+
+  const handleDelete = useCallback(() => {
+    onDelete(product.id);
+  }, [product.id, onDelete]);
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+      <div className="flex justify-between items-start">
+        <div>
+          <h3 className="font-semibold text-gray-800">{product.name}</h3>
+          <p className="text-sm text-gray-600">{product.brand}</p>
+          <p className="text-sm text-gray-600">{product.category}</p>
+          <p className="text-sm text-gray-600">Código: {product.code}</p>
+          <p className={`text-sm font-medium ${
+            product.stock <= product.minStock ? 'text-red-600' : 'text-green-600'
+          }`}>
+            Estoque: {product.stock}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handleEdit} className="text-blue-600 hover:text-blue-800">
+            <Edit size={16} />
+          </button>
+          <button onClick={handleDelete} className="text-red-600 hover:text-red-800">
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  return prevProps.product.id === nextProps.product.id &&
+         prevProps.product.stock === nextProps.product.stock;
 });
 
 // Componente de lista de produtos
@@ -1016,6 +1079,90 @@ const EstoqueFFApp = () => {
   const [reportsTab, setReportsTab] = useState('movements');
   const [movementsPeriodFilter, setMovementsPeriodFilter] = useState('all');
   const [productsFilter, setProductsFilter] = useState('all');
+  
+  // Função para limpar listeners do Firebase
+const cleanupFirebaseListeners = useCallback(() => {
+  if (window.firebaseDatabase) {
+    const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
+    window.firebaseOff(productsRef);
+    
+    const labelConfigsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_product_label_configs');
+    window.firebaseOff(labelConfigsRef);
+  }
+}, []);
+
+// Limpeza de URLs de objetos
+const revokeObjectURLs = useCallback((products) => {
+  products.forEach(product => {
+    if (product.imageUrl && product.imageUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(product.imageUrl);
+    }
+  });
+}, []);
+
+// Estado para paginação
+const [currentPage, setCurrentPage] = useState(1);
+const [itemsPerPage] = useState(50);
+
+// Função de debounce para otimizar buscas
+const debounce = (func, wait) => {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
+
+// Função de busca com debounce
+const debouncedSearch = useCallback(
+  debounce((searchTerm) => {
+    setFilteredProducts(
+      products.filter(product => 
+        product.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    );
+  }, 300),
+  [products]
+);
+
+// Função para limpar dados antigos do localStorage
+const cleanupLocalStorage = useCallback(() => {
+  const oneWeek = 7 * 24 * 60 * 60 * 1000;
+  const now = new Date().getTime();
+  
+  Object.keys(localStorage).forEach(key => {
+    if (key.startsWith('estoqueff_')) {
+      const item = JSON.parse(localStorage.getItem(key));
+      if (item.timestamp && (now - item.timestamp) > oneWeek) {
+        localStorage.removeItem(key);
+      }
+    }
+  });
+}, []);
+
+  // Efeito para limpeza de listeners do Firebase
+useEffect(() => {
+  return () => {
+    cleanupFirebaseListeners();
+  };
+}, [cleanupFirebaseListeners]);
+
+// Efeito para limpeza de URLs de objetos
+useEffect(() => {
+  return () => {
+    revokeObjectURLs(products);
+  };
+}, [products, revokeObjectURLs]);
+
+// Efeito para limpeza periódica do localStorage
+useEffect(() => {
+  const interval = setInterval(cleanupLocalStorage, 24 * 60 * 60 * 1000);
+  return () => clearInterval(interval);
+}, [cleanupLocalStorage]);
 
   useEffect(() => {
     const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
