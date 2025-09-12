@@ -1048,15 +1048,50 @@ const EstoqueFFApp = () => {
   };
 
   const handleDeleteProduct = useCallback((productId) => {
-    if (window.confirm('Tem certeza que deseja excluir este produto?')) {
-      setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
-      setProductLabelConfigs(prevConfigs => {
-        const newConfigs = { ...prevConfigs };
-        delete newConfigs[productId];
-        return newConfigs;
-      });
+  if (window.confirm('Tem certeza que deseja excluir este produto?')) {
+    try {
+      // Primeiro, filtra os produtos
+      const updatedProducts = products.filter(p => p.id !== productId);
+      
+      // Atualiza no Firebase
+      if (window.firebaseDatabase) {
+        const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
+        window.firebaseSet(productsRef, updatedProducts)
+          .then(() => {
+            // Atualiza o estado local após sucesso no Firebase
+            setProducts(updatedProducts);
+            
+            // Remove a configuração da etiqueta se existir
+            const labelConfigRef = window.firebaseRef(window.firebaseDatabase, `estoqueff_product_label_configs/${productId}`);
+            window.firebaseRemove(labelConfigRef);
+            
+            setProductLabelConfigs(prevConfigs => {
+              const newConfigs = { ...prevConfigs };
+              delete newConfigs[productId];
+              return newConfigs;
+            });
+            
+            setSuccess('✅ Produto excluído com sucesso!');
+            setTimeout(() => setSuccess(''), 3000);
+          })
+          .catch(error => {
+            console.error('Erro ao excluir produto:', error);
+            setErrors({ general: 'Erro ao excluir produto. Tente novamente.' });
+            setTimeout(() => setErrors({}), 3000);
+          });
+      } else {
+        // Fallback para estado local apenas
+        setProducts(updatedProducts);
+        setSuccess('✅ Produto excluído com sucesso!');
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (error) {
+      console.error('Erro ao excluir produto:', error);
+      setErrors({ general: 'Erro ao excluir produto. Tente novamente.' });
+      setTimeout(() => setErrors({}), 3000);
     }
-  }, [setProducts, setProductLabelConfigs]);
+  }
+}, [products, setProducts, setErrors, setSuccess]);
 
   const getProductLabelConfig = useCallback((productId) => {
     return productLabelConfigs[productId] || defaultLabelConfig;
