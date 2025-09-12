@@ -1006,8 +1006,7 @@ const EstoqueFFApp = () => {
   });
 
     // Novos estados
-  const [filteredProducts, setFilteredProducts] = useState([]);
-  const [cleanupTrigger, setCleanupTrigger] = useState(0);
+    const [cleanupTrigger, setCleanupTrigger] = useState(0);
   
    // useEffect para limpeza periódica
   useEffect(() => {
@@ -1108,6 +1107,15 @@ const EstoqueFFApp = () => {
   const [reportsTab, setReportsTab] = useState('movements');
   const [movementsPeriodFilter, setMovementsPeriodFilter] = useState('all');
   const [productsFilter, setProductsFilter] = useState('all');
+
+  const updateFilteredProducts = useCallback((searchTerm) => {
+  const filtered = products.filter(product => 
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.code.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  // Aqui usamos o resultado do useMemo ao invés de setState
+  filteredProducts = filtered;
+}, [products]);
   
   // Função para limpar listeners do Firebase
 const cleanupFirebaseListeners = useCallback(() => {
@@ -1149,7 +1157,7 @@ const debounce = (func, wait) => {
 // Função de busca com debounce
 const debouncedSearch = useCallback(
   debounce((searchTerm) => {
-    setFilteredProducts(
+    updateFilteredProducts(
       products.filter(product => 
         product.name.toLowerCase().includes(searchTerm.toLowerCase())
       )
