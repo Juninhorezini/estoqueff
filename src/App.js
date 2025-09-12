@@ -1,7 +1,7 @@
 // arquivo App(23).js original - controles e salvamento funcionam nas etiquetas
 // arquivo App(24).js usa o codigo como validador unico por produto
 
-import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { QrCode, Package, Users, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -41,63 +41,40 @@ const sanitizeConfig = (config) => {
 };
 
 // Hook Firebase usando window globals
-// Atualizar a função useFirebaseState
 function useFirebaseState(path, defaultValue = null) {
   const [data, setData] = useState(defaultValue);
   const [loading, setLoading] = useState(true);
-  const listenerRef = useRef(null);
 
   useEffect(() => {
     if (!window.firebaseDatabase) {
-      const timer = setTimeout(() => {
+      setTimeout(() => {
         if (window.firebaseDatabase) {
           setupFirebaseListener();
         }
       }, 1000);
-      return () => clearTimeout(timer);
+      return;
     }
     
     setupFirebaseListener();
     
     function setupFirebaseListener() {
-      // Limpar listener anterior se existir
-      if (listenerRef.current) {
-        listenerRef.current();
-      }
-      
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
-      // Limitar quantidade de dados
-      const query = window.firebaseQuery(
-        dbRef,
-        window.firebaseLimitToFirst(100)
-      );
       
-      listenerRef.current = window.firebaseOnValue(query, (snapshot) => {
-        const val = snapshot.val();
-        if (val) {
-          // Converter para array se necessário
-          const dataArray = Array.isArray(val) ? val : Object.values(val);
-          setData(dataArray);
-        } else {
-          setData(defaultValue);
-        }
+      const unsubscribe = window.firebaseOnValue(dbRef, (snapshot) => {
+        const value = snapshot.val();
+        setData(value !== null ? value : defaultValue);
         setLoading(false);
       });
+
+      return () => window.firebaseOff(dbRef, 'value', unsubscribe);
     }
-    
-    // Cleanup
-    return () => {
-      if (listenerRef.current) {
-        listenerRef.current();
-        listenerRef.current = null;
-      }
-    };
   }, [path, defaultValue]);
 
   const updateData = useCallback((newData) => {
     if (window.firebaseDatabase) {
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
       window.firebaseSet(dbRef, newData);
+      setData(newData);
     }
   }, [path]);
 
@@ -964,34 +941,6 @@ const EstoqueFFApp = () => {
       return null;
     }
   });
-
-    // Novos estados
-    const [cleanupTrigger, setCleanupTrigger] = useState(0);
-  
-   // useEffect para limpeza periódica
-  useEffect(() => {
-    const cleanup = () => {
-      cleanupFirebaseListeners();
-      // Limpar URLs de objetos
-      products.forEach(product => {
-        if (product.imageUrl && product.imageUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(product.imageUrl);
-        }
-      });
-    };
-
-    // Executar limpeza a cada 5 minutos
-    const interval = setInterval(() => {
-      cleanup();
-      setCleanupTrigger(prev => prev + 1);
-    }, 5 * 60 * 1000);
-
-    // Limpeza ao desmontar o componente
-    return () => {
-      clearInterval(interval);
-      cleanup();
-    };
-  }, [cleanupFirebaseListeners, products]);
   
   const [products, setProducts] = useFirebaseState('estoqueff_products', [
     { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
@@ -1067,74 +1016,6 @@ const EstoqueFFApp = () => {
   const [reportsTab, setReportsTab] = useState('movements');
   const [movementsPeriodFilter, setMovementsPeriodFilter] = useState('all');
   const [productsFilter, setProductsFilter] = useState('all');
-
-    // Função para limpar listeners do Firebase
-const cleanupFirebaseListeners = useCallback(() => {
-  if (window.firebaseDatabase) {
-    const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
-    window.firebaseOff(productsRef);
-    
-    const labelConfigsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_product_label_configs');
-    window.firebaseOff(labelConfigsRef);
-  }
-}, []);
-
-// Limpeza de URLs de objetos
-const revokeObjectURLs = useCallback((products) => {
-  products.forEach(product => {
-    if (product.imageUrl && product.imageUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(product.imageUrl);
-    }
-  });
-}, []);
-
-// Função de debounce para otimizar buscas
-const debounce = (func, wait) => {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
-};
-
-// Função para limpar dados antigos do localStorage
-const cleanupLocalStorage = useCallback(() => {
-  const oneWeek = 7 * 24 * 60 * 60 * 1000;
-  const now = new Date().getTime();
-  
-  Object.keys(localStorage).forEach(key => {
-    if (key.startsWith('estoqueff_')) {
-      const item = JSON.parse(localStorage.getItem(key));
-      if (item.timestamp && (now - item.timestamp) > oneWeek) {
-        localStorage.removeItem(key);
-      }
-    }
-  });
-}, []);
-
-  // Efeito para limpeza de listeners do Firebase
-useEffect(() => {
-  return () => {
-    cleanupFirebaseListeners();
-  };
-}, [cleanupFirebaseListeners]);
-
-// Efeito para limpeza de URLs de objetos
-useEffect(() => {
-  return () => {
-    revokeObjectURLs(products);
-  };
-}, [products, revokeObjectURLs]);
-
-// Efeito para limpeza periódica do localStorage
-useEffect(() => {
-  const interval = setInterval(cleanupLocalStorage, 24 * 60 * 60 * 1000);
-  return () => clearInterval(interval);
-}, [cleanupLocalStorage]);
 
   useEffect(() => {
     const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
@@ -2025,6 +1906,17 @@ useEffect(() => {
       }
     });
   }, [movements, movementsPeriodFilter]);
+
+  const filteredProducts = useMemo(() => {
+    switch (productsFilter) {
+      case 'low_stock':
+        return products.filter(p => p.stock <= p.minStock && p.stock > 0);
+      case 'no_stock':
+        return products.filter(p => p.stock <= 0);
+      default:
+        return products;
+    }
+  }, [products, productsFilter]);
 
   const topMovedProducts = useMemo(() => {
     const productStats = {};
