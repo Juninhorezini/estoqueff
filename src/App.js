@@ -1108,6 +1108,7 @@ const EstoqueFFApp = () => {
   const [manualSelectedProduct, setManualSelectedProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [labelSearchTerm, setLabelSearchTerm] = useState('');
+  const [filteredProducts, setFilteredProducts] = useState([]);
   const [newProduct, setNewProduct] = useState({
     name: '',
     brand: '',
