@@ -1,7 +1,7 @@
 // arquivo App(23).js original - controles e salvamento funcionam nas etiquetas
 // arquivo App(24).js usa o codigo como validador unico por produto
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { QrCode, Package, Users, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -1004,6 +1004,46 @@ const EstoqueFFApp = () => {
       return null;
     }
   });
+
+    // Novos estados
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [cleanupTrigger, setCleanupTrigger] = useState(0);
+  
+  // Função de limpeza de listeners do Firebase
+  const cleanupFirebaseListeners = useCallback(() => {
+    if (window.firebaseDatabase) {
+      const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
+      window.firebaseOff(productsRef);
+      
+      const labelConfigsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_product_label_configs');
+      window.firebaseOff(labelConfigsRef);
+    }
+  }, []);
+
+  // useEffect para limpeza periódica
+  useEffect(() => {
+    const cleanup = () => {
+      cleanupFirebaseListeners();
+      // Limpar URLs de objetos
+      products.forEach(product => {
+        if (product.imageUrl && product.imageUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(product.imageUrl);
+        }
+      });
+    };
+
+    // Executar limpeza a cada 5 minutos
+    const interval = setInterval(() => {
+      cleanup();
+      setCleanupTrigger(prev => prev + 1);
+    }, 5 * 60 * 1000);
+
+    // Limpeza ao desmontar o componente
+    return () => {
+      clearInterval(interval);
+      cleanup();
+    };
+  }, [cleanupFirebaseListeners, products]);
   
   const [products, setProducts] = useFirebaseState('estoqueff_products', [
     { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
