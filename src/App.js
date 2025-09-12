@@ -484,7 +484,18 @@ const ProductSearch = React.memo(({ onSearchChange, searchTerm }) => {
 
 // Componente de lista de produtos
 const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
- [products, searchTerm]);
+  const filteredProducts = useMemo(() => {
+    if (!searchTerm.trim()) return products;
+    
+    const term = searchTerm.toLowerCase().trim();
+    return products.filter(product => 
+      product.name.toLowerCase().includes(term) ||
+      product.id.toLowerCase().includes(term) ||
+      (product.brand && product.brand.toLowerCase().includes(term)) ||
+      product.category.toLowerCase().includes(term) ||
+      (product.code && product.code.toLowerCase().includes(term))
+    );
+  }, [products, searchTerm]);
 
   if (filteredProducts.length === 0 && searchTerm) {
     return (
@@ -1089,18 +1100,6 @@ const debounce = (func, wait) => {
     timeout = setTimeout(later, wait);
   };
 };
-
-// Função de busca com debounce
-const debouncedSearch = useCallback(
-  debounce((searchTerm) => {
-    updateFilteredProducts(
-      products.filter(product => 
-        product.name.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    );
-  }, 300),
-  [products]
-);
 
 // Função para limpar dados antigos do localStorage
 const cleanupLocalStorage = useCallback(() => {
@@ -2026,17 +2025,6 @@ useEffect(() => {
       }
     });
   }, [movements, movementsPeriodFilter]);
-
-  const filteredProducts = useMemo(() => {
-    switch (productsFilter) {
-      case 'low_stock':
-        return products.filter(p => p.stock <= p.minStock && p.stock > 0);
-      case 'no_stock':
-        return products.filter(p => p.stock <= 0);
-      default:
-        return products;
-    }
-  }, [products, productsFilter]);
 
   const topMovedProducts = useMemo(() => {
     const productStats = {};
