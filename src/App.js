@@ -1009,18 +1009,7 @@ const EstoqueFFApp = () => {
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [cleanupTrigger, setCleanupTrigger] = useState(0);
   
-  // Função de limpeza de listeners do Firebase
-  const cleanupFirebaseListeners = useCallback(() => {
-    if (window.firebaseDatabase) {
-      const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
-      window.firebaseOff(productsRef);
-      
-      const labelConfigsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_product_label_configs');
-      window.firebaseOff(labelConfigsRef);
-    }
-  }, []);
-
-  // useEffect para limpeza periódica
+   // useEffect para limpeza periódica
   useEffect(() => {
     const cleanup = () => {
       cleanupFirebaseListeners();
@@ -1108,7 +1097,6 @@ const EstoqueFFApp = () => {
   const [manualSelectedProduct, setManualSelectedProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [labelSearchTerm, setLabelSearchTerm] = useState('');
-  const [filteredProducts, setFilteredProducts] = useState([]);
   const [newProduct, setNewProduct] = useState({
     name: '',
     brand: '',
