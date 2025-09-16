@@ -46,36 +46,40 @@ function useFirebaseState(path, defaultValue = null) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!window.firebaseDatabase) {
-      setTimeout(() => {
-        if (window.firebaseDatabase) {
-          setupFirebaseListener();
-        }
-      }, 1000);
-      return;
-    }
-    
-    setupFirebaseListener();
-    
-    function setupFirebaseListener() {
-      const dbRef = window.firebaseRef(window.firebaseDatabase, path);
-      
-      const unsubscribe = window.firebaseOnValue(dbRef, (snapshot) => {
-        const value = snapshot.val();
-        setData(value !== null ? value : defaultValue);
-        setLoading(false);
-      });
+  let unsubscribe = null;
+  let timeoutId = null;
 
-      return () => window.firebaseOff(dbRef, 'value', unsubscribe);
-    }
+  if (!window.firebaseDatabase) {
+    timeoutId = setTimeout(() => {
+      if (window.firebaseDatabase) {
+        unsubscribe = setupFirebaseListener();
+      }
+    }, 1000);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (unsubscribe) unsubscribe();
+    };
+  }
+  
+  unsubscribe = setupFirebaseListener();
+  
+  function setupFirebaseListener() {
+    const dbRef = window.firebaseRef(window.firebaseDatabase, path);
+    
+    return window.firebaseOnValue(dbRef, (snapshot) => {
+      const value = snapshot.val();
+      setData(value !== null ? value : defaultValue);
+      setLoading(false);
+    });
+  }
 
-  // Cleanup para evitar vazamento de memória
+  // ✅ CLEANUP CORRETO - fora da função, dentro do useEffect
   return () => {
-    if () {
-      clearInterval();
+    if (unsubscribe) {
+      unsubscribe();
     }
   };
-  }, [path, defaultValue]);
+}, [path, defaultValue]);
 
   const updateData = useCallback((newData) => {
     if (window.firebaseDatabase) {
