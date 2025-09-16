@@ -2976,7 +2976,7 @@ const EstoqueFFApp = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredProducts.slice(0, 12).map(product => (
+                  {filteredProducts.slice(0, 200).map(product => (
                     <div key={product.id} className="border border-gray-200 rounded-lg p-4">
                       <div className="flex justify-between items-start mb-2">
                         <div>
