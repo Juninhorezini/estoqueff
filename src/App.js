@@ -68,6 +68,13 @@ function useFirebaseState(path, defaultValue = null) {
 
       return () => window.firebaseOff(dbRef, 'value', unsubscribe);
     }
+
+  // Cleanup para evitar vazamento de memória
+  return () => {
+    if () {
+      clearInterval();
+    }
+  };
   }, [path, defaultValue]);
 
   const updateData = useCallback((newData) => {
