@@ -79,7 +79,7 @@ function useFirebaseState(path, defaultValue = null) {
       unsubscribe();
     }
   };
-}, [path, defaultValue]);
+}, [path]);
 
   const updateData = useCallback((newData) => {
     if (window.firebaseDatabase) {
