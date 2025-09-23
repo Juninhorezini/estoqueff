@@ -79,7 +79,8 @@ function useFirebaseState(path, defaultValue = null) {
       unsubscribe();
     }
   };
-}, [path]);
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [path]); // ← Ignora warning do ESLint
 
   const updateData = useCallback((newData) => {
     if (window.firebaseDatabase) {
