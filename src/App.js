@@ -554,7 +554,7 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
             </div>
           </div>
           
-          product.stock <= product.minStock && (
+		  {product.stock <= product.minStock && (
             <div className="mt-2 bg-red-50 border border-red-200 rounded px-2 py-1">
               <span className="text-red-600 text-xs font-medium">⚠️ Estoque baixo</span>
             </div>
