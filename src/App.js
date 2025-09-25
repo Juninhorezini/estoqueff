@@ -3000,7 +3000,7 @@ const EstoqueFFApp = () => {
                               ? 'bg-orange-100 text-orange-800'
                               : 'bg-green-100 text-green-800'
                         }`}>
-                          product.stock <= 0 ? 'Sem estoque' : product.stock <= product.minStock ? 'Baixo' : 'Normal'}				
+                      {product.stock <= 0 ? 'Sem estoque' : product.stock <= product.minStock ? 'Baixo' : 'Normal'}				
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
