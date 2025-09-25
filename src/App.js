@@ -543,7 +543,7 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
             <div>
               <span className="text-gray-600">Estoque:</span>
               <span className={`ml-2 font-medium ${
-                formatNumber(product.stock) <= product.minStock ? 'text-red-600' : 'text-green-600'
+                product.stock <= product.minStock ? 'text-red-600' : 'text-green-600'
               }`}>
 		  {formatNumber(product.stock)}
               </span>
@@ -554,7 +554,7 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
             </div>
           </div>
           
-          {formatNumber(product.stock) <= formatNumber(product.minStock) && (
+          product.stock <= product.minStock && (
             <div className="mt-2 bg-red-50 border border-red-200 rounded px-2 py-1">
               <span className="text-red-600 text-xs font-medium">⚠️ Estoque baixo</span>
             </div>
