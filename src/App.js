@@ -2271,7 +2271,7 @@ const EstoqueFFApp = () => {
             </div>
           </div>
 
-          {{formatNumber(stats.lowStockProducts)} > 0 && (
+          {formatNumber(stats.lowStockProducts) > 0 && (
   <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
     <div className="flex items-center mb-2">
       <AlertTriangle className="text-orange-500 mr-2" size={20} />
