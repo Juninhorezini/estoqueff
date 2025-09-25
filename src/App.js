@@ -1963,7 +1963,7 @@ const EstoqueFFApp = () => {
         productName: product.name,
         totalMovements: productMovements.length,
         totalQuantity: productMovements.reduce((sum, m) => sum + m.quantity, 0),
-        currentStock: {formatNumber(product.stock)}
+        currentStock: formatNumber(product.stock)
       };
     });
     
