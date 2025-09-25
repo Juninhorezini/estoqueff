@@ -543,18 +543,18 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
             <div>
               <span className="text-gray-600">Estoque:</span>
               <span className={`ml-2 font-medium ${
-                formatNumber(product.stock) <= formatNumber(product.minStock) ? 'text-red-600' : 'text-green-600'
+                formatNumber(product.stock) <= product.minStock ? 'text-red-600' : 'text-green-600'
               }`}>
                 {formatNumber(product.stock)}
               </span>
             </div>
             <div>
               <span className="text-gray-600">Mín:</span>
-              <span className="ml-2 font-medium">{formatNumber(product.minStock)}</span>
+              <span className="ml-2 font-medium">product.minStock</span>
             </div>
           </div>
           
-          {formatNumber(product.stock) <= formatNumber(product.minStock) && (
+          {formatNumber(product.stock) <= product.minStock && (
             <div className="mt-2 bg-red-50 border border-red-200 rounded px-2 py-1">
               <span className="text-red-600 text-xs font-medium">⚠️ Estoque baixo</span>
             </div>
@@ -2485,7 +2485,7 @@ const EstoqueFFApp = () => {
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-600">Estoque:</p>
-                        <p className={`font-medium ${formatNumber(product.stock) <= formatNumber(product.minStock) ? 'text-red-600' : 'text-green-600'}`}>
+                        <p className={`font-medium ${formatNumber(product.stock) <= product.minStock ? 'text-red-600' : 'text-green-600'}`}>
                           {formatNumber(product.stock)} unid.
                         </p>
                       </div>
@@ -2996,11 +2996,11 @@ const EstoqueFFApp = () => {
                         <div className={`px-2 py-1 rounded text-xs font-medium ${
                           formatNumber(product.stock) <= 0 
                             ? 'bg-red-100 text-red-800' 
-                            : formatNumber(product.stock) <= formatNumber(product.minStock) 
+                            : formatNumber(product.stock) <= product.minStock
                               ? 'bg-orange-100 text-orange-800'
                               : 'bg-green-100 text-green-800'
                         }`}>
-                          {formatNumber(product.stock) <= 0 ? 'Sem estoque' : formatNumber(product.stock) <= formatNumber(product.minStock) ? 'Baixo' : 'Normal'}
+                          {formatNumber(product.stock) <= 0 ? 'Sem estoque' : formatNumber(product.stock) <= product.minStock ? 'Baixo' : 'Normal'}				
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
@@ -3010,7 +3010,7 @@ const EstoqueFFApp = () => {
                         </div>
                         <div>
                           <span className="text-gray-600">Mín:</span>
-                          <span className="ml-1 font-medium">{formatNumber(product.minStock)}</span>
+                          <span className="ml-1 font-medium">product.minStock</span>
                         </div>
                       </div>
                     </div>
