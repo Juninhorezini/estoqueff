@@ -545,7 +545,7 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
               <span className={`ml-2 font-medium ${
                 formatNumber(product.stock) <= product.minStock ? 'text-red-600' : 'text-green-600'
               }`}>
-                {formatNumber(product.stock)}
+                formatNumber(product.stock)
               </span>
             </div>
             <div>
