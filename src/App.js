@@ -2335,6 +2335,34 @@ const EstoqueFFApp = () => {
             </div>
           )}
 
+       {/* Últimas Movimentações - Movido do Dashboard */}
+		{!scannerActive && !scannedProduct && !showManualMovement && (
+			<div className="bg-white p-6 rounded-lg shadow-md flex flex-col gap-4 mt-8">
+				<h3 className="text-xl font-semibold text-gray-800">Últimas Movimentações</h3>
+				{movements.length === 0 ? (
+					<p className="text-gray-500 text-center py-4">Nenhuma movimentação registrada ainda.</p>
+				) : (
+					movements.slice(0, 5).map(movement => (
+						<div key={movement.id} className="flex justify-between items-center border-b pb-3 last:border-b-0 last:pb-0">
+							<div>
+								<p className="font-medium text-gray-800">{movement.product}</p>
+								<p className="text-sm text-gray-500">
+									{(() => {
+										const product = products.find(p => p.id === movement.productId);
+										return product?.brand ? `${product.brand} • ` : '';
+									})()}
+									{movement.user} • {movement.date}
+								</p>
+							</div>
+							<div className={`font-bold text-lg ${movement.type === 'entrada' ? 'text-green-500' : 'text-red-500'}`}>
+								{movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
+							</div>
+						</div>
+					))
+				)}
+			</div>
+		)}
+
           {success && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
               <p className="text-green-800 text-sm">{success}</p>
