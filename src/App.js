@@ -2485,7 +2485,7 @@ const EstoqueFFApp = () => {
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-600">Estoque:</p>
-                        <p className={`font-medium ${{formatNumber(product.stock)} <= product.minStock ? 'text-red-600' : 'text-green-600'}`}>
+                        <p className={`font-medium ${formatNumber(product.stock) <= product.minStock ? 'text-red-600' : 'text-green-600'}`}>
                           {formatNumber(product.stock)} unid.
                         </p>
                       </div>
