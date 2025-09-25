@@ -1,5 +1,4 @@
-// arquivo App(23).js original - controles e salvamento funcionam nas etiquetas
-// arquivo App(24).js usa o codigo como validador unico por produto
+// arquivo App(33).js lista das ultimas movimentações na aba Movimentação
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { QrCode, Package, Users, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload } from 'lucide-react';
@@ -8,6 +7,12 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import jsQR from 'jsqr';
 import './App.css';
+
+// Função para formatar números com separador de milhares
+const formatNumber = (number) => {
+  if (number === null || number === undefined) return '0';
+  return new Intl.NumberFormat('pt-BR').format(number);
+};
 
 // Função auxiliar para sanitizar objetos antes de salvar no Firebase
 const sanitizeConfig = (config) => {
@@ -2229,7 +2234,7 @@ const EstoqueFFApp = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-blue-600 text-sm font-medium">Total Produtos</p>
-                  <p className="text-2xl font-bold text-blue-800">{stats.totalProducts}</p>
+                  <p className="text-2xl font-bold text-blue-800">{formatNumber(stats.totalProducts)}</p>
                 </div>
                 <Package className="text-blue-500" size={32} />
               </div>
@@ -2239,7 +2244,7 @@ const EstoqueFFApp = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-red-600 text-sm font-medium">Estoque Baixo</p>
-                  <p className="text-2xl font-bold text-red-800">{stats.lowStockProducts}</p>
+                  <p className="text-2xl font-bold text-red-800">{formatNumber(stats.lowStockProducts)}</p>
                 </div>
                 <AlertTriangle className="text-red-500" size={32} />
               </div>
@@ -2355,7 +2360,7 @@ const EstoqueFFApp = () => {
 								</p>
 							</div>
 							<div className={`font-bold text-lg ${movement.type === 'entrada' ? 'text-green-500' : 'text-red-500'}`}>
-								{movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
+								{movement.type === 'entrada' ? '+' : '-'}{formatNumber(movement.quantity)}
 							</div>
 						</div>
 					))
@@ -2481,7 +2486,7 @@ const EstoqueFFApp = () => {
                       <div className="text-right">
                         <p className="text-sm text-gray-600">Estoque:</p>
                         <p className={`font-medium ${product.stock <= product.minStock ? 'text-red-600' : 'text-green-600'}`}>
-                          {product.stock} unid.
+                          {formatNumber(product.stock)} unid.
                         </p>
                       </div>
                     </div>
@@ -2521,7 +2526,7 @@ const EstoqueFFApp = () => {
                   <div>
                     <span className="text-gray-600">Estoque:</span>
                     <span className="ml-2 font-medium">
-                      {(scannedProduct || manualSelectedProduct).stock} unidades
+                      {formatNumber((scannedProduct || manualSelectedProduct).stock)} unidades
                     </span>
                   </div>
                   <div>
@@ -2932,7 +2937,7 @@ const EstoqueFFApp = () => {
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
+                        {movement.type === 'entrada' ? '+' : '-'}{formatNumber(movement.quantity)}
                       </div>
                     </div>
                   ))}
@@ -3125,7 +3130,7 @@ const EstoqueFFApp = () => {
             <div className="mt-6 pt-6 border-t border-gray-200">
               <h4 className="text-md font-medium text-gray-800 mb-2">Informações do Sistema</h4>
               <div className="text-sm text-gray-600 space-y-1">
-                <p>📦 Total de produtos: {stats.totalProducts}</p>
+                <p>📦 Total de produtos: {formatNumber(stats.totalProducts)}</p>
                 <p>📊 Total de movimentações: {movements.length}</p>
                 <p>🔄 Versão: EstoqueFF v2.0.0</p>
                 <p>✅ Status: Sistema funcionando com todas as funcionalidades</p>
