@@ -2342,7 +2342,7 @@ const EstoqueFFApp = () => {
 				{movements.length === 0 ? (
 					<p className="text-gray-500 text-center py-4">Nenhuma movimentação registrada ainda.</p>
 				) : (
-					movements.slice(0, 5).map(movement => (
+					movements.slice(0, 20).map(movement => (
 						<div key={movement.id} className="flex justify-between items-center border-b pb-3 last:border-b-0 last:pb-0">
 							<div>
 								<p className="font-medium text-gray-800">{movement.product}</p>
