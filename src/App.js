@@ -550,7 +550,7 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
             </div>
             <div>
               <span className="text-gray-600">Mín:</span>
-              <span className="ml-2 font-medium">product.minStock</span>
+              <span className="ml-2 font-medium">{product.minStock}</span>
             </div>
           </div>
           
@@ -3010,7 +3010,7 @@ const EstoqueFFApp = () => {
                         </div>
                         <div>
                           <span className="text-gray-600">Mín:</span>
-                          <span className="ml-1 font-medium">product.minStock</span>
+                          <span className="ml-1 font-medium">{product.minStock}</span>
                         </div>
                       </div>
                     </div>
