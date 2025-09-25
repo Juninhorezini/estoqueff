@@ -543,9 +543,9 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
             <div>
               <span className="text-gray-600">Estoque:</span>
               <span className={`ml-2 font-medium ${
-                product.stock <= product.minStock ? 'text-red-600' : 'text-green-600'
+                {formatNumber(product.stock)} <= product.minStock ? 'text-red-600' : 'text-green-600'
               }`}>
-                {product.stock}
+                {formatNumber(product.stock)}
               </span>
             </div>
             <div>
@@ -554,7 +554,7 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
             </div>
           </div>
           
-          {product.stock <= product.minStock && (
+          {{formatNumber(product.stock)} <= product.minStock && (
             <div className="mt-2 bg-red-50 border border-red-200 rounded px-2 py-1">
               <span className="text-red-600 text-xs font-medium">⚠️ Estoque baixo</span>
             </div>
@@ -1963,7 +1963,7 @@ const EstoqueFFApp = () => {
         productName: product.name,
         totalMovements: productMovements.length,
         totalQuantity: productMovements.reduce((sum, m) => sum + m.quantity, 0),
-        currentStock: product.stock
+        currentStock: {formatNumber(product.stock)}
       };
     });
     
@@ -2254,7 +2254,7 @@ const EstoqueFFApp = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-green-600 text-sm font-medium">Total Itens</p>
-                  <p className="text-2xl font-bold text-green-800">{stats.totalItems}</p>
+                  <p className="text-2xl font-bold text-green-800">{formatNumber(stats.totalItems)}</p>
                 </div>
                 <TrendingUp className="text-green-500" size={32} />
               </div>
@@ -2271,7 +2271,7 @@ const EstoqueFFApp = () => {
             </div>
           </div>
 
-          {stats.lowStockProducts > 0 && (
+          {{formatNumber(stats.lowStockProducts)} > 0 && (
   <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
     <div className="flex items-center mb-2">
       <AlertTriangle className="text-orange-500 mr-2" size={20} />
@@ -2285,7 +2285,7 @@ const EstoqueFFApp = () => {
             <span className="text-orange-600 text-sm ml-1">• {product.brand}</span>
           )}
         </div>
-        <span className="text-orange-600 font-medium">{product.stock} unidades</span>
+        <span className="text-orange-600 font-medium">{formatNumber(product.stock)} unidades</span>
       </div>
     ))}
   </div>
@@ -2485,7 +2485,7 @@ const EstoqueFFApp = () => {
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-600">Estoque:</p>
-                        <p className={`font-medium ${product.stock <= product.minStock ? 'text-red-600' : 'text-green-600'}`}>
+                        <p className={`font-medium ${{formatNumber(product.stock)} <= product.minStock ? 'text-red-600' : 'text-green-600'}`}>
                           {formatNumber(product.stock)} unid.
                         </p>
                       </div>
@@ -2709,7 +2709,7 @@ const EstoqueFFApp = () => {
                   <option value="">Selecione um produto</option>
                   {products.map(product => (
                     <option key={product.id} value={product.id}>
-                      {product.name} - {product.code || 'S/Código'} (Estoque: {product.stock})
+                      {product.name} - {product.code || 'S/Código'} (Estoque: {formatNumber(product.stock)})
                     </option>
                   ))}
                 </select>
@@ -2793,7 +2793,7 @@ const EstoqueFFApp = () => {
                 <div key={product.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                   <div className="flex-1">
                 <p className="font-medium text-gray-800">{product.name}</p>
-                <p className="text-sm text-gray-600">{product.brand ? `${product.brand} • ` : ''}Código: {product.code || 'N/A'} • Estoque: {product.stock}
+                <p className="text-sm text-gray-600">{product.brand ? `${product.brand} • ` : ''}Código: {product.code || 'N/A'} • Estoque: {formatNumber(product.stock)}
                    </p>
                   </div>
                   
