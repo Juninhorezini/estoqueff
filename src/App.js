@@ -2285,32 +2285,8 @@ const EstoqueFFApp = () => {
     ))}
   </div>
 )}
-
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="font-semibold text-gray-800 mb-3">Últimas Movimentações</h3>
-            {movements.slice(0, 5).map(movement => (
-              <div key={movement.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-          <div>
-                      <p className="font-medium text-gray-800">{movement.product}</p>
-                      <p className="text-xs text-gray-500">
-                        {(() => {
-                          const product = products.find(p => p.id === movement.productId);
-                          return product?.brand ? `${product.brand} • ` : '';
-                        })()} 
-                        {movement.user} • {movement.date}
-                      </p>
-                    </div>
-
-                <div className={`px-2 py-1 rounded text-xs font-medium ${
-                  movement.type === 'entrada' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
-                  {movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+</div>
+)}
 
       {/* Scanner Screen - Sistema Completo */}
       {currentScreen === 'scanner' && (
