@@ -2994,19 +2994,19 @@ const EstoqueFFApp = () => {
                           <p className="text-sm text-gray-600">{product.brand || 'Sem marca'} • {product.category}</p>
                         </div>
                         <div className={`px-2 py-1 rounded text-xs font-medium ${
-                          product.stock <= 0 
+                          formatNumber(product.stock) <= 0 
                             ? 'bg-red-100 text-red-800' 
                             : formatNumber(product.stock) <= formatNumber(product.minStock) 
                               ? 'bg-orange-100 text-orange-800'
                               : 'bg-green-100 text-green-800'
                         }`}>
-                          {product.stock <= 0 ? 'Sem estoque' : product.stock <= formatNumber(product.minStock) ? 'Baixo' : 'Normal'}
+                          {formatNumber(product.stock) <= 0 ? 'Sem estoque' : formatNumber(product.stock) <= formatNumber(product.minStock) ? 'Baixo' : 'Normal'}
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
                           <span className="text-gray-600">Atual:</span>
-                          <span className="ml-1 font-medium">{product.stock}</span>
+                          <span className="ml-1 font-medium">{formatNumber(product.stock)}</span>
                         </div>
                         <div>
                           <span className="text-gray-600">Mín:</span>
