@@ -1,4 +1,4 @@
-// arquivo App(33).js lista das ultimas movimentaÃ§Ãµeses na aba MovimentaÃ§Ã£o
+// arquivo App(33).js lista das ultimas movimentaÃ§Ãµeseses na aba MovimentaÃ§Ã£o
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { QrCode, Package, Users, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload } from 'lucide-react';
@@ -78,14 +78,14 @@ function useFirebaseState(path, defaultValue = null) {
     });
   }
 
-  // Ã¢Å“â€¦ CLEANUP CORRETO - fora da funÃ§Ã£o, dentro do useEffect
+  // Ã¢Ã…â€œÃ¢â‚¬Â¦ CLEANUP CORRETO - fora da funÃ§Ã£o, dentro do useEffect
   return () => {
     if (unsubscribe) {
       unsubscribe();
     }
   };
 // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [path]); // Ã¢â€ Â Ignora warning do ESLint
+}, [path]); // Ã¢Ã¢â‚¬ Ã‚Â Ignora warning do ESLint
 
   const updateData = useCallback((newData) => {
     if (window.firebaseDatabase) {
@@ -379,7 +379,7 @@ const UserManagement = ({ users, setUsers, currentUser }) => {
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Email</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">FunÃ§Ã£o</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">AÃ§Ãµeses</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">AÃ§Ãµeseses</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -511,7 +511,7 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
             <div>
               <h3 className="font-semibold text-gray-800">{product.name}</h3>
               <p className="text-sm text-gray-600">
-                {product.brand && `${product.brand} Ã¢â‚¬Â¢ `}{product.category}
+                {product.brand && `${product.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ `}{product.category}
               </p>
               <p className="text-xs text-gray-500">
                 CÃ³digo: {product.code || 'NÃ£o informado'}
@@ -556,7 +556,7 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
           
 		  {product.stock <= product.minStock && (
             <div className="mt-2 bg-red-50 border border-red-200 rounded px-2 py-1">
-              <span className="text-red-600 text-xs font-medium">Ã¢Å¡ Ã¯Â¸Â Estoque baixo</span>
+              <span className="text-red-600 text-xs font-medium">Ã¢Ã…Â¡ ÃƒÂ¯Ã‚Â¸Ã‚Â Estoque baixo</span>
             </div>
           )}
         </div>
@@ -698,7 +698,7 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
             spellCheck="false"
           />
           <p className="text-xs text-gray-500 mt-1">
-            Ã°Å¸â€™Â¡ Deixe vazio para usar "Qtd: [estoque atual]" automaticamente
+            ÃƒÂ°Ã…Â¸Ã¢â‚¬â„¢Ã‚Â¡ Deixe vazio para usar "Qtd: [estoque atual]" automaticamente
           </p>
         </div>
       )}
@@ -823,7 +823,7 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
       
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
         <p className="text-blue-800 text-xs">
-          Ã°Å¸â€™Â¾ Esta configuraÃ§Ã£o serÃ¡ salva apenas para "{product?.name}" e serÃ¡ lembrada nas prÃ³ximas geraÃ§Ãµeses de etiquetas deste produto.
+          ÃƒÂ°Ã…Â¸Ã¢â‚¬â„¢Ã‚Â¾ Esta configuraÃ§Ã£o serÃ¡ salva apenas para "{product?.name}" e serÃ¡ lembrada nas prÃ³ximas geraÃ§Ãµeseses de etiquetas deste produto.
         </p>
       </div>
     </div>
@@ -1096,7 +1096,7 @@ const EstoqueFFApp = () => {
                 .catch(error => console.error('Erro ao remover config:', error));
             }
             
-            setSuccess('Ã¢Å“â€¦ Produto excluÃ­do com sucesso!');
+            setSuccess('Ã¢Ã…â€œÃ¢â‚¬Â¦ Produto excluÃ­do com sucesso!');
             setTimeout(() => setSuccess(''), 3000);
           })
           .catch(error => {
@@ -1112,7 +1112,7 @@ const EstoqueFFApp = () => {
           delete newConfigs[productId];
           return newConfigs;
         });
-        setSuccess('Ã¢Å“â€¦ Produto excluÃ­do com sucesso!');
+        setSuccess('Ã¢Ã…â€œÃ¢â‚¬Â¦ Produto excluÃ­do com sucesso!');
         setTimeout(() => setSuccess(''), 3000);
       }
     } catch (error) {
@@ -1163,7 +1163,7 @@ const EstoqueFFApp = () => {
   );
 
   const startRealQRScanner = async () => {
-    console.log('Ã°Å¸Å½Â¬ Iniciando scanner de cÃ¢mera...');
+    console.log('ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¬ Iniciando scanner de cÃ¢mera...');
     setLoading(true);
     setScannerActive(true);
     setErrors({});
@@ -1187,12 +1187,12 @@ const EstoqueFFApp = () => {
       }
 
       setCameraStream(stream);
-      console.log('Ã°Å¸â€œÂ¡ CameraStream definido:', !!stream);
-      console.log('Ã°Å¸â€œÂ¡ Tracks do stream:', stream.getTracks().length);
+      console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¡ CameraStream definido:', !!stream);
+      console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¡ Tracks do stream:', stream.getTracks().length);
 
       let attempts = 0;
       while (!videoRef.current && attempts < 20) {
-        console.log(`Ã¢ÂÂ³ Aguardando videoRef... tentativa ${attempts + 1}`);
+        console.log(`Ã¢Ã‚ÂÃ‚Â³ Aguardando videoRef... tentativa ${attempts + 1}`);
         await new Promise(resolve => setTimeout(resolve, 100));
         attempts++;
       }
@@ -1201,24 +1201,24 @@ const EstoqueFFApp = () => {
         throw new Error('Elemento de vÃ­deo nÃ£o foi renderizado apÃ³s 2 segundos');
       }
 
-      console.log('Ã¢Å“â€¦ VideoRef disponÃ­vel:', !!videoRef.current);
+      console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ VideoRef disponÃ­vel:', !!videoRef.current);
 
       videoRef.current.srcObject = stream;
       videoRef.current.muted = true;
       videoRef.current.playsInline = true;
 
       const scanQRCode = () => {
-        console.log('Ã°Å¸â€â€ž scanQRCode executando...');
-        console.log('Ã°Å¸â€œÂ¹ videoRef.current:', !!videoRef.current);
-        console.log('Ã°Å¸â€œÂ¡ cameraStream:', !!cameraStream);
-        console.log('Ã°Å¸â€œÅ  readyState:', videoRef.current?.readyState);
+        console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬Å¾ scanQRCode executando...');
+        console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¹ videoRef.current:', !!videoRef.current);
+        console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¡ cameraStream:', !!cameraStream);
+        console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã…  readyState:', videoRef.current?.readyState);
         
         if (!videoRef.current || videoRef.current.readyState < 2) {
-          console.log('Ã¢Å¡ Ã¯Â¸Â CondiÃ§Ãµeses nÃ£o atendidas para scan');
+          console.log('Ã¢Ã…Â¡ ÃƒÂ¯Ã‚Â¸Ã‚Â CondiÃ§Ãµeseses nÃ£o atendidas para scan');
           return;
         }
         
-        console.log('Ã¢Å“â€¦ Tentando scan...');
+        console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ Tentando scan...');
         
         try {
           const canvas = document.createElement('canvas');
@@ -1226,10 +1226,10 @@ const EstoqueFFApp = () => {
           canvas.width = videoRef.current.videoWidth || 640;
           canvas.height = videoRef.current.videoHeight || 480;
           
-          console.log('Ã°Å¸â€œÂ Canvas:', canvas.width, 'x', canvas.height);
+          console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â Canvas:', canvas.width, 'x', canvas.height);
           
           if (canvas.width === 0 || canvas.height === 0) {
-            console.log('Ã¢Å¡ Ã¯Â¸Â DimensÃµes invÃ¡lidas');
+            console.log('Ã¢Ã…Â¡ ÃƒÂ¯Ã‚Â¸Ã‚Â DimensÃ§Ãµes invÃ¡lidas');
             return;
           }
           
@@ -1238,19 +1238,19 @@ const EstoqueFFApp = () => {
           const code = jsQR(imageData.data, imageData.width, imageData.height);
           
           if (code) {
-            console.log('Ã°Å¸Å½Â¯ QR CODE ENCONTRADO!:', code.data);
+            console.log('ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ QR CODE ENCONTRADO!:', code.data);
 
             let productData;
             try {
               productData = JSON.parse(code.data);
-              console.log('Ã°Å¸â€œâ€¹ Dados parseados:', productData);
+              console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã¢â‚¬Â¹ Dados parseados:', productData);
               
               if (productData.code) {
-                console.log('Ã°Å¸â€Â Procurando produto com code:', productData.code);
+                console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â Procurando produto com code:', productData.code);
                 const product = findProductByQR(productData.code);
                 
                 if (product) {
-                  console.log('Ã¢Å“â€¦ Produto encontrado via code:', product.name);
+                  console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ Produto encontrado via code:', product.name);
                   clearInterval(scanIntervalRef.current);
                   setScannedProduct(product);
                   setSelectedProduct(product.id);
@@ -1267,52 +1267,52 @@ const EstoqueFFApp = () => {
                 }
               }
             } catch (parseError) {
-              console.log('Ã¢Å¡ Ã¯Â¸Â QR nÃ£o Ã© JSON vÃ¡lido, tentando busca direta');
+              console.log('Ã¢Ã…Â¡ ÃƒÂ¯Ã‚Â¸Ã‚Â QR nÃ£o Ã© JSON vÃ¡lido, tentando busca direta');
               productData = code.data;
             }
 
-            console.log('Ã°Å¸â€Â Tentando busca direta com:', productData);
+            console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â Tentando busca direta com:', productData);
             const product = findProductByQR(productData);
 
             if (product) {
-              console.log('Ã¢Å“â€¦ Produto encontrado via busca direta:', product.name);
+              console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ Produto encontrado via busca direta:', product.name);
               clearInterval(scanIntervalRef.current);
               setScannedProduct(product);
             } else {
-              console.log('Ã¢ÂÅ’ Produto nÃ£o encontrado');
+              console.log('Ã¢Ã‚ÂÃ…â€™ Produto nÃ£o encontrado');
               setErrors({ camera: 'Produto nÃ£o encontrado' });
             }
             stopCamera();
           } else {
-            if (Math.random() < 0.02) console.log('Ã°Å¸â€Â Procurando QR Code...');
+            if (Math.random() < 0.02) console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â Procurando QR Code...');
           }
         } catch (scanError) {
-          console.error('Ã¢ÂÅ’ Erro no scan:', scanError);
+          console.error('Ã¢Ã‚ÂÃ…â€™ Erro no scan:', scanError);
         }
       };
 
       const initScanner = async () => {
         try {
-          console.log('Ã¢â€“Â¶Ã¯Â¸Â Iniciando initScanner...');
+          console.log('Ã¢Ã¢â‚¬â€œÃ‚Â¶ÃƒÂ¯Ã‚Â¸Ã‚Â Iniciando initScanner...');
           await videoRef.current.play();
-          console.log('Ã¢Å“â€¦ Play executado');
+          console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ Play executado');
           
           let attempts = 0;
           while (videoRef.current.readyState < 2 && attempts < 50) {
-            console.log(`Ã¢ÂÂ³ Aguardando readyState >= 2, atual: ${videoRef.current.readyState}, tentativa: ${attempts + 1}`);
+            console.log(`Ã¢Ã‚ÂÃ‚Â³ Aguardando readyState >= 2, atual: ${videoRef.current.readyState}, tentativa: ${attempts + 1}`);
             await new Promise(resolve => setTimeout(resolve, 100));
             attempts++;
           }
           
           if (videoRef.current.readyState >= 2) {
-            console.log('Ã°Å¸Å¡â‚¬ INICIANDO INTERVAL DE ESCANEAMENTO!');
+            console.log('ÃƒÂ°Ã…Â¸Ã…Â¡Ã¢â€šÂ¬ INICIANDO INTERVAL DE ESCANEAMENTO!');
             scanIntervalRef.current = setInterval(scanQRCode, 100);
-            console.log('Ã¢Å“â€¦ Interval criado:', !!scanIntervalRef.current);
+            console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ Interval criado:', !!scanIntervalRef.current);
           } else {
             throw new Error('VÃ­deo nÃ£o ficou pronto apÃ³s 5 segundos');
           }
         } catch (playError) {
-          console.error('Ã¢ÂÅ’ Erro no initScanner:', playError);
+          console.error('Ã¢Ã‚ÂÃ…â€™ Erro no initScanner:', playError);
           throw new Error(`Erro no play: ${playError.message}`);
         }
       };
@@ -1335,7 +1335,7 @@ const EstoqueFFApp = () => {
       }
 
     } catch (error) {
-      console.error('Ã¢ÂÅ’ Erro geral:', error);
+      console.error('Ã¢Ã‚ÂÃ…â€™ Erro geral:', error);
       let errorMessage = 'Erro ao acessar cÃ¢mera';
       if (error.name === 'NotAllowedError') {
         errorMessage = 'PermissÃ£o da cÃ¢mera negada';
@@ -1352,14 +1352,14 @@ const EstoqueFFApp = () => {
   };
 
   const stopCamera = () => {
-    console.log('Ã°Å¸â€ºâ€˜ stopCamera CHAMADA!');
+    console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂºÃ¢â‚¬Ëœ stopCamera CHAMADA!');
     if (scanIntervalRef.current) {
-      console.log('Ã¢ÂÂ¹Ã¯Â¸Â Parando interval principal');
+      console.log('Ã¢Ã‚ÂÃ‚Â¹ÃƒÂ¯Ã‚Â¸Ã‚Â Parando interval principal');
       clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = null;
     }
     
-    console.log('Ã°Å¸Â§Â¹ Limpando intervals Ã³rfÃ£os...');
+    console.log('ÃƒÂ°Ã…Â¸Ã‚Â§Ã‚Â¹ Limpando intervals Ã³rfÃ£os...');
     for (let i = 1; i < 999999; i++) {
       clearInterval(i);
     }
@@ -1367,22 +1367,22 @@ const EstoqueFFApp = () => {
     let streamToStop = cameraStream;
     
     if (!streamToStop && videoRef.current && videoRef.current.srcObject) {
-      console.log('Ã°Å¸â€â€ž Usando stream do videoRef');
+      console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬Å¾ Usando stream do videoRef');
       streamToStop = videoRef.current.srcObject;
     }
     
     if (streamToStop) {
-      console.log('Ã°Å¸â€œÂ¹ Parando tracks da cÃ¢mera');
+      console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¹ Parando tracks da cÃ¢mera');
       streamToStop.getTracks().forEach(track => {
-        console.log('Ã°Å¸â€Å¡ Parando track:', track.kind, 'estado:', track.readyState);
+        console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ…Â¡ Parando track:', track.kind, 'estado:', track.readyState);
         track.stop();
       });
     } else {
-      console.log('Ã¢Å¡ Ã¯Â¸Â Nenhum stream encontrado para parar');
+      console.log('Ã¢Ã…Â¡ ÃƒÂ¯Ã‚Â¸Ã‚Â Nenhum stream encontrado para parar');
     }
     
     if (videoRef.current) {
-      console.log('Ã°Å¸Â§Â¹ Limpando srcObject');
+      console.log('ÃƒÂ°Ã…Â¸Ã‚Â§Ã‚Â¹ Limpando srcObject');
       videoRef.current.srcObject = null;
       videoRef.current.load();
     }
@@ -1391,22 +1391,22 @@ const EstoqueFFApp = () => {
     setScannerActive(false);
     setLoading(false);
     
-    console.log('Ã¢Å“â€¦ stopCamera finalizada');
+    console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ stopCamera finalizada');
   };
   
   const findProductByQR = (qrCode) => {
-    console.log('Ã°Å¸â€Â findProductByQR recebeu:', qrCode);
-    console.log('Ã°Å¸â€œÂ¦ Produtos disponÃ­veis:', products.length);
+    console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â findProductByQR recebeu:', qrCode);
+    console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¦ Produtos disponÃ­veis:', products.length);
     
     let searchTerm = qrCode;
     try {
       const parsed = JSON.parse(qrCode);
       if (parsed.code) {
         searchTerm = parsed.code;
-        console.log('Ã°Å¸â€œâ€¹ ExtraÃ­do code do JSON:', searchTerm);
+        console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã¢â‚¬Â¹ ExtraÃ­do code do JSON:', searchTerm);
       }
     } catch (e) {
-      console.log('Ã°Å¸â€œÂ NÃ£o Ã© JSON, usando valor direto');
+      console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â NÃ£o Ã© JSON, usando valor direto');
     }  
     return products.find(p => p.qrCode === qrCode || p.code === searchTerm);
   };
@@ -1492,7 +1492,7 @@ const EstoqueFFApp = () => {
       setProducts([...products, product]);
       setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
       setShowAddProduct(false);
-      setSuccess(`Ã¢Å“â€¦ Produto "${product.name}" adicionado com sucesso!`);
+      setSuccess(`Ã¢Ã…â€œÃ¢â‚¬Â¦ Produto "${product.name}" adicionado com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
       
     } catch (error) {
@@ -1529,7 +1529,7 @@ const EstoqueFFApp = () => {
           : p
       ));
       setEditingProduct(null);
-      setSuccess(`Ã¢Å“â€¦ Produto atualizado com sucesso!`);
+      setSuccess(`Ã¢Ã…â€œÃ¢â‚¬Â¦ Produto atualizado com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
       
     } catch (error) {
@@ -1599,7 +1599,7 @@ const EstoqueFFApp = () => {
       setManualSearchTerm('');
       setMovementQuantity(0);
       setMovementType('');
-      setSuccess(`Ã¢Å“â€¦ ${movementType === 'entrada' ? 'Entrada' : 'SaÃ­da'} de ${quantity} unidades registrada com sucesso!`);
+      setSuccess(`Ã¢Ã…â€œÃ¢â‚¬Â¦ ${movementType === 'entrada' ? 'Entrada' : 'SaÃ­da'} de ${quantity} unidades registrada com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
       
     } catch (error) {
@@ -1762,7 +1762,7 @@ const EstoqueFFApp = () => {
         worksheetData.push([
           m.id,
           m.product,
-          m.type === 'entrada' ? 'ENTRADA' : 'SAÃƒÂDA',
+          m.type === 'entrada' ? 'ENTRADA' : 'SAÃƒÆ’Ã‚ÂDA',
           m.quantity,
           m.user,
           m.date
@@ -1773,7 +1773,7 @@ const EstoqueFFApp = () => {
     }
     
     worksheetData.push([]);
-    worksheetData.push(['=== ESTATÃƒÂSTICAS ===']);
+    worksheetData.push(['=== ESTATÃƒÆ’Ã‚ÂSTICAS ===']);
     worksheetData.push([`Total de registros: ${data.length}`]);
     
     if (type === 'products') {
@@ -1790,8 +1790,8 @@ const EstoqueFFApp = () => {
       const totalEntradas = data.filter(m => m.type === 'entrada').reduce((sum, m) => sum + m.quantity, 0);
       const totalSaidas = data.filter(m => m.type === 'saÃ­da').reduce((sum, m) => sum + m.quantity, 0);
       
-      worksheetData.push([`Total de entradas: ${entradas} movimentaÃ§Ãµeses (${totalEntradas} itens)`]);
-      worksheetData.push([`Total de saÃ­das: ${saidas} movimentaÃ§Ãµeses (${totalSaidas} itens)`]);
+      worksheetData.push([`Total de entradas: ${entradas} movimentaÃ§Ãµeseses (${totalEntradas} itens)`]);
+      worksheetData.push([`Total de saÃ­das: ${saidas} movimentaÃ§Ãµeseses (${totalSaidas} itens)`]);
     }
     
     const wb = XLSX.utils.book_new();
@@ -1813,7 +1813,7 @@ const EstoqueFFApp = () => {
     if (ws['A3']) ws['A3'].s = { font: { italic: true } };
     if (ws['A4']) ws['A4'].s = { font: { italic: true } };
     
-    XLSX.utils.book_append_sheet(wb, ws, type === 'products' ? 'Produtos' : 'MovimentaÃ§Ãµeses');
+    XLSX.utils.book_append_sheet(wb, ws, type === 'products' ? 'Produtos' : 'MovimentaÃ§Ãµeseses');
     XLSX.writeFile(wb, filename);
   };
 
@@ -1826,15 +1826,15 @@ const EstoqueFFApp = () => {
       title = 'RelatÃ³rio de Produtos - EstoqueFF';
     } else if (type === 'movements') {
       data = filteredMovements.length > 0 ? filteredMovements : movements;
-      title = 'RelatÃ³rio de MovimentaÃ§Ãµeses - EstoqueFF';
+      title = 'RelatÃ³rio de MovimentaÃ§Ãµeseses - EstoqueFF';
     }
     
     if (format === 'pdf') {
       exportToPDF(type, data, title);
-      setSuccess(`Ã¢Å“â€¦ RelatÃ³rio PDF gerado com sucesso! (${data.length} registros)`);
+      setSuccess(`Ã¢Ã…â€œÃ¢â‚¬Â¦ RelatÃ³rio PDF gerado com sucesso! (${data.length} registros)`);
     } else {
       exportToExcel(type, data, title);
-      setSuccess(`Ã¢Å“â€¦ RelatÃ³rio Excel gerado com sucesso! (${data.length} registros)`);
+      setSuccess(`Ã¢Ã…â€œÃ¢â‚¬Â¦ RelatÃ³rio Excel gerado com sucesso! (${data.length} registros)`);
     }
     
     setTimeout(() => setSuccess(''), 3000);
@@ -1875,7 +1875,7 @@ const EstoqueFFApp = () => {
           if (backup.productLabelConfigs) {
             setProductLabelConfigs(backup.productLabelConfigs);
           }
-          setSuccess('Ã¢Å“â€¦ Backup restaurado com sucesso!');
+          setSuccess('Ã¢Ã…â€œÃ¢â‚¬Â¦ Backup restaurado com sucesso!');
           setTimeout(() => setSuccess(''), 3000);
         } else {
           setErrors({ general: 'Arquivo de backup invÃ¡lido!' });
@@ -2144,7 +2144,7 @@ const EstoqueFFApp = () => {
       link.href = canvas.toDataURL('image/png', 1.0);
       link.click();
       
-      setSuccess(`Ã¢Å“â€¦ Etiquetas PNG geradas com sucesso!`);
+      setSuccess(`Ã¢Ã…â€œÃ¢â‚¬Â¦ Etiquetas PNG geradas com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
       
     } catch (error) {
@@ -2155,7 +2155,7 @@ const EstoqueFFApp = () => {
     setLoading(false);
   };
 
-  // Ã°Å¸â€Â VERIFICAR SE USUÃƒÂRIO ESTÃƒÂ LOGADO
+  // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â VERIFICAR SE USUÃƒÆ’Ã‚ÂRIO ESTÃƒÆ’Ã‚Â LOGADO
   if (!currentUser) {
     return <LoginScreen onLogin={setCurrentUser} users={users} />;
   }
@@ -2265,7 +2265,7 @@ const EstoqueFFApp = () => {
             <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-purple-600 text-sm font-medium">MovimentaÃ§Ãµeses Hoje</p>
+                  <p className="text-purple-600 text-sm font-medium">MovimentaÃ§Ãµeseses Hoje</p>
                   <p className="text-2xl font-bold text-purple-800">{stats.todayMovements}</p>
                 </div>
                 <BarChart3 className="text-purple-500" size={32} />
@@ -2284,7 +2284,7 @@ const EstoqueFFApp = () => {
         <div>
           <span className="text-orange-700">{product.name}</span>
           {product.brand && (
-            <span className="text-orange-600 text-sm ml-1">Ã¢â‚¬Â¢ {product.brand}</span>
+            <span className="text-orange-600 text-sm ml-1">Ã¢Ã¢â€šÂ¬Ã‚Â¢ {product.brand}</span>
           )}
         </div>
         <span className="text-orange-600 font-medium">{formatNumber(product.stock)} unidades</span>
@@ -2311,7 +2311,7 @@ const EstoqueFFApp = () => {
             )}
           </div>
 
-          {/* BotÃµes de opÃ§Ã£o */}
+          {/* BotÃ§Ãµes de opÃ§Ã£o */}
           {!scannerActive && !scannedProduct && !showManualMovement && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <button
@@ -2342,10 +2342,10 @@ const EstoqueFFApp = () => {
             </div>
           )}
 
-       {/* ÃƒÅ¡ltimas MovimentaÃ§Ãµeses - Movido do Dashboard */}
+       {/* ÃƒÆ’Ã…Â¡ltimas MovimentaÃ§Ãµeseses - Movido do Dashboard */}
 		{!scannerActive && !scannedProduct && !showManualMovement && (
 			<div className="bg-white p-6 rounded-lg shadow-md flex flex-col gap-4 mt-8">
-				<h3 className="text-xl font-semibold text-gray-800">ÃƒÅ¡ltimas MovimentaÃ§Ãµeses</h3>
+				<h3 className="text-xl font-semibold text-gray-800">ÃƒÆ’Ã…Â¡ltimas MovimentaÃ§Ãµeseses</h3>
 				{movements.length === 0 ? (
 					<p className="text-gray-500 text-center py-4">Nenhuma movimentaÃ§Ã£o registrada ainda.</p>
 				) : (
@@ -2356,9 +2356,9 @@ const EstoqueFFApp = () => {
 								<p className="text-sm text-gray-500">
 									{(() => {
 										const product = products.find(p => p.id === movement.productId);
-										return product?.brand ? `${product.brand} Ã¢â‚¬Â¢ ` : '';
+										return product?.brand ? `${product.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ ` : '';
 									})()}
-									{movement.user} Ã¢â‚¬Â¢ {movement.date}
+									{movement.user} Ã¢Ã¢â€šÂ¬Ã‚Â¢ {movement.date}
 								</p>
 							</div>
 							<div className={`font-bold text-lg ${movement.type === 'entrada' ? 'text-green-500' : 'text-red-500'}`}>
@@ -2420,7 +2420,7 @@ const EstoqueFFApp = () => {
                 )}
                 
                 <div className="bg-black bg-opacity-75 p-4">
-                  <p className="text-white text-sm">Ã°Å¸â€Â Posicione o QR Code dentro da Ã¡rea marcada</p>
+                  <p className="text-white text-sm">ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â Posicione o QR Code dentro da Ã¡rea marcada</p>
                   <p className="text-green-400 text-xs mt-1">Aguarde a detecÃ§Ã£o automÃ¡tica...</p>
                 </div>
               </div>
@@ -2480,7 +2480,7 @@ const EstoqueFFApp = () => {
                       <div className="flex-1">
                         <h4 className="font-semibold text-gray-800">{product.name}</h4>
                         <p className="text-sm text-gray-600">
-                          {product.brand && `${product.brand} Ã¢â‚¬Â¢ `}
+                          {product.brand && `${product.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ `}
                           CÃ³digo: {product.code || 'N/A'}
                         </p>
                         <p className="text-sm text-gray-600">Categoria: {product.category}</p>
@@ -2581,7 +2581,7 @@ const EstoqueFFApp = () => {
                           : 'bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:bg-green-50'
                       }`}
                     >
-                      Ã¢â€ â€”Ã¯Â¸Â Entrada
+                      Ã¢Ã¢â‚¬ Ã¢â‚¬â€ÃƒÂ¯Ã‚Â¸Ã‚Â Entrada
                     </button>
                     <button
                       onClick={() => {
@@ -2594,7 +2594,7 @@ const EstoqueFFApp = () => {
                           : 'bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:bg-red-50'
                       }`}
                     >
-                      Ã¢â€ â„¢Ã¯Â¸Â SaÃ­da
+                      Ã¢Ã¢â‚¬ Ã¢â€žÂ¢ÃƒÂ¯Ã‚Â¸Ã‚Â SaÃ­da
                     </button>
                   </div>
                 </div>
@@ -2712,7 +2712,7 @@ const EstoqueFFApp = () => {
                     onClick={() => {
                       setScannedProduct(null); setMovementQuantity(''); setVolumes(''); setUnitsPerVolume('');
                       setManualSelectedProduct(null);
-                      setShowManualMovement(false);
+                      setShowManualMovement(false); setMovementQuantity(''); setVolumes(''); setUnitsPerVolume('');
                       setManualSearchTerm('');
                       setMovementType('');
                       setErrors({});
@@ -2881,7 +2881,7 @@ const EstoqueFFApp = () => {
                 <div key={product.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                   <div className="flex-1">
                 <p className="font-medium text-gray-800">{product.name}</p>
-                <p className="text-sm text-gray-600">{product.brand ? `${product.brand} Ã¢â‚¬Â¢ ` : ''}CÃ³digo: {product.code || 'N/A'} Ã¢â‚¬Â¢ Estoque: {formatNumber(product.stock)}
+                <p className="text-sm text-gray-600">{product.brand ? `${product.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ ` : ''}CÃ³digo: {product.code || 'N/A'} Ã¢Ã¢â€šÂ¬Ã‚Â¢ Estoque: {formatNumber(product.stock)}
                    </p>
                   </div>
                   
@@ -2894,7 +2894,7 @@ const EstoqueFFApp = () => {
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >
-                      {selectedProduct === product.id ? 'Ã¢Å“â€œ Selecionado' : 'Selecionar'}
+                      {selectedProduct === product.id ? 'Ã¢Ã…â€œÃ¢â‚¬Å“ Selecionado' : 'Selecionar'}
                     </button>
                     
                     <button 
@@ -2948,7 +2948,7 @@ const EstoqueFFApp = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              MovimentaÃ§Ãµeses
+              MovimentaÃ§Ãµeseses
             </button>
             <button
               onClick={() => setReportsTab('products')}
@@ -2972,12 +2972,12 @@ const EstoqueFFApp = () => {
             </button>
           </div>
 
-          {/* RelatÃ³rio de MovimentaÃ§Ãµeses */}
+          {/* RelatÃ³rio de MovimentaÃ§Ãµeseses */}
           {reportsTab === 'movements' && (
             <div className="space-y-6">
               <div className="bg-white rounded-lg border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-gray-800">RelatÃ³rio de MovimentaÃ§Ãµeses</h3>
+                  <h3 className="font-semibold text-gray-800">RelatÃ³rio de MovimentaÃ§Ãµeseses</h3>
                   <div className="flex items-center gap-3">
                     <select
                       value={movementsPeriodFilter}
@@ -2985,8 +2985,8 @@ const EstoqueFFApp = () => {
                       className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
                     >
                       <option value="all">Todas</option>
-                      <option value="7days">ÃƒÅ¡ltimos 7 dias</option>
-                      <option value="30days">ÃƒÅ¡ltimos 30 dias</option>
+                      <option value="7days">ÃƒÆ’Ã…Â¡ltimos 7 dias</option>
+                      <option value="30days">ÃƒÆ’Ã…Â¡ltimos 30 dias</option>
                     </select>
                     
                     <button
@@ -3015,9 +3015,9 @@ const EstoqueFFApp = () => {
                       <p className="text-sm text-gray-600">
                         {(() => {
                           const product = products.find(p => p.id === movement.productId);
-                          return product?.brand ? `${product.brand} Ã¢â‚¬Â¢ ` : '';
+                          return product?.brand ? `${product.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ ` : '';
                         })()}
-                        {movement.user} Ã¢â‚¬Â¢ {movement.date}
+                        {movement.user} Ã¢Ã¢â€šÂ¬Ã‚Â¢ {movement.date}
                       </p>
                     </div>
                       <div className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -3032,7 +3032,7 @@ const EstoqueFFApp = () => {
                 </div>
 
                 <p className="text-xs text-gray-500 mt-4 text-center">
-                  Mostrando {Math.min(10, filteredMovements.length)} de {filteredMovements.length} movimentaÃ§Ãµeses
+                  Mostrando {Math.min(10, filteredMovements.length)} de {filteredMovements.length} movimentaÃ§Ãµeseses
                 </p>
               </div>
             </div>
@@ -3079,7 +3079,7 @@ const EstoqueFFApp = () => {
                       <div className="flex justify-between items-start mb-2">
                         <div>
                           <h4 className="font-semibold text-gray-800">{product.name}</h4>
-                          <p className="text-sm text-gray-600">{product.brand || 'Sem marca'} Ã¢â‚¬Â¢ {product.category}</p>
+                          <p className="text-sm text-gray-600">{product.brand || 'Sem marca'} Ã¢Ã¢â€šÂ¬Ã‚Â¢ {product.category}</p>
                         </div>
                         <div className={`px-2 py-1 rounded text-xs font-medium ${
                           product.stock <= 0 
@@ -3127,14 +3127,14 @@ const EstoqueFFApp = () => {
                         <p className="text-xs text-gray-500">
                         {(() => {
                          const prod = products.find(p => p.id === product.productId);
-                         return prod?.brand ? `${prod.brand} Ã¢â‚¬Â¢ ` : '';
+                         return prod?.brand ? `${prod.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ ` : '';
                          })()}Estoque atual: {product.currentStock}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-blue-600">{product.totalMovements}</p>
-                        <p className="text-xs text-gray-500">movimentaÃ§Ãµeses</p>
+                        <p className="text-xs text-gray-500">movimentaÃ§Ãµeseses</p>
                       </div>
                     </div>
                   ))}
@@ -3151,13 +3151,13 @@ const EstoqueFFApp = () => {
                               <p className="text-xs text-gray-500">
                               {(() => {
                                const prod = products.find(p => p.id === product.productId);
-                               return prod?.brand ? `${prod.brand} Ã¢â‚¬Â¢ ` : '';
+                               return prod?.brand ? `${prod.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ ` : '';
                               })()}Estoque atual: {product.currentStock}
                              </p>
                             </div>
                       <div className="text-right">
                         <p className="font-bold text-red-600">{product.totalMovements}</p>
-                        <p className="text-xs text-gray-500">movimentaÃ§Ãµeses</p>
+                        <p className="text-xs text-gray-500">movimentaÃ§Ãµeseses</p>
                       </div>
                     </div>
                   ))}
@@ -3172,7 +3172,7 @@ const EstoqueFFApp = () => {
       {currentScreen === 'settings' && (
         <div className="p-4 pb-20 md:ml-64 md:pb-4">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">ConfiguraÃ§Ãµeses</h1>
+            <h1 className="text-2xl font-bold text-gray-800">ConfiguraÃ§Ãµeseses</h1>
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -3216,23 +3216,23 @@ const EstoqueFFApp = () => {
             </div>
 
             <div className="mt-6 pt-6 border-t border-gray-200">
-              <h4 className="text-md font-medium text-gray-800 mb-2">InformaÃ§Ãµeses do Sistema</h4>
+              <h4 className="text-md font-medium text-gray-800 mb-2">InformaÃ§Ãµeseses do Sistema</h4>
               <div className="text-sm text-gray-600 space-y-1">
-                <p>Ã°Å¸â€œÂ¦ Total de produtos: {formatNumber(stats.totalProducts)}</p>
-                <p>Ã°Å¸â€œÅ  Total de movimentaÃ§Ãµeses: {movements.length}</p>
-                <p>Ã°Å¸â€â€ž VersÃ£o: EstoqueFF v2.0.0</p>
-                <p>Ã¢Å“â€¦ Status: Sistema funcionando com todas as funcionalidades</p>
+                <p>ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¦ Total de produtos: {formatNumber(stats.totalProducts)}</p>
+                <p>ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã…  Total de movimentaÃ§Ãµeseses: {movements.length}</p>
+                <p>ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬Å¾ VersÃ£o: EstoqueFF v2.0.0</p>
+                <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ Status: Sistema funcionando com todas as funcionalidades</p>
               </div>
               
               <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <h5 className="font-medium text-green-800 mb-2">Ã°Å¸Å½â€° Funcionalidades Ativas:</h5>
+                <h5 className="font-medium text-green-800 mb-2">ÃƒÂ°Ã…Â¸Ã…Â½Ã¢â‚¬Â° Funcionalidades Ativas:</h5>
                 <div className="text-sm text-green-700 space-y-1">
-                  <p>Ã¢Å“â€¦ Scanner QR Code com cÃ¢mera real</p>
-                  <p>Ã¢Å“â€¦ Sistema completo de movimentaÃ§Ãµeses</p>
-                  <p>Ã¢Å“â€¦ Gerador de etiquetas personalizadas</p>
-                  <p>Ã¢Å“â€¦ RelatÃ³rios avanÃ§ados (PDF/Excel)</p>
-                  <p>Ã¢Å“â€¦ Backup e restauraÃ§Ã£o de dados</p>
-                  <p>Ã¢Å“â€¦ AnÃ¡lise de produtos e estatÃ­sticas</p>
+                  <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ Scanner QR Code com cÃ¢mera real</p>
+                  <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ Sistema completo de movimentaÃ§Ãµeseses</p>
+                  <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ Gerador de etiquetas personalizadas</p>
+                  <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ RelatÃ³rios avanÃ§ados (PDF/Excel)</p>
+                  <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ Backup e restauraÃ§Ã£o de dados</p>
+                  <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ AnÃ¡lise de produtos e estatÃ­sticas</p>
                 </div>
               </div>
             </div>
@@ -3563,7 +3563,7 @@ const EstoqueFFApp = () => {
                   ) : (
                     <>
                       <Save size={16} />
-                      Salvar AlteraÃ§Ãµeses
+                      Salvar AlteraÃ§Ãµeseses
                     </>
                   )}
                 </button>
