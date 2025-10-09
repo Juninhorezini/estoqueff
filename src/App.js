@@ -1,4 +1,4 @@
-// arquivo App(33).js lista das ultimas movimentaÃ§Ãµeseses na aba MovimentaÃ§Ã£o
+// arquivo App(33).js lista das ultimas movimentações na aba Movimentação
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { QrCode, Package, Users, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload } from 'lucide-react';
@@ -8,13 +8,13 @@ import * as XLSX from 'xlsx';
 import jsQR from 'jsqr';
 import './App.css';
 
-// FunÃ§Ã£o para formatar nÃºmeros com separador de milhares
+// Função para formatar números com separador de milhares
 const formatNumber = (number) => {
   if (number === null || number === undefined) return '0';
   return new Intl.NumberFormat('pt-BR').format(number);
 };
 
-// FunÃ§Ã£o auxiliar para sanitizar objetos antes de salvar no Firebase
+// Função auxiliar para sanitizar objetos antes de salvar no Firebase
 const sanitizeConfig = (config) => {
   if (!config) return null;
   const clean = {};
@@ -78,14 +78,14 @@ function useFirebaseState(path, defaultValue = null) {
     });
   }
 
-  // Ã¢Ã…â€œÃ¢â‚¬Â¦ CLEANUP CORRETO - fora da funÃ§Ã£o, dentro do useEffect
+  // ✅ CLEANUP CORRETO - fora da função, dentro do useEffect
   return () => {
     if (unsubscribe) {
       unsubscribe();
     }
   };
 // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [path]); // Ã¢Ã¢â‚¬ Ã‚Â Ignora warning do ESLint
+}, [path]); // ← Ignora warning do ESLint
 
   const updateData = useCallback((newData) => {
     if (window.firebaseDatabase) {
@@ -120,7 +120,7 @@ const LoginScreen = ({ onLogin, users }) => {
       onLogin(user);
       localStorage.setItem('currentUser', JSON.stringify(user));
     } else {
-      setError('UsuÃ¡rio ou senha incorretos');
+      setError('Usuário ou senha incorretos');
     }
     
     setLoading(false);
@@ -137,13 +137,13 @@ const LoginScreen = ({ onLogin, users }) => {
 
         <form onSubmit={handleLogin}>
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">UsuÃ¡rio</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Usuário</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Digite seu usuÃ¡rio"
+              placeholder="Digite seu usuário"
               required
             />
           </div>
@@ -183,7 +183,7 @@ const LoginScreen = ({ onLogin, users }) => {
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-600">
-          <p>UsuÃ¡rios de teste:</p>
+          <p>Usuários de teste:</p>
           <p><strong>admin</strong> / senha: 123</p>
           <p><strong>operador</strong> / senha: 123</p>
         </div>
@@ -192,7 +192,7 @@ const LoginScreen = ({ onLogin, users }) => {
   );
 };
 
-// Componente de GestÃ£o de UsuÃ¡rios
+// Componente de Gestão de Usuários
 const UserManagement = ({ users, setUsers, currentUser }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -254,7 +254,7 @@ const UserManagement = ({ users, setUsers, currentUser }) => {
   };
 
   const handleDelete = (userId) => {
-    if (window.confirm('Tem certeza que deseja excluir este usuÃ¡rio?')) {
+    if (window.confirm('Tem certeza que deseja excluir este usuário?')) {
       setUsers(users.filter(user => user.id !== userId));
     }
   };
@@ -262,20 +262,20 @@ const UserManagement = ({ users, setUsers, currentUser }) => {
   return (
     <div className="p-4 pb-20 md:ml-24 md:pb-4">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">GestÃ£o de UsuÃ¡rios</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Gestão de Usuários</h2>
         <button
           onClick={() => setShowForm(true)}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center"
         >
           <Plus size={20} className="mr-2" />
-          Novo UsuÃ¡rio
+          Novo Usuário
         </button>
       </div>
 
       {showForm && (
         <div className="bg-white p-6 rounded-lg shadow-md mb-6">
           <h3 className="text-lg font-semibold mb-4">
-            {editingUser ? 'Editar UsuÃ¡rio' : 'Novo UsuÃ¡rio'}
+            {editingUser ? 'Editar Usuário' : 'Novo Usuário'}
           </h3>
           
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -291,7 +291,7 @@ const UserManagement = ({ users, setUsers, currentUser }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nome de UsuÃ¡rio</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nome de Usuário</label>
               <input
                 type="text"
                 value={formData.username}
@@ -324,7 +324,7 @@ const UserManagement = ({ users, setUsers, currentUser }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">FunÃ§Ã£o</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Função</label>
               <select
                 value={formData.role}
                 onChange={(e) => setFormData({...formData, role: e.target.value})}
@@ -346,7 +346,7 @@ const UserManagement = ({ users, setUsers, currentUser }) => {
                 className="mr-2"
               />
               <label htmlFor="active" className="text-sm font-medium text-gray-700">
-                UsuÃ¡rio Ativo
+                Usuário Ativo
               </label>
             </div>
 
@@ -375,11 +375,11 @@ const UserManagement = ({ users, setUsers, currentUser }) => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Nome</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">UsuÃ¡rio</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Usuário</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Email</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">FunÃ§Ã£o</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Função</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">AÃ§Ãµeseses</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -453,7 +453,7 @@ const ProductSearch = React.memo(({ onSearchChange, searchTerm }) => {
       <input
         type="text"
         inputMode="text"
-        placeholder="Pesquisar produtos por nome, cÃ³digo, marca ou categoria..."
+        placeholder="Pesquisar produtos por nome, código, marca ou categoria..."
         value={searchTerm}
         onChange={handleChange}
         className="w-full pl-10 pr-12 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -497,7 +497,7 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
         <Search size={48} className="mx-auto text-gray-300 mb-4" />
         <h3 className="text-lg font-medium text-gray-600 mb-2">Nenhum produto encontrado</h3>
         <p className="text-gray-500">
-          Tente pesquisar com outras palavras-chave ou verifique se o produto estÃ¡ cadastrado.
+          Tente pesquisar com outras palavras-chave ou verifique se o produto está cadastrado.
         </p>
       </div>
     );
@@ -511,10 +511,10 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
             <div>
               <h3 className="font-semibold text-gray-800">{product.name}</h3>
               <p className="text-sm text-gray-600">
-                {product.brand && `${product.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ `}{product.category}
+                {product.brand && `${product.brand} • `}{product.category}
               </p>
               <p className="text-xs text-gray-500">
-                CÃ³digo: {product.code || 'NÃ£o informado'}
+                Código: {product.code || 'Não informado'}
               </p>
             </div>
             <div className="flex gap-2">
@@ -549,14 +549,14 @@ const ProductList = React.memo(({ products, searchTerm, onEdit, onDelete }) => {
               </span>
             </div>
             <div>
-              <span className="text-gray-600">MÃ­n:</span>
+              <span className="text-gray-600">Mín:</span>
               <span className="ml-2 font-medium">{formatNumber(product.minStock)}</span>
             </div>
           </div>
           
 		  {product.stock <= product.minStock && (
             <div className="mt-2 bg-red-50 border border-red-200 rounded px-2 py-1">
-              <span className="text-red-600 text-xs font-medium">Ã¢Ã…Â¡ ÃƒÂ¯Ã‚Â¸Ã‚Â Estoque baixo</span>
+              <span className="text-red-600 text-xs font-medium">⚠️ Estoque baixo</span>
             </div>
           )}
         </div>
@@ -595,7 +595,7 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
       onClose();
     } catch (error) {
       console.error('Error saving config:', error);
-      alert('Erro ao salvar configuraÃ§Ã£o. Verifique o console.');
+      alert('Erro ao salvar configuração. Verifique o console.');
     }
   };
 
@@ -611,7 +611,7 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
           />
         </div>
         <p className="text-xs text-gray-500 mt-2 text-center">
-          * ConfiguraÃ§Ã£o salva individualmente para "{product?.name}"
+          * Configuração salva individualmente para "{product?.name}"
         </p>
       </div>
       
@@ -629,7 +629,7 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
           </label>
           
           <label className="flex items-center justify-between">
-            <span className="text-sm">CÃ³digo do produto</span>
+            <span className="text-sm">Código do produto</span>
             <input
               type="checkbox"
               checked={localConfig.showCode}
@@ -692,13 +692,13 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
             onChange={(e) => handleConfigChange('customQuantity', e.target.value)}
             className="w-full px-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             style={{ fontSize: '16px' }}
-            placeholder={`Ex: Lote 2025-001 (padrÃ£o: Qtd: ${product?.stock || 0})`}
+            placeholder={`Ex: Lote 2025-001 (padrão: Qtd: ${product?.stock || 0})`}
             autoComplete="off"
             autoCorrect="off"
             spellCheck="false"
           />
           <p className="text-xs text-gray-500 mt-1">
-            ÃƒÂ°Ã…Â¸Ã¢â‚¬â„¢Ã‚Â¡ Deixe vazio para usar "Qtd: [estoque atual]" automaticamente
+            💡 Deixe vazio para usar "Qtd: [estoque atual]" automaticamente
           </p>
         </div>
       )}
@@ -817,13 +817,13 @@ const LabelEditor = React.memo(({ productId, product, currentConfig, onConfigUpd
           className="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
         >
           <Save size={16} />
-          Salvar ConfiguraÃ§Ã£o
+          Salvar Configuração
         </button>
       </div>
       
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
         <p className="text-blue-800 text-xs">
-          ÃƒÂ°Ã…Â¸Ã¢â‚¬â„¢Ã‚Â¾ Esta configuraÃ§Ã£o serÃ¡ salva apenas para "{product?.name}" e serÃ¡ lembrada nas prÃ³ximas geraÃ§Ãµeseses de etiquetas deste produto.
+          💾 Esta configuração será salva apenas para "{product?.name}" e será lembrada nas próximas gerações de etiquetas deste produto.
         </p>
       </div>
     </div>
@@ -927,7 +927,7 @@ const LabelPreview = React.memo(({ product, labelTemplate, companySettings }) =>
   );
 });
 
-// ConfiguraÃ§Ã£o padrÃ£o para etiquetas
+// Configuração padrão para etiquetas
 const defaultLabelConfig = {
   showBrand: true,
   showCode: false, 
@@ -960,16 +960,16 @@ const EstoqueFFApp = () => {
   });
   
   const [products, setProducts] = useFirebaseState('estoqueff_products', [
-    { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'EletrÃ´nicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
-    { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'AcessÃ³rios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
-    { id: 'P003', name: 'Teclado MecÃ¢nico', brand: 'Razer', category: 'AcessÃ³rios', code: 'KB-RZR-003', stock: 8, minStock: 5, qrCode: 'QR003', createdAt: '2025-01-01' },
-    { id: 'P004', name: 'Monitor 24"', brand: 'Samsung', category: 'EletrÃ´nicos', code: 'MN-SAM-004', stock: 12, minStock: 3, qrCode: 'QR004', createdAt: '2025-01-01' }
+    { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
+    { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'Acessórios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
+    { id: 'P003', name: 'Teclado Mecânico', brand: 'Razer', category: 'Acessórios', code: 'KB-RZR-003', stock: 8, minStock: 5, qrCode: 'QR003', createdAt: '2025-01-01' },
+    { id: 'P004', name: 'Monitor 24"', brand: 'Samsung', category: 'Eletrônicos', code: 'MN-SAM-004', stock: 12, minStock: 3, qrCode: 'QR004', createdAt: '2025-01-01' }
   ]);
   
   const [movements, setMovements] = useFirebaseState('estoqueff_movements', [
-    { id: '1', product: 'Notebook Dell', type: 'saÃ­da', quantity: 2, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 14:30' },
+    { id: '1', product: 'Notebook Dell', type: 'saída', quantity: 2, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 14:30' },
     { id: '2', product: 'Mouse Logitech', type: 'entrada', quantity: 5, user: 'Operador Sistema', userId: 'user2', userName: 'Operador Sistema', userRole: 'operator', date: '2025-08-04 12:15' },
-    { id: '3', product: 'Monitor 24"', type: 'saÃ­da', quantity: 1, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 10:45' }
+    { id: '3', product: 'Monitor 24"', type: 'saída', quantity: 1, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 10:45' }
   ]);
 
   const [companySettings, setCompanySettings] = useFirebaseState('estoqueff_settings', {
@@ -1079,7 +1079,7 @@ const EstoqueFFApp = () => {
             // Atualiza estado local
             setProducts(updatedProducts);
             
-            // Remove configuraÃ§Ã£o de etiqueta se existir
+            // Remove configuração de etiqueta se existir
             if (productLabelConfigs[productId]) {
               const labelConfigRef = window.firebaseRef(
                 window.firebaseDatabase, 
@@ -1096,7 +1096,7 @@ const EstoqueFFApp = () => {
                 .catch(error => console.error('Erro ao remover config:', error));
             }
             
-            setSuccess('Ã¢Ã…â€œÃ¢â‚¬Â¦ Produto excluÃ­do com sucesso!');
+            setSuccess('✅ Produto excluído com sucesso!');
             setTimeout(() => setSuccess(''), 3000);
           })
           .catch(error => {
@@ -1112,7 +1112,7 @@ const EstoqueFFApp = () => {
           delete newConfigs[productId];
           return newConfigs;
         });
-        setSuccess('Ã¢Ã…â€œÃ¢â‚¬Â¦ Produto excluÃ­do com sucesso!');
+        setSuccess('✅ Produto excluído com sucesso!');
         setTimeout(() => setSuccess(''), 3000);
       }
     } catch (error) {
@@ -1163,7 +1163,7 @@ const EstoqueFFApp = () => {
   );
 
   const startRealQRScanner = async () => {
-    console.log('ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¬ Iniciando scanner de cÃ¢mera...');
+    console.log('🎬 Iniciando scanner de câmera...');
     setLoading(true);
     setScannerActive(true);
     setErrors({});
@@ -1187,38 +1187,38 @@ const EstoqueFFApp = () => {
       }
 
       setCameraStream(stream);
-      console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¡ CameraStream definido:', !!stream);
-      console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¡ Tracks do stream:', stream.getTracks().length);
+      console.log('📡 CameraStream definido:', !!stream);
+      console.log('📡 Tracks do stream:', stream.getTracks().length);
 
       let attempts = 0;
       while (!videoRef.current && attempts < 20) {
-        console.log(`Ã¢Ã‚ÂÃ‚Â³ Aguardando videoRef... tentativa ${attempts + 1}`);
+        console.log(`⏳ Aguardando videoRef... tentativa ${attempts + 1}`);
         await new Promise(resolve => setTimeout(resolve, 100));
         attempts++;
       }
 
       if (!videoRef.current) {
-        throw new Error('Elemento de vÃ­deo nÃ£o foi renderizado apÃ³s 2 segundos');
+        throw new Error('Elemento de vídeo não foi renderizado após 2 segundos');
       }
 
-      console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ VideoRef disponÃ­vel:', !!videoRef.current);
+      console.log('✅ VideoRef disponível:', !!videoRef.current);
 
       videoRef.current.srcObject = stream;
       videoRef.current.muted = true;
       videoRef.current.playsInline = true;
 
       const scanQRCode = () => {
-        console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬Å¾ scanQRCode executando...');
-        console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¹ videoRef.current:', !!videoRef.current);
-        console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¡ cameraStream:', !!cameraStream);
-        console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã…  readyState:', videoRef.current?.readyState);
+        console.log('🔄 scanQRCode executando...');
+        console.log('📹 videoRef.current:', !!videoRef.current);
+        console.log('📡 cameraStream:', !!cameraStream);
+        console.log('📊 readyState:', videoRef.current?.readyState);
         
         if (!videoRef.current || videoRef.current.readyState < 2) {
-          console.log('Ã¢Ã…Â¡ ÃƒÂ¯Ã‚Â¸Ã‚Â CondiÃ§Ãµeseses nÃ£o atendidas para scan');
+          console.log('⚠️ Condições não atendidas para scan');
           return;
         }
         
-        console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ Tentando scan...');
+        console.log('✅ Tentando scan...');
         
         try {
           const canvas = document.createElement('canvas');
@@ -1226,10 +1226,10 @@ const EstoqueFFApp = () => {
           canvas.width = videoRef.current.videoWidth || 640;
           canvas.height = videoRef.current.videoHeight || 480;
           
-          console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â Canvas:', canvas.width, 'x', canvas.height);
+          console.log('📐 Canvas:', canvas.width, 'x', canvas.height);
           
           if (canvas.width === 0 || canvas.height === 0) {
-            console.log('Ã¢Ã…Â¡ ÃƒÂ¯Ã‚Â¸Ã‚Â DimensÃ§Ãµes invÃ¡lidas');
+            console.log('⚠️ Dimensões inválidas');
             return;
           }
           
@@ -1238,19 +1238,19 @@ const EstoqueFFApp = () => {
           const code = jsQR(imageData.data, imageData.width, imageData.height);
           
           if (code) {
-            console.log('ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ QR CODE ENCONTRADO!:', code.data);
+            console.log('🎯 QR CODE ENCONTRADO!:', code.data);
 
             let productData;
             try {
               productData = JSON.parse(code.data);
-              console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã¢â‚¬Â¹ Dados parseados:', productData);
+              console.log('📋 Dados parseados:', productData);
               
               if (productData.code) {
-                console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â Procurando produto com code:', productData.code);
+                console.log('🔍 Procurando produto com code:', productData.code);
                 const product = findProductByQR(productData.code);
                 
                 if (product) {
-                  console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ Produto encontrado via code:', product.name);
+                  console.log('✅ Produto encontrado via code:', product.name);
                   clearInterval(scanIntervalRef.current);
                   setScannedProduct(product);
                   setSelectedProduct(product.id);
@@ -1267,52 +1267,52 @@ const EstoqueFFApp = () => {
                 }
               }
             } catch (parseError) {
-              console.log('Ã¢Ã…Â¡ ÃƒÂ¯Ã‚Â¸Ã‚Â QR nÃ£o Ã© JSON vÃ¡lido, tentando busca direta');
+              console.log('⚠️ QR não é JSON válido, tentando busca direta');
               productData = code.data;
             }
 
-            console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â Tentando busca direta com:', productData);
+            console.log('🔍 Tentando busca direta com:', productData);
             const product = findProductByQR(productData);
 
             if (product) {
-              console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ Produto encontrado via busca direta:', product.name);
+              console.log('✅ Produto encontrado via busca direta:', product.name);
               clearInterval(scanIntervalRef.current);
               setScannedProduct(product);
             } else {
-              console.log('Ã¢Ã‚ÂÃ…â€™ Produto nÃ£o encontrado');
-              setErrors({ camera: 'Produto nÃ£o encontrado' });
+              console.log('❌ Produto não encontrado');
+              setErrors({ camera: 'Produto não encontrado' });
             }
             stopCamera();
           } else {
-            if (Math.random() < 0.02) console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â Procurando QR Code...');
+            if (Math.random() < 0.02) console.log('🔍 Procurando QR Code...');
           }
         } catch (scanError) {
-          console.error('Ã¢Ã‚ÂÃ…â€™ Erro no scan:', scanError);
+          console.error('❌ Erro no scan:', scanError);
         }
       };
 
       const initScanner = async () => {
         try {
-          console.log('Ã¢Ã¢â‚¬â€œÃ‚Â¶ÃƒÂ¯Ã‚Â¸Ã‚Â Iniciando initScanner...');
+          console.log('▶️ Iniciando initScanner...');
           await videoRef.current.play();
-          console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ Play executado');
+          console.log('✅ Play executado');
           
           let attempts = 0;
           while (videoRef.current.readyState < 2 && attempts < 50) {
-            console.log(`Ã¢Ã‚ÂÃ‚Â³ Aguardando readyState >= 2, atual: ${videoRef.current.readyState}, tentativa: ${attempts + 1}`);
+            console.log(`⏳ Aguardando readyState >= 2, atual: ${videoRef.current.readyState}, tentativa: ${attempts + 1}`);
             await new Promise(resolve => setTimeout(resolve, 100));
             attempts++;
           }
           
           if (videoRef.current.readyState >= 2) {
-            console.log('ÃƒÂ°Ã…Â¸Ã…Â¡Ã¢â€šÂ¬ INICIANDO INTERVAL DE ESCANEAMENTO!');
+            console.log('🚀 INICIANDO INTERVAL DE ESCANEAMENTO!');
             scanIntervalRef.current = setInterval(scanQRCode, 100);
-            console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ Interval criado:', !!scanIntervalRef.current);
+            console.log('✅ Interval criado:', !!scanIntervalRef.current);
           } else {
-            throw new Error('VÃ­deo nÃ£o ficou pronto apÃ³s 5 segundos');
+            throw new Error('Vídeo não ficou pronto após 5 segundos');
           }
         } catch (playError) {
-          console.error('Ã¢Ã‚ÂÃ…â€™ Erro no initScanner:', playError);
+          console.error('❌ Erro no initScanner:', playError);
           throw new Error(`Erro no play: ${playError.message}`);
         }
       };
@@ -1335,12 +1335,12 @@ const EstoqueFFApp = () => {
       }
 
     } catch (error) {
-      console.error('Ã¢Ã‚ÂÃ…â€™ Erro geral:', error);
-      let errorMessage = 'Erro ao acessar cÃ¢mera';
+      console.error('❌ Erro geral:', error);
+      let errorMessage = 'Erro ao acessar câmera';
       if (error.name === 'NotAllowedError') {
-        errorMessage = 'PermissÃ£o da cÃ¢mera negada';
+        errorMessage = 'Permissão da câmera negada';
       } else if (error.name === 'NotFoundError') {
-        errorMessage = 'CÃ¢mera nÃ£o encontrada';
+        errorMessage = 'Câmera não encontrada';
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -1352,14 +1352,14 @@ const EstoqueFFApp = () => {
   };
 
   const stopCamera = () => {
-    console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂºÃ¢â‚¬Ëœ stopCamera CHAMADA!');
+    console.log('🛑 stopCamera CHAMADA!');
     if (scanIntervalRef.current) {
-      console.log('Ã¢Ã‚ÂÃ‚Â¹ÃƒÂ¯Ã‚Â¸Ã‚Â Parando interval principal');
+      console.log('⏹️ Parando interval principal');
       clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = null;
     }
     
-    console.log('ÃƒÂ°Ã…Â¸Ã‚Â§Ã‚Â¹ Limpando intervals Ã³rfÃ£os...');
+    console.log('🧹 Limpando intervals órfãos...');
     for (let i = 1; i < 999999; i++) {
       clearInterval(i);
     }
@@ -1367,22 +1367,22 @@ const EstoqueFFApp = () => {
     let streamToStop = cameraStream;
     
     if (!streamToStop && videoRef.current && videoRef.current.srcObject) {
-      console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬Å¾ Usando stream do videoRef');
+      console.log('🔄 Usando stream do videoRef');
       streamToStop = videoRef.current.srcObject;
     }
     
     if (streamToStop) {
-      console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¹ Parando tracks da cÃ¢mera');
+      console.log('📹 Parando tracks da câmera');
       streamToStop.getTracks().forEach(track => {
-        console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ…Â¡ Parando track:', track.kind, 'estado:', track.readyState);
+        console.log('🔚 Parando track:', track.kind, 'estado:', track.readyState);
         track.stop();
       });
     } else {
-      console.log('Ã¢Ã…Â¡ ÃƒÂ¯Ã‚Â¸Ã‚Â Nenhum stream encontrado para parar');
+      console.log('⚠️ Nenhum stream encontrado para parar');
     }
     
     if (videoRef.current) {
-      console.log('ÃƒÂ°Ã…Â¸Ã‚Â§Ã‚Â¹ Limpando srcObject');
+      console.log('🧹 Limpando srcObject');
       videoRef.current.srcObject = null;
       videoRef.current.load();
     }
@@ -1391,22 +1391,22 @@ const EstoqueFFApp = () => {
     setScannerActive(false);
     setLoading(false);
     
-    console.log('Ã¢Ã…â€œÃ¢â‚¬Â¦ stopCamera finalizada');
+    console.log('✅ stopCamera finalizada');
   };
   
   const findProductByQR = (qrCode) => {
-    console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â findProductByQR recebeu:', qrCode);
-    console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¦ Produtos disponÃ­veis:', products.length);
+    console.log('🔍 findProductByQR recebeu:', qrCode);
+    console.log('📦 Produtos disponíveis:', products.length);
     
     let searchTerm = qrCode;
     try {
       const parsed = JSON.parse(qrCode);
       if (parsed.code) {
         searchTerm = parsed.code;
-        console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã¢â‚¬Â¹ ExtraÃ­do code do JSON:', searchTerm);
+        console.log('📋 Extraído code do JSON:', searchTerm);
       }
     } catch (e) {
-      console.log('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â NÃ£o Ã© JSON, usando valor direto');
+      console.log('📝 Não é JSON, usando valor direto');
     }  
     return products.find(p => p.qrCode === qrCode || p.code === searchTerm);
   };
@@ -1437,23 +1437,23 @@ const EstoqueFFApp = () => {
     
     const stock = parseInt(product.stock);
     if (isNaN(stock) || stock < 0) {
-      newErrors.stock = 'Estoque deve ser um nÃºmero vÃ¡lido maior ou igual a 0';
+      newErrors.stock = 'Estoque deve ser um número válido maior ou igual a 0';
     }
     
     const minStock = parseInt(product.minStock);
     if (isNaN(minStock) || minStock < 1) {
-      newErrors.minStock = 'Estoque mÃ­nimo deve ser um nÃºmero vÃ¡lido maior que 0';
+      newErrors.minStock = 'Estoque mínimo deve ser um número válido maior que 0';
     }
     
     if (!product.code || product.code.trim().length < 2) {
-      newErrors.code = 'CÃ³digo deve ter pelo menos 2 caracteres';
+      newErrors.code = 'Código deve ter pelo menos 2 caracteres';
     } else {
       const codeExists = products.some(p => 
         p.code.toLowerCase().trim() === product.code.toLowerCase().trim() &&
         (isEdit ? p.id !== product.id : true)
       );
       if (codeExists) {
-        newErrors.code = 'JÃ¡ existe um produto com este cÃ³digo';
+        newErrors.code = 'Já existe um produto com este código';
       }
     }
     
@@ -1492,7 +1492,7 @@ const EstoqueFFApp = () => {
       setProducts([...products, product]);
       setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
       setShowAddProduct(false);
-      setSuccess(`Ã¢Ã…â€œÃ¢â‚¬Â¦ Produto "${product.name}" adicionado com sucesso!`);
+      setSuccess(`✅ Produto "${product.name}" adicionado com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
       
     } catch (error) {
@@ -1529,7 +1529,7 @@ const EstoqueFFApp = () => {
           : p
       ));
       setEditingProduct(null);
-      setSuccess(`Ã¢Ã…â€œÃ¢â‚¬Â¦ Produto atualizado com sucesso!`);
+      setSuccess(`✅ Produto atualizado com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
       
     } catch (error) {
@@ -1539,7 +1539,7 @@ const EstoqueFFApp = () => {
     setLoading(false);
   };
 
-  // Processar movimentaÃ§Ã£o
+  // Processar movimentação
   const processMovement = (product = null) => {
     const targetProduct = product || scannedProduct;
     if (!targetProduct) return;
@@ -1550,19 +1550,19 @@ const EstoqueFFApp = () => {
     const quantity = parseInt(movementQuantity);
     
     if (isNaN(quantity) || quantity <= 0) {
-      setErrors({ quantity: 'Quantidade deve ser um nÃºmero vÃ¡lido maior que 0' });
+      setErrors({ quantity: 'Quantidade deve ser um número válido maior que 0' });
       setLoading(false);
       return;
     }
     
     if (!movementType) {
-      setErrors({ movement: 'Selecione o tipo de movimentaÃ§Ã£o (Entrada ou SaÃ­da)' });
+      setErrors({ movement: 'Selecione o tipo de movimentação (Entrada ou Saída)' });
       setLoading(false);
       return;
     }
     
-    if (movementType === 'saÃ­da' && targetProduct.stock < quantity) {
-      setErrors({ quantity: `Estoque insuficiente! DisponÃ­vel: ${targetProduct.stock} unidades` });
+    if (movementType === 'saída' && targetProduct.stock < quantity) {
+      setErrors({ quantity: `Estoque insuficiente! Disponível: ${targetProduct.stock} unidades` });
       setLoading(false);
       return;
     }
@@ -1598,23 +1598,25 @@ const EstoqueFFApp = () => {
       setShowManualMovement(false);
       setManualSearchTerm('');
       setMovementQuantity(0);
+		setVolumes('');
+      setUnitsPerVolume('');
       setMovementType('');
-      setSuccess(`Ã¢Ã…â€œÃ¢â‚¬Â¦ ${movementType === 'entrada' ? 'Entrada' : 'SaÃ­da'} de ${quantity} unidades registrada com sucesso!`);
+      setSuccess(`✅ ${movementType === 'entrada' ? 'Entrada' : 'Saída'} de ${quantity} unidades registrada com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
       
     } catch (error) {
-      setErrors({ general: 'Erro ao processar movimentaÃ§Ã£o. Tente novamente.' });
+      setErrors({ general: 'Erro ao processar movimentação. Tente novamente.' });
     }
     
     setLoading(false);
   };
 
-  // ExportaÃ§Ã£o para PDF
+  // Exportação para PDF
   const exportToPDF = (type, data, title) => {
     const pdf = new jsPDF();
     const timestamp = new Date().toLocaleString('pt-BR');
     
-    // CabeÃ§alho
+    // Cabeçalho
     pdf.setFontSize(18);
     pdf.setFont('helvetica', 'bold');
     pdf.text(title, 14, 22);
@@ -1622,7 +1624,7 @@ const EstoqueFFApp = () => {
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
     pdf.text(`${companySettings.companyName}`, 14, 32);
-    pdf.text(`ResponsÃ¡vel: ${companySettings.responsibleName}`, 14, 38);
+    pdf.text(`Responsável: ${companySettings.responsibleName}`, 14, 38);
     pdf.text(`Gerado em: ${timestamp}`, 14, 44);
     
     pdf.setLineWidth(0.5);
@@ -1633,7 +1635,7 @@ const EstoqueFFApp = () => {
     
     if (type === 'products') {
       columns = [
-        { header: 'CÃ³digo', dataKey: 'code' },
+        { header: 'Código', dataKey: 'code' },
         { header: 'Nome', dataKey: 'name' },
         { header: 'Marca', dataKey: 'brand' },
         { header: 'Categoria', dataKey: 'category' },
@@ -1657,13 +1659,13 @@ const EstoqueFFApp = () => {
         { header: 'Produto', dataKey: 'product' },
         { header: 'Tipo', dataKey: 'type' },
         { header: 'Qtd', dataKey: 'quantity' },
-        { header: 'UsuÃ¡rio', dataKey: 'user' },
+        { header: 'Usuário', dataKey: 'user' },
         { header: 'Data', dataKey: 'date' }
       ];
       
       rows = data.map(m => ({
         product: m.product.length > 25 ? m.product.substring(0, 25) + '...' : m.product,
-        type: m.type === 'entrada' ? 'Entrada' : 'SaÃ­da',
+        type: m.type === 'entrada' ? 'Entrada' : 'Saída',
         quantity: m.quantity.toString(),
         user: m.user.length > 15 ? m.user.substring(0, 15) + '...' : m.user,
         date: m.date.split(' ')[0]
@@ -1700,7 +1702,7 @@ const EstoqueFFApp = () => {
       }
     });
     
-    // RodapÃ©
+    // Rodapé
     const estimatedRowHeight = 12;
     const headerHeight = 15;
     const startY = 55;
@@ -1714,7 +1716,7 @@ const EstoqueFFApp = () => {
     pdf.save(filename);
   };
 
-  // ExportaÃ§Ã£o para Excel
+  // Exportação para Excel
   const exportToExcel = (type, data, title) => {
     let worksheetData = [];
     let filename = '';
@@ -1723,10 +1725,10 @@ const EstoqueFFApp = () => {
       worksheetData = [
         [title],
         [`${companySettings.companyName}`],
-        [`ResponsÃ¡vel: ${companySettings.responsibleName}`],
+        [`Responsável: ${companySettings.responsibleName}`],
         [`Gerado em: ${new Date().toLocaleString('pt-BR')}`],
         [],
-        ['CÃ³digo', 'Nome do Produto', 'Marca', 'Categoria', 'Estoque Atual', 'Estoque MÃ­nimo', 'DiferenÃ§a', 'Status', 'Data CriaÃ§Ã£o']
+        ['Código', 'Nome do Produto', 'Marca', 'Categoria', 'Estoque Atual', 'Estoque Mínimo', 'Diferença', 'Status', 'Data Criação']
       ];
       
       data.forEach(p => {
@@ -1752,17 +1754,17 @@ const EstoqueFFApp = () => {
       worksheetData = [
         [title],
         [`${companySettings.companyName}`],
-        [`ResponsÃ¡vel: ${companySettings.responsibleName}`],
+        [`Responsável: ${companySettings.responsibleName}`],
         [`Gerado em: ${new Date().toLocaleString('pt-BR')}`],
         [],
-        ['ID', 'Produto', 'Tipo de MovimentaÃ§Ã£o', 'Quantidade', 'UsuÃ¡rio', 'Data e Hora']
+        ['ID', 'Produto', 'Tipo de Movimentação', 'Quantidade', 'Usuário', 'Data e Hora']
       ];
       
       data.forEach(m => {
         worksheetData.push([
           m.id,
           m.product,
-          m.type === 'entrada' ? 'ENTRADA' : 'SAÃƒÆ’Ã‚ÂDA',
+          m.type === 'entrada' ? 'ENTRADA' : 'SAÍDA',
           m.quantity,
           m.user,
           m.date
@@ -1773,7 +1775,7 @@ const EstoqueFFApp = () => {
     }
     
     worksheetData.push([]);
-    worksheetData.push(['=== ESTATÃƒÆ’Ã‚ÂSTICAS ===']);
+    worksheetData.push(['=== ESTATÍSTICAS ===']);
     worksheetData.push([`Total de registros: ${data.length}`]);
     
     if (type === 'products') {
@@ -1786,12 +1788,12 @@ const EstoqueFFApp = () => {
       worksheetData.push([`Total de itens em estoque: ${totalItems}`]);
     } else {
       const entradas = data.filter(m => m.type === 'entrada').length;
-      const saidas = data.filter(m => m.type === 'saÃ­da').length;
+      const saidas = data.filter(m => m.type === 'saída').length;
       const totalEntradas = data.filter(m => m.type === 'entrada').reduce((sum, m) => sum + m.quantity, 0);
-      const totalSaidas = data.filter(m => m.type === 'saÃ­da').reduce((sum, m) => sum + m.quantity, 0);
+      const totalSaidas = data.filter(m => m.type === 'saída').reduce((sum, m) => sum + m.quantity, 0);
       
-      worksheetData.push([`Total de entradas: ${entradas} movimentaÃ§Ãµeseses (${totalEntradas} itens)`]);
-      worksheetData.push([`Total de saÃ­das: ${saidas} movimentaÃ§Ãµeseses (${totalSaidas} itens)`]);
+      worksheetData.push([`Total de entradas: ${entradas} movimentações (${totalEntradas} itens)`]);
+      worksheetData.push([`Total de saídas: ${saidas} movimentações (${totalSaidas} itens)`]);
     }
     
     const wb = XLSX.utils.book_new();
@@ -1813,7 +1815,7 @@ const EstoqueFFApp = () => {
     if (ws['A3']) ws['A3'].s = { font: { italic: true } };
     if (ws['A4']) ws['A4'].s = { font: { italic: true } };
     
-    XLSX.utils.book_append_sheet(wb, ws, type === 'products' ? 'Produtos' : 'MovimentaÃ§Ãµeseses');
+    XLSX.utils.book_append_sheet(wb, ws, type === 'products' ? 'Produtos' : 'Movimentações');
     XLSX.writeFile(wb, filename);
   };
 
@@ -1823,18 +1825,18 @@ const EstoqueFFApp = () => {
     
     if (type === 'products') {
       data = filteredProducts.length > 0 ? filteredProducts : products;
-      title = 'RelatÃ³rio de Produtos - EstoqueFF';
+      title = 'Relatório de Produtos - EstoqueFF';
     } else if (type === 'movements') {
       data = filteredMovements.length > 0 ? filteredMovements : movements;
-      title = 'RelatÃ³rio de MovimentaÃ§Ãµeseses - EstoqueFF';
+      title = 'Relatório de Movimentações - EstoqueFF';
     }
     
     if (format === 'pdf') {
       exportToPDF(type, data, title);
-      setSuccess(`Ã¢Ã…â€œÃ¢â‚¬Â¦ RelatÃ³rio PDF gerado com sucesso! (${data.length} registros)`);
+      setSuccess(`✅ Relatório PDF gerado com sucesso! (${data.length} registros)`);
     } else {
       exportToExcel(type, data, title);
-      setSuccess(`Ã¢Ã…â€œÃ¢â‚¬Â¦ RelatÃ³rio Excel gerado com sucesso! (${data.length} registros)`);
+      setSuccess(`✅ Relatório Excel gerado com sucesso! (${data.length} registros)`);
     }
     
     setTimeout(() => setSuccess(''), 3000);
@@ -1875,10 +1877,10 @@ const EstoqueFFApp = () => {
           if (backup.productLabelConfigs) {
             setProductLabelConfigs(backup.productLabelConfigs);
           }
-          setSuccess('Ã¢Ã…â€œÃ¢â‚¬Â¦ Backup restaurado com sucesso!');
+          setSuccess('✅ Backup restaurado com sucesso!');
           setTimeout(() => setSuccess(''), 3000);
         } else {
-          setErrors({ general: 'Arquivo de backup invÃ¡lido!' });
+          setErrors({ general: 'Arquivo de backup inválido!' });
           setTimeout(() => setErrors({}), 3000);
         }
       } catch (error) {
@@ -1890,7 +1892,7 @@ const EstoqueFFApp = () => {
     event.target.value = '';
   };
 
-  // Calcular estatÃ­sticas
+  // Calcular estatísticas
   const stats = useMemo(() => {
     const today = new Date();
     const todayBR = today.toLocaleDateString('pt-BR');
@@ -1908,7 +1910,7 @@ const EstoqueFFApp = () => {
     };
   }, [products, movements]);
 
-  // RelatÃ³rios expandidos
+  // Relatórios expandidos
   const filteredMovements = useMemo(() => {
     if (movementsPeriodFilter === 'all') return movements;
     
@@ -2144,7 +2146,7 @@ const EstoqueFFApp = () => {
       link.href = canvas.toDataURL('image/png', 1.0);
       link.click();
       
-      setSuccess(`Ã¢Ã…â€œÃ¢â‚¬Â¦ Etiquetas PNG geradas com sucesso!`);
+      setSuccess(`✅ Etiquetas PNG geradas com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
       
     } catch (error) {
@@ -2155,7 +2157,7 @@ const EstoqueFFApp = () => {
     setLoading(false);
   };
 
-  // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â VERIFICAR SE USUÃƒÆ’Ã‚ÂRIO ESTÃƒÆ’Ã‚Â LOGADO
+  // 🔐 VERIFICAR SE USUÁRIO ESTÁ LOGADO
   if (!currentUser) {
     return <LoginScreen onLogin={setCurrentUser} users={users} />;
   }
@@ -2196,12 +2198,12 @@ const EstoqueFFApp = () => {
         <div className="flex justify-around md:flex-col md:space-y-2">
           {[
             { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
-            { id: 'scanner', icon: Scan, label: 'MovimentaÃ§Ã£o' },
+            { id: 'scanner', icon: Scan, label: 'Movimentação' },
             { id: 'products', icon: Package, label: 'Produtos' },
             { id: 'labels', icon: QrCode, label: 'Etiquetas' },
-            { id: 'reports', icon: TrendingUp, label: 'RelatÃ³rios' },
+            { id: 'reports', icon: TrendingUp, label: 'Relatórios' },
             { id: 'settings', icon: Settings, label: 'Config' },
-            { id: 'users', icon: Users, label: 'UsuÃ¡rios' },
+            { id: 'users', icon: Users, label: 'Usuários' },
             { id: 'logout', icon: X, label: 'Sair' }
           ].map(item => (
             <button
@@ -2265,7 +2267,7 @@ const EstoqueFFApp = () => {
             <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-purple-600 text-sm font-medium">MovimentaÃ§Ãµeseses Hoje</p>
+                  <p className="text-purple-600 text-sm font-medium">Movimentações Hoje</p>
                   <p className="text-2xl font-bold text-purple-800">{stats.todayMovements}</p>
                 </div>
                 <BarChart3 className="text-purple-500" size={32} />
@@ -2284,7 +2286,7 @@ const EstoqueFFApp = () => {
         <div>
           <span className="text-orange-700">{product.name}</span>
           {product.brand && (
-            <span className="text-orange-600 text-sm ml-1">Ã¢Ã¢â€šÂ¬Ã‚Â¢ {product.brand}</span>
+            <span className="text-orange-600 text-sm ml-1">• {product.brand}</span>
           )}
         </div>
         <span className="text-orange-600 font-medium">{formatNumber(product.stock)} unidades</span>
@@ -2299,7 +2301,7 @@ const EstoqueFFApp = () => {
       {currentScreen === 'scanner' && (
         <div className="p-4 pb-20 md:ml-64 md:pb-4">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">MovimentaÃ§Ã£o de Estoque</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Movimentação de Estoque</h1>
             {scannerActive && (
               <button
                 onClick={stopCamera}
@@ -2311,7 +2313,7 @@ const EstoqueFFApp = () => {
             )}
           </div>
 
-          {/* BotÃ§Ãµes de opÃ§Ã£o */}
+          {/* Botões de opção */}
           {!scannerActive && !scannedProduct && !showManualMovement && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <button
@@ -2322,7 +2324,7 @@ const EstoqueFFApp = () => {
                 <Camera size={32} />
                 <div className="text-center">
                   <p className="font-medium">Scanner QR Code</p>
-                  <p className="text-xs opacity-80">Use a cÃ¢mera</p>
+                  <p className="text-xs opacity-80">Use a câmera</p>
                 </div>
               </button>
               
@@ -2342,12 +2344,12 @@ const EstoqueFFApp = () => {
             </div>
           )}
 
-       {/* ÃƒÆ’Ã…Â¡ltimas MovimentaÃ§Ãµeseses - Movido do Dashboard */}
+       {/* Últimas Movimentações - Movido do Dashboard */}
 		{!scannerActive && !scannedProduct && !showManualMovement && (
 			<div className="bg-white p-6 rounded-lg shadow-md flex flex-col gap-4 mt-8">
-				<h3 className="text-xl font-semibold text-gray-800">ÃƒÆ’Ã…Â¡ltimas MovimentaÃ§Ãµeseses</h3>
+				<h3 className="text-xl font-semibold text-gray-800">Últimas Movimentações</h3>
 				{movements.length === 0 ? (
-					<p className="text-gray-500 text-center py-4">Nenhuma movimentaÃ§Ã£o registrada ainda.</p>
+					<p className="text-gray-500 text-center py-4">Nenhuma movimentação registrada ainda.</p>
 				) : (
 					movements.slice(0, 20).map(movement => (
 						<div key={movement.id} className="flex justify-between items-center border-b pb-3 last:border-b-0 last:pb-0">
@@ -2356,9 +2358,9 @@ const EstoqueFFApp = () => {
 								<p className="text-sm text-gray-500">
 									{(() => {
 										const product = products.find(p => p.id === movement.productId);
-										return product?.brand ? `${product.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ ` : '';
+										return product?.brand ? `${product.brand} • ` : '';
 									})()}
-									{movement.user} Ã¢Ã¢â€šÂ¬Ã‚Â¢ {movement.date}
+									{movement.user} • {movement.date}
 								</p>
 							</div>
 							<div className={`font-bold text-lg ${movement.type === 'entrada' ? 'text-green-500' : 'text-red-500'}`}>
@@ -2420,21 +2422,21 @@ const EstoqueFFApp = () => {
                 )}
                 
                 <div className="bg-black bg-opacity-75 p-4">
-                  <p className="text-white text-sm">ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â Posicione o QR Code dentro da Ã¡rea marcada</p>
-                  <p className="text-green-400 text-xs mt-1">Aguarde a detecÃ§Ã£o automÃ¡tica...</p>
+                  <p className="text-white text-sm">🔍 Posicione o QR Code dentro da área marcada</p>
+                  <p className="text-green-400 text-xs mt-1">Aguarde a detecção automática...</p>
                 </div>
               </div>
             </div>
           )}
           
-          {/* MovimentaÃ§Ã£o Manual */}
+          {/* Movimentação Manual */}
           {showManualMovement && !manualSelectedProduct && (
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-800">Busca Manual de Produto</h3>
                 <button
                   onClick={() => {
-                    setShowManualMovement(false); setMovementQuantity(''); setVolumes(''); setUnitsPerVolume('');
+                    setShowManualMovement(false);
                     setManualSearchTerm('');
                   }}
                   className="text-gray-500 hover:text-gray-700"
@@ -2450,7 +2452,7 @@ const EstoqueFFApp = () => {
                 <input
                   type="text"
                   inputMode="text"
-                  placeholder="Pesquisar produto por nome, cÃ³digo, marca..."
+                  placeholder="Pesquisar produto por nome, código, marca..."
                   value={manualSearchTerm}
                   onChange={(e) => handleManualSearchChange(e.target.value)}
                   className="w-full pl-10 pr-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
@@ -2480,8 +2482,8 @@ const EstoqueFFApp = () => {
                       <div className="flex-1">
                         <h4 className="font-semibold text-gray-800">{product.name}</h4>
                         <p className="text-sm text-gray-600">
-                          {product.brand && `${product.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ `}
-                          CÃ³digo: {product.code || 'N/A'}
+                          {product.brand && `${product.brand} • `}
+                          Código: {product.code || 'N/A'}
                         </p>
                         <p className="text-sm text-gray-600">Categoria: {product.category}</p>
                       </div>
@@ -2498,7 +2500,7 @@ const EstoqueFFApp = () => {
             </div>
           )}
 
-          {/* FormulÃ¡rio de MovimentaÃ§Ã£o */}
+          {/* Formulário de Movimentação */}
           {(scannedProduct || manualSelectedProduct) && (
             <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
               <div className="flex items-center mb-4">
@@ -2514,7 +2516,7 @@ const EstoqueFFApp = () => {
                 </h4>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-gray-600">CÃ³digo:</span>
+                    <span className="text-gray-600">Código:</span>
                     <span className="ml-2 font-medium">
                       {(scannedProduct || manualSelectedProduct).code || '-'}
                     </span>
@@ -2566,8 +2568,8 @@ const EstoqueFFApp = () => {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tipo de MovimentaÃ§Ã£o *
-                    {!movementType && <span className="text-red-500 text-xs ml-1">(ObrigatÃ³rio)</span>}
+                    Tipo de Movimentação *
+                    {!movementType && <span className="text-red-500 text-xs ml-1">(Obrigatório)</span>}
                   </label>
                   <div className="flex gap-2">
                     <button
@@ -2581,25 +2583,25 @@ const EstoqueFFApp = () => {
                           : 'bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:bg-green-50'
                       }`}
                     >
-                      Ã¢Ã¢â‚¬ Ã¢â‚¬â€ÃƒÂ¯Ã‚Â¸Ã‚Â Entrada
+                      ↗️ Entrada
                     </button>
                     <button
                       onClick={() => {
-                        setMovementType('saÃ­da');
+                        setMovementType('saída');
                         if (errors.movement) setErrors({...errors, movement: ''});
                       }}
                       className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors border-2 ${
-                        movementType === 'saÃ­da' 
+                        movementType === 'saída' 
                           ? 'bg-red-500 text-white border-red-500' 
                           : 'bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:bg-red-50'
                       }`}
                     >
-                      Ã¢Ã¢â‚¬ Ã¢â€žÂ¢ÃƒÂ¯Ã‚Â¸Ã‚Â SaÃ­da
+                      ↙️ Saída
                     </button>
-                  </div>
+                   </div>
                 </div>
 
-                {/* Novos campos para cÃ¡lculo de quantidade */}
+                {/* Campos para cálculo de quantidade */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2612,18 +2614,10 @@ const EstoqueFFApp = () => {
                       value={volumes}
                       onChange={(e) => {
                         const value = e.target.value;
-                        // Aceitar apenas nÃºmeros positivos
                         if (value === '' || /^[0-9]+$/.test(value)) {
                           setVolumes(value);
-                          // Calcular quantidade automaticamente
                           if (value && unitsPerVolume) {
-                            const calculated = parseInt(value) * parseInt(unitsPerVolume);
-                            setMovementQuantity(calculated.toString());
-                          } else if (!value || !unitsPerVolume) {
-                            // Se algum campo ficar vazio, limpar quantidade apenas se veio do cÃ¡lculo
-                            if (movementQuantity === (parseInt(volumes || 0) * parseInt(unitsPerVolume || 0)).toString()) {
-                              setMovementQuantity('');
-                            }
+                            setMovementQuantity((parseInt(value) * parseInt(unitsPerVolume)).toString());
                           }
                           if (errors.quantity) setErrors({...errors, quantity: ''});
                         }
@@ -2649,18 +2643,10 @@ const EstoqueFFApp = () => {
                       value={unitsPerVolume}
                       onChange={(e) => {
                         const value = e.target.value;
-                        // Aceitar apenas nÃºmeros positivos
                         if (value === '' || /^[0-9]+$/.test(value)) {
                           setUnitsPerVolume(value);
-                          // Calcular quantidade automaticamente
                           if (volumes && value) {
-                            const calculated = parseInt(volumes) * parseInt(value);
-                            setMovementQuantity(calculated.toString());
-                          } else if (!volumes || !value) {
-                            // Se algum campo ficar vazio, limpar quantidade apenas se veio do cÃ¡lculo
-                            if (movementQuantity === (parseInt(volumes || 0) * parseInt(unitsPerVolume || 0)).toString()) {
-                              setMovementQuantity('');
-                            }
+                            setMovementQuantity((parseInt(volumes) * parseInt(value)).toString());
                           }
                           if (errors.quantity) setErrors({...errors, quantity: ''});
                         }
@@ -2685,14 +2671,10 @@ const EstoqueFFApp = () => {
                     value={movementQuantity}
                     onChange={(e) => {
                       const value = e.target.value;
-                      // Aceitar apenas nÃºmeros positivos
                       if (value === '' || /^[0-9]+$/.test(value)) {
                         setMovementQuantity(value);
-                        // Limpar campos de volumes/unidades se quantidade for alterada manualmente
-                        if (value !== '' && value !== (parseInt(volumes || 0) * parseInt(unitsPerVolume || 0)).toString()) {
-                          setVolumes('');
-                          setUnitsPerVolume('');
-                        }
+                        setVolumes('');
+                        setUnitsPerVolume('');
                         if (errors.quantity) setErrors({...errors, quantity: ''});
                       }
                     }}
@@ -2710,9 +2692,13 @@ const EstoqueFFApp = () => {
                 <div className="flex gap-3">
                   <button
                     onClick={() => {
-                      setScannedProduct(null); setMovementQuantity(''); setVolumes(''); setUnitsPerVolume('');
+                      setScannedProduct(null);
+					  setMovementQuantity('');
+					  setVolumes('');
+					  setUnitsPerVolume('');
                       setManualSelectedProduct(null);
-                      setShowManualMovement(false); setMovementQuantity(''); setVolumes(''); setUnitsPerVolume('');
+                      setShowManualMovement(false);
+						setMovementQuantity('');
                       setManualSearchTerm('');
                       setMovementType('');
                       setErrors({});
@@ -2740,7 +2726,7 @@ const EstoqueFFApp = () => {
                     ) : (
                       <>
                         <Check size={16} />
-                        Confirmar MovimentaÃ§Ã£o
+                        Confirmar Movimentação
                       </>
                     )}
                   </button>
@@ -2755,7 +2741,7 @@ const EstoqueFFApp = () => {
       {currentScreen === 'products' && (
         <div className="p-4 pb-20 md:ml-64 md:pb-4">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">GestÃ£o de Produtos</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Gestão de Produtos</h1>
             <button
               onClick={() => setShowAddProduct(true)}
               className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
@@ -2797,7 +2783,7 @@ const EstoqueFFApp = () => {
                   <option value="">Selecione um produto</option>
                   {products.map(product => (
                     <option key={product.id} value={product.id}>
-                      {product.name} - {product.code || 'S/CÃ³digo'} (Estoque: {formatNumber(product.stock)})
+                      {product.name} - {product.code || 'S/Código'} (Estoque: {formatNumber(product.stock)})
                     </option>
                   ))}
                 </select>
@@ -2845,7 +2831,7 @@ const EstoqueFFApp = () => {
             )}
           </div>
 
-          {/* Preview das Ãºltimas etiquetas geradas */}
+          {/* Preview das últimas etiquetas geradas */}
           {selectedProduct && (
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               <h3 className="font-semibold text-gray-800 mb-4">Preview da Etiqueta</h3>
@@ -2857,14 +2843,14 @@ const EstoqueFFApp = () => {
                 />
               </div>
               <p className="text-xs text-gray-500 mt-2 text-center">
-                * Esta Ã© uma prÃ©via da etiqueta que serÃ¡ gerada
+                * Esta é uma prévia da etiqueta que será gerada
               </p>
             </div>
           )}
 
-          {/* Lista de produtos disponÃ­veis com busca */}
+          {/* Lista de produtos disponíveis com busca */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="font-semibold text-gray-800 mb-4">Produtos DisponÃ­veis</h3>
+            <h3 className="font-semibold text-gray-800 mb-4">Produtos Disponíveis</h3>
             
             <ProductSearch onSearchChange={handleLabelSearchChange} searchTerm={labelSearchTerm} />
             
@@ -2881,7 +2867,7 @@ const EstoqueFFApp = () => {
                 <div key={product.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                   <div className="flex-1">
                 <p className="font-medium text-gray-800">{product.name}</p>
-                <p className="text-sm text-gray-600">{product.brand ? `${product.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ ` : ''}CÃ³digo: {product.code || 'N/A'} Ã¢Ã¢â€šÂ¬Ã‚Â¢ Estoque: {formatNumber(product.stock)}
+                <p className="text-sm text-gray-600">{product.brand ? `${product.brand} • ` : ''}Código: {product.code || 'N/A'} • Estoque: {formatNumber(product.stock)}
                    </p>
                   </div>
                   
@@ -2894,7 +2880,7 @@ const EstoqueFFApp = () => {
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >
-                      {selectedProduct === product.id ? 'Ã¢Ã…â€œÃ¢â‚¬Å“ Selecionado' : 'Selecionar'}
+                      {selectedProduct === product.id ? '✓ Selecionado' : 'Selecionar'}
                     </button>
                     
                     <button 
@@ -2912,11 +2898,11 @@ const EstoqueFFApp = () => {
         </div>
       )}
 
-      {/* Reports Screen - RelatÃ³rios Completos */}
+      {/* Reports Screen - Relatórios Completos */}
       {currentScreen === 'reports' && (
         <div className="p-4 pb-20 md:ml-64 md:pb-4">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">RelatÃ³rios</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Relatórios</h1>
             <div className="flex gap-2">
               <button
                 onClick={createBackup}
@@ -2938,7 +2924,7 @@ const EstoqueFFApp = () => {
             </div>
           </div>
 
-          {/* Abas de relatÃ³rios */}
+          {/* Abas de relatórios */}
           <div className="flex mb-6 border-b border-gray-200">
             <button
               onClick={() => setReportsTab('movements')}
@@ -2948,7 +2934,7 @@ const EstoqueFFApp = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              MovimentaÃ§Ãµeseses
+              Movimentações
             </button>
             <button
               onClick={() => setReportsTab('products')}
@@ -2968,16 +2954,16 @@ const EstoqueFFApp = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              AnÃ¡lises
+              Análises
             </button>
           </div>
 
-          {/* RelatÃ³rio de MovimentaÃ§Ãµeseses */}
+          {/* Relatório de Movimentações */}
           {reportsTab === 'movements' && (
             <div className="space-y-6">
               <div className="bg-white rounded-lg border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-gray-800">RelatÃ³rio de MovimentaÃ§Ãµeseses</h3>
+                  <h3 className="font-semibold text-gray-800">Relatório de Movimentações</h3>
                   <div className="flex items-center gap-3">
                     <select
                       value={movementsPeriodFilter}
@@ -2985,8 +2971,8 @@ const EstoqueFFApp = () => {
                       className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
                     >
                       <option value="all">Todas</option>
-                      <option value="7days">ÃƒÆ’Ã…Â¡ltimos 7 dias</option>
-                      <option value="30days">ÃƒÆ’Ã…Â¡ltimos 30 dias</option>
+                      <option value="7days">Últimos 7 dias</option>
+                      <option value="30days">Últimos 30 dias</option>
                     </select>
                     
                     <button
@@ -3015,9 +3001,9 @@ const EstoqueFFApp = () => {
                       <p className="text-sm text-gray-600">
                         {(() => {
                           const product = products.find(p => p.id === movement.productId);
-                          return product?.brand ? `${product.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ ` : '';
+                          return product?.brand ? `${product.brand} • ` : '';
                         })()}
-                        {movement.user} Ã¢Ã¢â€šÂ¬Ã‚Â¢ {movement.date}
+                        {movement.user} • {movement.date}
                       </p>
                     </div>
                       <div className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -3032,18 +3018,18 @@ const EstoqueFFApp = () => {
                 </div>
 
                 <p className="text-xs text-gray-500 mt-4 text-center">
-                  Mostrando {Math.min(10, filteredMovements.length)} de {filteredMovements.length} movimentaÃ§Ãµeseses
+                  Mostrando {Math.min(10, filteredMovements.length)} de {filteredMovements.length} movimentações
                 </p>
               </div>
             </div>
           )}
 
-          {/* RelatÃ³rio de Produtos */}
+          {/* Relatório de Produtos */}
           {reportsTab === 'products' && (
             <div className="space-y-6">
               <div className="bg-white rounded-lg border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-gray-800">RelatÃ³rio de Produtos</h3>
+                  <h3 className="font-semibold text-gray-800">Relatório de Produtos</h3>
                   <div className="flex items-center gap-3">
                     <select
                       value={productsFilter}
@@ -3079,7 +3065,7 @@ const EstoqueFFApp = () => {
                       <div className="flex justify-between items-start mb-2">
                         <div>
                           <h4 className="font-semibold text-gray-800">{product.name}</h4>
-                          <p className="text-sm text-gray-600">{product.brand || 'Sem marca'} Ã¢Ã¢â€šÂ¬Ã‚Â¢ {product.category}</p>
+                          <p className="text-sm text-gray-600">{product.brand || 'Sem marca'} • {product.category}</p>
                         </div>
                         <div className={`px-2 py-1 rounded text-xs font-medium ${
                           product.stock <= 0 
@@ -3097,7 +3083,7 @@ const EstoqueFFApp = () => {
                           <span className="ml-1 font-medium">{formatNumber(product.stock)}</span>
                         </div>
                         <div>
-                          <span className="text-gray-600">MÃ­n:</span>
+                          <span className="text-gray-600">Mín:</span>
                           <span className="ml-1 font-medium">{formatNumber(product.minStock)}</span>
                         </div>
                       </div>
@@ -3108,7 +3094,7 @@ const EstoqueFFApp = () => {
             </div>
           )}
 
-          {/* AnÃ¡lises */}
+          {/* Análises */}
           {reportsTab === 'analytics' && (
             <div className="space-y-6">
               <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -3127,14 +3113,14 @@ const EstoqueFFApp = () => {
                         <p className="text-xs text-gray-500">
                         {(() => {
                          const prod = products.find(p => p.id === product.productId);
-                         return prod?.brand ? `${prod.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ ` : '';
+                         return prod?.brand ? `${prod.brand} • ` : '';
                          })()}Estoque atual: {product.currentStock}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-blue-600">{product.totalMovements}</p>
-                        <p className="text-xs text-gray-500">movimentaÃ§Ãµeseses</p>
+                        <p className="text-xs text-gray-500">movimentações</p>
                       </div>
                     </div>
                   ))}
@@ -3151,13 +3137,13 @@ const EstoqueFFApp = () => {
                               <p className="text-xs text-gray-500">
                               {(() => {
                                const prod = products.find(p => p.id === product.productId);
-                               return prod?.brand ? `${prod.brand} Ã¢Ã¢â€šÂ¬Ã‚Â¢ ` : '';
+                               return prod?.brand ? `${prod.brand} • ` : '';
                               })()}Estoque atual: {product.currentStock}
                              </p>
                             </div>
                       <div className="text-right">
                         <p className="font-bold text-red-600">{product.totalMovements}</p>
-                        <p className="text-xs text-gray-500">movimentaÃ§Ãµeseses</p>
+                        <p className="text-xs text-gray-500">movimentações</p>
                       </div>
                     </div>
                   ))}
@@ -3172,7 +3158,7 @@ const EstoqueFFApp = () => {
       {currentScreen === 'settings' && (
         <div className="p-4 pb-20 md:ml-64 md:pb-4">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">ConfiguraÃ§Ãµeseses</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Configurações</h1>
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -3191,7 +3177,7 @@ const EstoqueFFApp = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">ResponsÃ¡vel</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Responsável</label>
                 <input
                   type="text"
                   value={companySettings.responsibleName}
@@ -3216,23 +3202,23 @@ const EstoqueFFApp = () => {
             </div>
 
             <div className="mt-6 pt-6 border-t border-gray-200">
-              <h4 className="text-md font-medium text-gray-800 mb-2">InformaÃ§Ãµeseses do Sistema</h4>
+              <h4 className="text-md font-medium text-gray-800 mb-2">Informações do Sistema</h4>
               <div className="text-sm text-gray-600 space-y-1">
-                <p>ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¦ Total de produtos: {formatNumber(stats.totalProducts)}</p>
-                <p>ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã…  Total de movimentaÃ§Ãµeseses: {movements.length}</p>
-                <p>ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬Å¾ VersÃ£o: EstoqueFF v2.0.0</p>
-                <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ Status: Sistema funcionando com todas as funcionalidades</p>
+                <p>📦 Total de produtos: {formatNumber(stats.totalProducts)}</p>
+                <p>📊 Total de movimentações: {movements.length}</p>
+                <p>🔄 Versão: EstoqueFF v2.0.0</p>
+                <p>✅ Status: Sistema funcionando com todas as funcionalidades</p>
               </div>
               
               <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <h5 className="font-medium text-green-800 mb-2">ÃƒÂ°Ã…Â¸Ã…Â½Ã¢â‚¬Â° Funcionalidades Ativas:</h5>
+                <h5 className="font-medium text-green-800 mb-2">🎉 Funcionalidades Ativas:</h5>
                 <div className="text-sm text-green-700 space-y-1">
-                  <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ Scanner QR Code com cÃ¢mera real</p>
-                  <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ Sistema completo de movimentaÃ§Ãµeseses</p>
-                  <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ Gerador de etiquetas personalizadas</p>
-                  <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ RelatÃ³rios avanÃ§ados (PDF/Excel)</p>
-                  <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ Backup e restauraÃ§Ã£o de dados</p>
-                  <p>Ã¢Ã…â€œÃ¢â‚¬Â¦ AnÃ¡lise de produtos e estatÃ­sticas</p>
+                  <p>✅ Scanner QR Code com câmera real</p>
+                  <p>✅ Sistema completo de movimentações</p>
+                  <p>✅ Gerador de etiquetas personalizadas</p>
+                  <p>✅ Relatórios avançados (PDF/Excel)</p>
+                  <p>✅ Backup e restauração de dados</p>
+                  <p>✅ Análise de produtos e estatísticas</p>
                 </div>
               </div>
             </div>
@@ -3318,13 +3304,13 @@ const EstoqueFFApp = () => {
                       errors.category ? 'border-red-500 bg-red-50' : 'border-gray-300'
                     }`}
                     style={{ fontSize: '16px' }}
-                    placeholder="Ex: EletrÃ´nicos"
+                    placeholder="Ex: Eletrônicos"
                   />
                   {errors.category && <p className="text-red-600 text-xs mt-1">{errors.category}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">CÃ³digo do Produto *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Código do Produto *</label>
                   <input
                     type="text"
                     value={newProduct.code}
@@ -3363,7 +3349,7 @@ const EstoqueFFApp = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque MÃ­nimo *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Mínimo *</label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -3483,7 +3469,7 @@ const EstoqueFFApp = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">CÃ³digo do Produto *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Código do Produto *</label>
                   <input
                     type="text"
                     value={editingProduct.code}
@@ -3520,7 +3506,7 @@ const EstoqueFFApp = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque MÃ­nimo *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Mínimo *</label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -3563,7 +3549,7 @@ const EstoqueFFApp = () => {
                   ) : (
                     <>
                       <Save size={16} />
-                      Salvar AlteraÃ§Ãµeseses
+                      Salvar Alterações
                     </>
                   )}
                 </button>
