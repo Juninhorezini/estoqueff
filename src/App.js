@@ -3024,12 +3024,12 @@ const EstoqueFFApp = () => {
           {reportsTab === 'movements' && (
             <div className="space-y-6">
               <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-gray-800">Relatório de Movimentações</h3>
                     {hasActiveMovementFilters && (
                       <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                        {[
+                        {[ 
                           movementsPeriodFilter !== 'all' && '📅',
                           movementTypeFilter !== 'all' && '🔀',
                           movementUserFilter !== 'all' && '👤',
@@ -3038,11 +3038,11 @@ const EstoqueFFApp = () => {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
                     <select
                       value={movementsPeriodFilter}
                       onChange={(e) => setMovementsPeriodFilter(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-full sm:w-auto min-w-[160px]"
                     >
                       <option value="all">Todas</option>
                       <option value="7days">Últimos 7 dias</option>
@@ -3053,7 +3053,7 @@ const EstoqueFFApp = () => {
                     <select
                       value={movementTypeFilter}
                       onChange={(e) => setMovementTypeFilter(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-full sm:w-auto min-w-[160px]"
                       title="Filtrar por tipo de movimentação"
                     >
                       <option value="all">🔀 Todos os Tipos</option>
@@ -3065,7 +3065,7 @@ const EstoqueFFApp = () => {
                     <select
                       value={movementUserFilter}
                       onChange={(e) => setMovementUserFilter(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-full sm:w-auto min-w-[160px]"
                       title="Filtrar por usuário"
                     >
                       <option value="all">👤 Todos os Usuários</option>
@@ -3080,7 +3080,7 @@ const EstoqueFFApp = () => {
                     <select
                       value={movementProductFilter}
                       onChange={(e) => setMovementProductFilter(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-full sm:w-auto min-w-[200px]"
                       title="Filtrar por produto"
                     >
                       <option value="all">📦 Todos os Produtos</option>
@@ -3095,7 +3095,7 @@ const EstoqueFFApp = () => {
                     {hasActiveMovementFilters && (
                       <button
                         onClick={clearMovementFilters}
-                        className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors w-full sm:w-auto"
                         title="Limpar todos os filtros"
                       >
                         ✕ Limpar
@@ -3104,7 +3104,7 @@ const EstoqueFFApp = () => {
                     
                     <button
                       onClick={() => exportData('movements', 'excel')}
-                      className="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 text-sm"
+                      className="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 text-sm w-full sm:w-auto"
                     >
                       <FileSpreadsheet size={14} />
                       Excel
@@ -3112,7 +3112,7 @@ const EstoqueFFApp = () => {
                     
                     <button
                       onClick={() => exportData('movements', 'pdf')}
-                      className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 text-sm"
+                      className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 text-sm w-full sm:w-auto"
                     >
                       <FileText size={14} />
                       PDF
@@ -3155,13 +3155,13 @@ const EstoqueFFApp = () => {
           {reportsTab === 'products' && (
             <div className="space-y-6">
               <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
                   <h3 className="font-semibold text-gray-800">Relatório de Produtos</h3>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
                     <select
                       value={productsFilter}
                       onChange={(e) => setProductsFilter(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-full sm:w-auto min-w-[160px]"
                     >
                       <option value="all">Todos</option>
                       <option value="low_stock">Estoque Baixo</option>
@@ -3170,7 +3170,7 @@ const EstoqueFFApp = () => {
                     
                     <button
                       onClick={() => exportData('products', 'excel')}
-                      className="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 text-sm"
+                      className="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 text-sm w-full sm:w-auto"
                     >
                       <FileSpreadsheet size={14} />
                       Excel
@@ -3178,7 +3178,7 @@ const EstoqueFFApp = () => {
                     
                     <button
                       onClick={() => exportData('products', 'pdf')}
-                      className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 text-sm"
+                      className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 text-sm w-full sm:w-auto"
                     >
                       <FileText size={14} />
                       PDF
