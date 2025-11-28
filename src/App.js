@@ -1943,17 +1943,6 @@ const EstoqueFFApp = () => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [movements]);
 
-  const uniqueProducts = useMemo(() => {
-    const prods = new Map();
-    movements.forEach(m => {
-      if (m.productId && m.product) {
-        prods.set(m.productId, m.product);
-      }
-    });
-    return Array.from(prods.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [movements]);
 
   const productSearchResults = useMemo(() => {
     const term = movementProductSearchTerm.toLowerCase().trim();
@@ -1996,13 +1985,17 @@ const EstoqueFFApp = () => {
       filtered = filtered.filter(m => m.userId === movementUserFilter);
     }
     
-    // Filtro por produto
+    // Filtro por produto (compatível com registros antigos sem productId)
     if (movementProductFilter !== 'all') {
-      filtered = filtered.filter(m => m.productId === movementProductFilter);
+      const selectedProd = products.find(p => p.id === movementProductFilter);
+      filtered = filtered.filter(m => 
+        m.productId === movementProductFilter ||
+        (!!selectedProd && m.product === selectedProd.name)
+      );
     }
     
     return filtered;
-  }, [movements, movementsPeriodFilter, movementTypeFilter, movementUserFilter, movementProductFilter]);
+  }, [movements, movementsPeriodFilter, movementTypeFilter, movementUserFilter, movementProductFilter, products]);
 
   const filteredProducts = useMemo(() => {
     switch (productsFilter) {
