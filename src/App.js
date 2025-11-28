@@ -1037,6 +1037,7 @@ const EstoqueFFApp = () => {
   const [movementTypeFilter, setMovementTypeFilter] = useState('all');
   const [movementUserFilter, setMovementUserFilter] = useState('all');
   const [movementProductFilter, setMovementProductFilter] = useState('all');
+  const [movementProductSearchTerm, setMovementProductSearchTerm] = useState('');
 
   useEffect(() => {
     const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
@@ -1828,6 +1829,7 @@ const EstoqueFFApp = () => {
     setMovementTypeFilter('all');
     setMovementUserFilter('all');
     setMovementProductFilter('all');
+    setMovementProductSearchTerm('');
   };
 
   const hasActiveMovementFilters = movementsPeriodFilter !== 'all' ||
@@ -1952,6 +1954,18 @@ const EstoqueFFApp = () => {
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [movements]);
+
+  const productSearchResults = useMemo(() => {
+    const term = movementProductSearchTerm.toLowerCase().trim();
+    if (!term) return [];
+    return products
+      .filter(p => 
+        p.name.toLowerCase().includes(term) ||
+        (p.code && p.code.toLowerCase().includes(term))
+      )
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 50);
+  }, [movementProductSearchTerm, products]);
 
   const filteredMovements = useMemo(() => {
     let filtered = movements;
@@ -3076,20 +3090,48 @@ const EstoqueFFApp = () => {
                       ))}
                     </select>
                     
-                    {/* Filtro de Produto */}
-                    <select
-                      value={movementProductFilter}
-                      onChange={(e) => setMovementProductFilter(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-full sm:w-auto min-w-[200px]"
-                      title="Filtrar por produto"
-                    >
-                      <option value="all">📦 Todos os Produtos</option>
-                      {uniqueProducts.map(prod => (
-                        <option key={prod.id} value={prod.id}>
-                          {prod.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative w-full sm:w-auto min-w-[200px]" title="Filtrar por produto">
+                      <input
+                        type="text"
+                        value={movementProductSearchTerm}
+                        onChange={(e) => {
+                          setMovementProductSearchTerm(e.target.value);
+                          if (movementProductFilter !== 'all') setMovementProductFilter('all');
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        placeholder="Pesquisar produto (nome ou código)"
+                        autoComplete="off"
+                      />
+                      {movementProductSearchTerm && productSearchResults.length > 0 && movementProductFilter === 'all' && (
+                        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow max-h-64 overflow-y-auto">
+                          {productSearchResults.map(prod => (
+                            <button
+                              key={prod.id}
+                              onClick={() => {
+                                setMovementProductFilter(prod.id);
+                                setMovementProductSearchTerm(`${prod.name}${prod.brand ? ' • ' + prod.brand : ''}`);
+                              }}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                            >
+                              <div className="text-sm text-gray-800">{prod.name}{prod.brand ? ` • ${prod.brand}` : ''}</div>
+                              <div className="text-xs text-gray-500">Código: {prod.code || 'N/A'}</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {movementProductFilter !== 'all' && (
+                        <button
+                          onClick={() => {
+                            setMovementProductFilter('all');
+                            setMovementProductSearchTerm('');
+                          }}
+                          className="absolute right-2 top-2 text-gray-500 hover:text-gray-700"
+                          title="Limpar produto"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                     
                     {/* Botão Limpar Filtros */}
                     {hasActiveMovementFilters && (
