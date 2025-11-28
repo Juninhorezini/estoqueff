@@ -1035,6 +1035,9 @@ const EstoqueFFApp = () => {
   const [reportsTab, setReportsTab] = useState('movements');
   const [movementsPeriodFilter, setMovementsPeriodFilter] = useState('all');
   const [productsFilter, setProductsFilter] = useState('all');
+  const [movementTypeFilter, setMovementTypeFilter] = useState('all');
+  const [movementUserFilter, setMovementUserFilter] = useState('all');
+  const [movementProductFilter, setMovementProductFilter] = useState('all');
 
   useEffect(() => {
     const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
@@ -1819,6 +1822,20 @@ const EstoqueFFApp = () => {
     XLSX.writeFile(wb, filename);
   };
 
+
+  // Função para limpar todos os filtros de movimentações
+  const clearMovementFilters = () => {
+    setMovementsPeriodFilter('all');
+    setMovementTypeFilter('all');
+    setMovementUserFilter('all');
+    setMovementProductFilter('all');
+  };
+
+  const hasActiveMovementFilters = movementsPeriodFilter !== 'all' ||
+                                   movementTypeFilter !== 'all' ||
+                                   movementUserFilter !== 'all' ||
+                                   movementProductFilter !== 'all';
+
   const exportData = (type, format = 'excel') => {
     let data = [];
     let title = '';
@@ -1911,22 +1928,68 @@ const EstoqueFFApp = () => {
   }, [products, movements]);
 
   // Relatórios expandidos
-  const filteredMovements = useMemo(() => {
-    if (movementsPeriodFilter === 'all') return movements;
-    
-    const now = new Date();
-    const filterDays = movementsPeriodFilter === '7days' ? 7 : 30;
-    const filterDate = new Date(now.getTime() - (filterDays * 24 * 60 * 60 * 1000));
-    
-    return movements.filter(m => {
-      try {
-        const movementDate = new Date(m.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
-        return movementDate >= filterDate;
-      } catch {
-        return true;
+
+  // Listas dinâmicas para filtros
+  const uniqueUsers = useMemo(() => {
+    const users = new Map();
+    movements.forEach(m => {
+      if (m.userId && m.userName) {
+        users.set(m.userId, m.userName);
       }
     });
-  }, [movements, movementsPeriodFilter]);
+    return Array.from(users.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [movements]);
+
+  const uniqueProducts = useMemo(() => {
+    const prods = new Map();
+    movements.forEach(m => {
+      if (m.productId && m.product) {
+        prods.set(m.productId, m.product);
+      }
+    });
+    return Array.from(prods.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [movements]);
+
+  const filteredMovements = useMemo(() => {
+    let filtered = movements;
+    
+    // Filtro por período
+    if (movementsPeriodFilter !== 'all') {
+      const now = new Date();
+      const filterDays = movementsPeriodFilter === '7days' ? 7 : 30;
+      const filterDate = new Date(now.getTime() - (filterDays * 24 * 60 * 60 * 1000));
+      
+      filtered = filtered.filter(m => {
+        try {
+          const movementDate = new Date(m.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
+          return movementDate >= filterDate;
+        } catch {
+          return true;
+        }
+      });
+    }
+    
+    // Filtro por tipo (entrada/saída)
+    if (movementTypeFilter !== 'all') {
+      filtered = filtered.filter(m => m.type === movementTypeFilter);
+    }
+    
+    // Filtro por usuário
+    if (movementUserFilter !== 'all') {
+      filtered = filtered.filter(m => m.userId === movementUserFilter);
+    }
+    
+    // Filtro por produto
+    if (movementProductFilter !== 'all') {
+      filtered = filtered.filter(m => m.productId === movementProductFilter);
+    }
+    
+    return filtered;
+  }, [movements, movementsPeriodFilter, movementTypeFilter, movementUserFilter, movementProductFilter]);
 
   const filteredProducts = useMemo(() => {
     switch (productsFilter) {
@@ -2963,7 +3026,19 @@ const EstoqueFFApp = () => {
             <div className="space-y-6">
               <div className="bg-white rounded-lg border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-gray-800">Relatório de Movimentações</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-gray-800">Relatório de Movimentações</h3>
+                    {hasActiveMovementFilters && (
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                        {[
+                          movementsPeriodFilter !== 'all' && '📅',
+                          movementTypeFilter !== 'all' && '🔀',
+                          movementUserFilter !== 'all' && '👤',
+                          movementProductFilter !== 'all' && '📦'
+                        ].filter(Boolean).length} filtros ativos
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-3">
                     <select
                       value={movementsPeriodFilter}
@@ -2974,6 +3049,59 @@ const EstoqueFFApp = () => {
                       <option value="7days">Últimos 7 dias</option>
                       <option value="30days">Últimos 30 dias</option>
                     </select>
+                    
+                    {/* Filtro de Tipo */}
+                    <select
+                      value={movementTypeFilter}
+                      onChange={(e) => setMovementTypeFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      title="Filtrar por tipo de movimentação"
+                    >
+                      <option value="all">🔀 Todos os Tipos</option>
+                      <option value="entrada">✅ Entradas</option>
+                      <option value="saida">❌ Saídas</option>
+                    </select>
+                    
+                    {/* Filtro de Usuário */}
+                    <select
+                      value={movementUserFilter}
+                      onChange={(e) => setMovementUserFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      title="Filtrar por usuário"
+                    >
+                      <option value="all">👤 Todos os Usuários</option>
+                      {uniqueUsers.map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.name}
+                        </option>
+                      ))}
+                    </select>
+                    
+                    {/* Filtro de Produto */}
+                    <select
+                      value={movementProductFilter}
+                      onChange={(e) => setMovementProductFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      title="Filtrar por produto"
+                    >
+                      <option value="all">📦 Todos os Produtos</option>
+                      {uniqueProducts.map(prod => (
+                        <option key={prod.id} value={prod.id}>
+                          {prod.name}
+                        </option>
+                      ))}
+                    </select>
+                    
+                    {/* Botão Limpar Filtros */}
+                    {hasActiveMovementFilters && (
+                      <button
+                        onClick={clearMovementFilters}
+                        className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        title="Limpar todos os filtros"
+                      >
+                        ✕ Limpar
+                      </button>
+                    )}
                     
                     <button
                       onClick={() => exportData('movements', 'excel')}
