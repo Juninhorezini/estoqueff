@@ -3058,7 +3058,7 @@ const EstoqueFFApp = () => {
                     >
                       <option value="all">🔀 Todos os Tipos</option>
                       <option value="entrada">✅ Entradas</option>
-                      <option value="saida">❌ Saídas</option>
+                      <option value="saída">❌ Saídas</option>
                     </select>
                     
                     {/* Filtro de Usuário */}
