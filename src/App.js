@@ -44,55 +44,124 @@ const sanitizeConfig = (config) => {
   return clean;
 };
 
-// Hook Firebase usando window globals
+// Hook Firebase usando window globals com suporte a fila offline e retry
 function useFirebaseState(path, defaultValue = null) {
   const [data, setData] = useState(defaultValue);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-  let unsubscribe = null;
-  let timeoutId = null;
+  const getQueueKey = (p) => `estoqueff_queue_${p}`;
 
-  if (!window.firebaseDatabase) {
-    timeoutId = setTimeout(() => {
-      if (window.firebaseDatabase) {
-        unsubscribe = setupFirebaseListener();
-      }
-    }, 1000);
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (unsubscribe) unsubscribe();
-    };
-  }
-  
-  unsubscribe = setupFirebaseListener();
-  
-  function setupFirebaseListener() {
-    const dbRef = window.firebaseRef(window.firebaseDatabase, path);
-    
-    return window.firebaseOnValue(dbRef, (snapshot) => {
-      const value = snapshot.val();
-      setData(value !== null ? value : defaultValue);
-      setLoading(false);
-    });
-  }
-
-  // ✅ CLEANUP CORRETO - fora da função, dentro do useEffect
-  return () => {
-    if (unsubscribe) {
-      unsubscribe();
+  const enqueueOfflineWrite = useCallback((p, payload) => {
+    try {
+      const key = getQueueKey(p);
+      const raw = localStorage.getItem(key);
+      const queue = raw ? JSON.parse(raw) : [];
+      queue.push({ payload, ts: Date.now() });
+      localStorage.setItem(key, JSON.stringify(queue));
+    } catch {
     }
-  };
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [path]); // ← Ignora warning do ESLint
+  }, []);
 
-  const updateData = useCallback((newData) => {
-    if (window.firebaseDatabase) {
+  const flushOfflineQueue = useCallback(async () => {
+    if (!window.firebaseDatabase) return;
+    try {
+      const key = getQueueKey(path);
+      const raw = localStorage.getItem(key);
+      const queue = raw ? JSON.parse(raw) : [];
+      if (!queue.length) return;
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
-      window.firebaseSet(dbRef, newData);
-      setData(newData);
+      let lastPayload = null;
+      for (const item of queue) {
+        let payloadToWrite = item.payload;
+        if (path === 'estoqueff_movements' && Array.isArray(payloadToWrite)) {
+          payloadToWrite = payloadToWrite.map((m) => {
+            if (m && typeof m === 'object') {
+              return { ...m, status: 'synced' };
+            }
+            return m;
+          });
+        }
+        lastPayload = payloadToWrite;
+        await window.firebaseSet(dbRef, payloadToWrite);
+      }
+      if (lastPayload !== null) {
+        setData(lastPayload);
+      }
+      localStorage.removeItem(key);
+    } catch {
     }
   }, [path]);
+
+  useEffect(() => {
+    let unsubscribe = null;
+    let timeoutId = null;
+
+    function setupFirebaseListener() {
+      const dbRef = window.firebaseRef(window.firebaseDatabase, path);
+      return window.firebaseOnValue(dbRef, (snapshot) => {
+        const value = snapshot.val();
+        setData(value !== null ? value : defaultValue);
+        setLoading(false);
+      });
+    }
+
+    const init = () => {
+      if (!window.firebaseDatabase) {
+        timeoutId = setTimeout(() => {
+          if (window.firebaseDatabase) {
+            unsubscribe = setupFirebaseListener();
+            flushOfflineQueue();
+          }
+        }, 1000);
+        return;
+      }
+      unsubscribe = setupFirebaseListener();
+      flushOfflineQueue();
+    };
+
+    init();
+
+    const handleOnline = () => {
+      flushOfflineQueue();
+    };
+
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (unsubscribe) {
+        unsubscribe();
+      }
+      window.removeEventListener('online', handleOnline);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path]);
+
+  const updateData = useCallback(
+    async (newData) => {
+      setData(newData);
+      const writeWithRetry = async (attempt = 0) => {
+        try {
+          if (!window.firebaseDatabase) {
+            throw new Error('offline');
+          }
+          const dbRef = window.firebaseRef(window.firebaseDatabase, path);
+          await window.firebaseSet(dbRef, newData);
+          return true;
+        } catch (error) {
+          if (attempt < 4) {
+            const delay = 300 * Math.pow(2, attempt);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            return writeWithRetry(attempt + 1);
+          }
+          enqueueOfflineWrite(path, newData);
+          return false;
+        }
+      };
+      return writeWithRetry(0);
+    },
+    [path, enqueueOfflineWrite]
+  );
 
   return [data, updateData, loading];
 }
@@ -1542,8 +1611,8 @@ const EstoqueFFApp = () => {
     setLoading(false);
   };
 
-  // Processar movimentação
-  const processMovement = (product = null) => {
+  // Processar movimentação com confirmação de persistência
+  const processMovement = async (product = null) => {
     const targetProduct = product || scannedProduct;
     if (!targetProduct) return;
     
@@ -1571,7 +1640,7 @@ const EstoqueFFApp = () => {
     }
     
     try {
-      const newMovement = {
+      const baseMovement = {
         id: Date.now().toString(),
         product: targetProduct.name,
         productId: targetProduct.id,
@@ -1584,34 +1653,66 @@ const EstoqueFFApp = () => {
         date: new Date().toLocaleString('pt-BR'),
         timestamp: new Date().toISOString()
       };
-      
-      setMovements([newMovement, ...movements]);
-      
-      setProducts(products.map(p => 
-        p.id === targetProduct.id 
-          ? { ...p, stock: movementType === 'entrada' 
-              ? p.stock + quantity
-              : p.stock - quantity }
+
+      const syncingMovement = { ...baseMovement, status: 'syncing' };
+      const syncingMovements = [syncingMovement, ...movements];
+      setMovements(syncingMovements);
+
+      const updatedMovements = [baseMovement, ...movements];
+      const updatedProducts = products.map(p =>
+        p.id === targetProduct.id
+          ? {
+              ...p,
+              stock:
+                movementType === 'entrada'
+                  ? p.stock + quantity
+                  : p.stock - quantity
+            }
           : p
-      ));
-      
-      // Reset estados
-      setScannedProduct(null);
-      setManualSelectedProduct(null);
-      setShowManualMovement(false);
-      setManualSearchTerm('');
-      setMovementQuantity(0);
-		setVolumes('');
-      setUnitsPerVolume('');
-      setMovementType('');
-      setSuccess(`✅ ${movementType === 'entrada' ? 'Entrada' : 'Saída'} de ${quantity} unidades registrada com sucesso!`);
-      setTimeout(() => setSuccess(''), 3000);
-      
+      );
+
+      const [movementsSaved, productsSaved] = await Promise.all([
+        setMovements(updatedMovements),
+        setProducts(updatedProducts)
+      ]);
+
+      const finalStatus = movementsSaved && productsSaved ? 'synced' : 'pending';
+      const finalMovements = updatedMovements.map((m) =>
+        m.id === baseMovement.id ? { ...m, status: finalStatus } : m
+      );
+      setMovements(finalMovements);
+      if (movementsSaved && productsSaved) {
+        setScannedProduct(null);
+        setManualSelectedProduct(null);
+        setShowManualMovement(false);
+        setManualSearchTerm('');
+        setMovementQuantity(0);
+        setVolumes('');
+        setUnitsPerVolume('');
+        setMovementType('');
+        setSuccess(
+          `✅ ${movementType === 'entrada' ? 'Entrada' : 'Saída'} de ${quantity} unidades registrada com sucesso!`
+        );
+      } else {
+        setScannedProduct(null);
+        setManualSelectedProduct(null);
+        setShowManualMovement(false);
+        setManualSearchTerm('');
+        setMovementQuantity(0);
+        setVolumes('');
+        setUnitsPerVolume('');
+        setMovementType('');
+        setSuccess(
+          `⚠️ ${movementType === 'entrada' ? 'Entrada' : 'Saída'} de ${quantity} unidades registrada localmente e será sincronizada quando a conexão estiver estável.`
+        );
+      }
+
+      setTimeout(() => setSuccess(''), 4000);
     } catch (error) {
       setErrors({ general: 'Erro ao processar movimentação. Tente novamente.' });
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   // Exportação para PDF
@@ -2420,23 +2521,77 @@ const EstoqueFFApp = () => {
 				{movements.length === 0 ? (
 					<p className="text-gray-500 text-center py-4">Nenhuma movimentação registrada ainda.</p>
 				) : (
-					movements.slice(0, 20).map(movement => (
-						<div key={movement.id} className="flex justify-between items-center border-b pb-3 last:border-b-0 last:pb-0">
-							<div>
-								<p className="font-medium text-gray-800">{movement.product}</p>
-								<p className="text-sm text-gray-500">
-									{(() => {
-										const product = products.find(p => p.id === movement.productId);
-										return product?.brand ? `${product.brand} • ` : '';
-									})()}
-									{movement.user} • {movement.date}
-								</p>
-							</div>
-							<div className={`font-bold text-lg ${movement.type === 'entrada' ? 'text-green-500' : 'text-red-500'}`}>
-								{movement.type === 'entrada' ? '+' : '-'}{formatNumber(movement.quantity)}
-							</div>
-						</div>
-					))
+					movements.slice(0, 20).map(movement => {
+            const movementStatus = movement.status || 'synced';
+            const isEntrada = movement.type === 'entrada';
+            const amountColor = isEntrada ? 'text-green-500' : 'text-red-500';
+            const statusConfig = movementStatus === 'syncing'
+              ? {
+                  text: 'Sincronizando',
+                  classes: 'bg-blue-100 text-blue-800',
+                  icon: (
+                    <Loader2
+                      size={14}
+                      className="mr-1 inline-block animate-spin"
+                    />
+                  ),
+                  title: 'Aguardando confirmação de sincronização com o servidor'
+                }
+              : movementStatus === 'pending'
+              ? {
+                  text: 'Pendente',
+                  classes: 'bg-orange-100 text-orange-800',
+                  icon: (
+                    <AlertTriangle
+                      size={14}
+                      className="mr-1 inline-block"
+                    />
+                  ),
+                  title: 'Registrado localmente. Será sincronizado quando a conexão estiver estável'
+                }
+              : {
+                  text: 'Sincronizado',
+                  classes: 'bg-green-100 text-green-800',
+                  icon: (
+                    <CheckCircle
+                      size={14}
+                      className="mr-1 inline-block"
+                    />
+                  ),
+                  title: 'Movimentação confirmada no servidor'
+                };
+
+            return (
+              <div
+                key={movement.id}
+                className="flex justify-between items-center border-b pb-3 last:border-b-0 last:pb-0"
+              >
+                <div>
+                  <p className="font-medium text-gray-800">{movement.product}</p>
+                  <p className="text-sm text-gray-500">
+                    {(() => {
+                      const product = products.find(p => p.id === movement.productId);
+                      return product?.brand ? `${product.brand} • ` : '';
+                    })()}
+                    {movement.user} • {movement.date}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <div className={`font-bold text-lg ${amountColor}`}>
+                    {isEntrada ? '+' : '-'}
+                    {formatNumber(movement.quantity)}
+                  </div>
+                  <div
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-medium flex items-center ${statusConfig.classes}`}
+                    title={statusConfig.title}
+                  >
+                    {statusConfig.icon}
+                    <span>{statusConfig.text}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })
 				)}
 			</div>
 		)}
@@ -3156,27 +3311,85 @@ const EstoqueFFApp = () => {
                 </div>
 
                 <div className="space-y-2">
-                  {filteredMovements.slice(0, 100).map(movement => (
-                    <div key={movement.id} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
-                      <div>
-                      <p className="font-medium text-gray-800">{movement.product}</p>
-                      <p className="text-sm text-gray-600">
-                        {(() => {
-                          const product = products.find(p => p.id === movement.productId);
-                          return product?.brand ? `${product.brand} • ` : '';
-                        })()}
-                        {movement.user} • {movement.date}
-                      </p>
-                    </div>
-                      <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        movement.type === 'entrada' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {movement.type === 'entrada' ? '+' : '-'}{formatNumber(movement.quantity)}
+                  {filteredMovements.slice(0, 100).map(movement => {
+                    const movementStatus = movement.status || 'synced';
+                    const isEntrada = movement.type === 'entrada';
+                    const amountClasses = isEntrada
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800';
+                    const statusConfig = movementStatus === 'syncing'
+                      ? {
+                          text: 'Sincronizando',
+                          classes: 'bg-blue-100 text-blue-800',
+                          icon: (
+                            <Loader2
+                              size={14}
+                              className="mr-1 inline-block animate-spin"
+                            />
+                          ),
+                          title: 'Aguardando confirmação de sincronização com o servidor'
+                        }
+                      : movementStatus === 'pending'
+                      ? {
+                          text: 'Pendente',
+                          classes: 'bg-orange-100 text-orange-800',
+                          icon: (
+                            <AlertTriangle
+                              size={14}
+                              className="mr-1 inline-block"
+                            />
+                          ),
+                          title: 'Registrado localmente. Será sincronizado quando a conexão estiver estável'
+                        }
+                      : {
+                          text: 'Sincronizado',
+                          classes: 'bg-green-100 text-green-800',
+                          icon: (
+                            <CheckCircle
+                              size={14}
+                              className="mr-1 inline-block"
+                            />
+                          ),
+                          title: 'Movimentação confirmada no servidor'
+                        };
+
+                    return (
+                      <div
+                        key={movement.id}
+                        className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0"
+                      >
+                        <div>
+                          <p className="font-medium text-gray-800">
+                            {movement.product}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {(() => {
+                              const product = products.find(
+                                p => p.id === movement.productId
+                              );
+                              return product?.brand ? `${product.brand} • ` : '';
+                            })()}
+                            {movement.user} • {movement.date}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <div
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${amountClasses}`}
+                          >
+                            {isEntrada ? '+' : '-'}
+                            {formatNumber(movement.quantity)}
+                          </div>
+                          <div
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-medium flex items-center ${statusConfig.classes}`}
+                            title={statusConfig.title}
+                          >
+                            {statusConfig.icon}
+                            <span>{statusConfig.text}</span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <p className="text-xs text-gray-500 mt-4 text-center">
