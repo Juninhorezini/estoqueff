@@ -140,11 +140,15 @@ function useFirebaseState(path, defaultValue = null) {
   const updateData = useCallback(
     async (newData) => {
       setData(newData);
+      if (
+        !window.firebaseDatabase ||
+        (typeof navigator !== 'undefined' && navigator.onLine === false)
+      ) {
+        enqueueOfflineWrite(path, newData);
+        return false;
+      }
       const writeWithRetry = async (attempt = 0) => {
         try {
-          if (!window.firebaseDatabase) {
-            throw new Error('offline');
-          }
           const dbRef = window.firebaseRef(window.firebaseDatabase, path);
           await window.firebaseSet(dbRef, newData);
           return true;
@@ -1611,7 +1615,7 @@ const EstoqueFFApp = () => {
     setLoading(false);
   };
 
-  // Processar movimentação com confirmação de persistência
+  // Processar movimentação com confirmação e sincronização resiliente
   const processMovement = async (product = null) => {
     const targetProduct = product || scannedProduct;
     if (!targetProduct) return;
@@ -1654,11 +1658,16 @@ const EstoqueFFApp = () => {
         timestamp: new Date().toISOString()
       };
 
-      const syncingMovement = { ...baseMovement, status: 'syncing' };
-      const syncingMovements = [syncingMovement, ...movements];
-      setMovements(syncingMovements);
+      const onlineNow =
+        typeof navigator !== 'undefined' ? navigator.onLine : true;
+      const statusOnCreate =
+        onlineNow && window.firebaseDatabase ? 'syncing' : 'pending';
 
-      const updatedMovements = [baseMovement, ...movements];
+      const initialMovements = [
+        { ...baseMovement, status: statusOnCreate },
+        ...movements
+      ];
+
       const updatedProducts = products.map(p =>
         p.id === targetProduct.id
           ? {
@@ -1671,43 +1680,42 @@ const EstoqueFFApp = () => {
           : p
       );
 
-      const [movementsSaved, productsSaved] = await Promise.all([
-        setMovements(updatedMovements),
-        setProducts(updatedProducts)
-      ]);
+      const movementsPromise = setMovements(initialMovements);
+      const productsPromise = setProducts(updatedProducts);
 
-      const finalStatus = movementsSaved && productsSaved ? 'synced' : 'pending';
-      const finalMovements = updatedMovements.map((m) =>
-        m.id === baseMovement.id ? { ...m, status: finalStatus } : m
-      );
-      setMovements(finalMovements);
-      if (movementsSaved && productsSaved) {
-        setScannedProduct(null);
-        setManualSelectedProduct(null);
-        setShowManualMovement(false);
-        setManualSearchTerm('');
-        setMovementQuantity(0);
-        setVolumes('');
-        setUnitsPerVolume('');
-        setMovementType('');
+      setScannedProduct(null);
+      setManualSelectedProduct(null);
+      setShowManualMovement(false);
+      setManualSearchTerm('');
+      setMovementQuantity(0);
+      setVolumes('');
+      setUnitsPerVolume('');
+      setMovementType('');
+
+      if (statusOnCreate === 'syncing') {
         setSuccess(
-          `✅ ${movementType === 'entrada' ? 'Entrada' : 'Saída'} de ${quantity} unidades registrada com sucesso!`
+          `✅ ${movementType === 'entrada' ? 'Entrada' : 'Saída'} de ${quantity} unidades registrada e sincronizando com o servidor...`
         );
       } else {
-        setScannedProduct(null);
-        setManualSelectedProduct(null);
-        setShowManualMovement(false);
-        setManualSearchTerm('');
-        setMovementQuantity(0);
-        setVolumes('');
-        setUnitsPerVolume('');
-        setMovementType('');
         setSuccess(
           `⚠️ ${movementType === 'entrada' ? 'Entrada' : 'Saída'} de ${quantity} unidades registrada localmente e será sincronizada quando a conexão estiver estável.`
         );
       }
 
       setTimeout(() => setSuccess(''), 4000);
+
+      Promise.all([movementsPromise, productsPromise])
+        .then(([movementsSaved, productsSaved]) => {
+          if (movementsSaved && productsSaved) {
+            const finalMovements = initialMovements.map(m =>
+              m.id === baseMovement.id ? { ...m, status: 'synced' } : m
+            );
+            setMovements(finalMovements);
+          }
+        })
+        .catch(error => {
+          console.error('Erro ao sincronizar movimentação:', error);
+        });
     } catch (error) {
       setErrors({ general: 'Erro ao processar movimentação. Tente novamente.' });
     } finally {
