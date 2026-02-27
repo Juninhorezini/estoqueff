@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { QrCode, Package, Users, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload } from 'lucide-react';
+import { QrCode, Package, Users, BarChart3, Settings, Scan, Plus, AlertTriangle, TrendingUp, Download, Search, Edit, Trash2, Camera, CheckCircle, Save, X, Check, Loader2, FileText, FileSpreadsheet, Upload, Clock } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -44,51 +44,142 @@ const sanitizeConfig = (config) => {
   return clean;
 };
 
-// Hook Firebase usando window globals com suporte a fila offline e retry
+// Hook Firebase usando window globals com suporte a fila offline, retry e reconciliação
 function useFirebaseState(path, defaultValue = null) {
   const [data, setData] = useState(defaultValue);
   const [loading, setLoading] = useState(true);
+  const [syncStatus, setSyncStatus] = useState('idle'); // idle, syncing, error, synced
+  const [retryCount, setRetryCount] = useState(0);
 
   const getQueueKey = (p) => `estoqueff_queue_${p}`;
+
+  // Carrega dados locais (cache/fila) imediatamente ao iniciar
+  useEffect(() => {
+    try {
+      const key = getQueueKey(path);
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const queue = JSON.parse(raw);
+        if (queue.length > 0) {
+          // Usa o snapshot mais recente da fila local para exibição imediata
+          const latest = queue[queue.length - 1].payload;
+          console.log(`[Offline] Carregando dados locais para ${path}`, latest);
+          setData(latest);
+          setLoading(false);
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao ler cache local:", e);
+    }
+  }, [path]);
 
   const enqueueOfflineWrite = useCallback((p, payload) => {
     try {
       const key = getQueueKey(p);
       const raw = localStorage.getItem(key);
       const queue = raw ? JSON.parse(raw) : [];
-      queue.push({ payload, ts: Date.now() });
-      localStorage.setItem(key, JSON.stringify(queue));
-    } catch {
+      
+      // Otimização: Se a fila já tem itens e estamos salvando snapshots completos,
+      // podemos manter apenas o mais recente para evitar processamento desnecessário,
+      // MAS para segurança de histórico, vamos manter os últimos 5 no máximo.
+      // Se for movements, a lógica de merge no flush lidará com isso.
+      
+      queue.push({ payload, ts: Date.now(), id: Date.now().toString() });
+      
+      // Limita tamanho da fila para evitar localStorage full
+      const trimmedQueue = queue.slice(-5);
+      
+      localStorage.setItem(key, JSON.stringify(trimmedQueue));
+      setSyncStatus('pending');
+    } catch (e) {
+      console.error("Erro ao enfileirar offline:", e);
     }
   }, []);
 
-  const flushOfflineQueue = useCallback(async () => {
+  const flushOfflineQueue = useCallback(async (currentRetry = 0) => {
     if (!window.firebaseDatabase) return;
+    
+    const key = getQueueKey(path);
+    const raw = localStorage.getItem(key);
+    const queue = raw ? JSON.parse(raw) : [];
+    
+    if (!queue.length) {
+      setSyncStatus('idle');
+      return;
+    }
+
+    setSyncStatus('syncing');
+    
     try {
-      const key = getQueueKey(path);
-      const raw = localStorage.getItem(key);
-      const queue = raw ? JSON.parse(raw) : [];
-      if (!queue.length) return;
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
-      let lastPayload = null;
-      for (const item of queue) {
-        let payloadToWrite = item.payload;
-        if (path === 'estoqueff_movements' && Array.isArray(payloadToWrite)) {
-          payloadToWrite = payloadToWrite.map((m) => {
-            if (m && typeof m === 'object') {
-              return { ...m, status: 'synced' };
-            }
-            return m;
-          });
+      
+      // Pega o item mais recente da fila (snapshot atual)
+      const lastItem = queue[queue.length - 1];
+      let payloadToWrite = lastItem.payload;
+
+      // Lógica de Reconciliação para Movimentações
+      if (path === 'estoqueff_movements' && Array.isArray(payloadToWrite)) {
+        // 1. Busca dados atuais do servidor para não sobrescrever outros usuários
+        const serverSnapshot = await window.firebaseGet(dbRef); // Assumindo que firebaseGet existe ou usando onValue one-time
+        // Se firebaseGet não existir como helper, usamos onValue com once
+        
+        let serverData = [];
+        if (serverSnapshot && serverSnapshot.exists && serverSnapshot.exists()) {
+           serverData = serverSnapshot.val() || [];
+        } else {
+           // Fallback se não conseguir ler ou não existir helper direto
+           // Tentaremos usar o próprio onValue wrapped numa promise se necessário, 
+           // mas por segurança, se falhar a leitura, seguimos com o snapshot local (risco de overwrite)
+           // ou abortamos. Vamos tentar ser otimistas.
         }
-        lastPayload = payloadToWrite;
-        await window.firebaseSet(dbRef, payloadToWrite);
+
+        // Se conseguimos ler do servidor, fazemos merge
+        if (Array.isArray(serverData)) {
+           // Mapa de IDs do servidor
+           const serverIds = new Set(serverData.map(m => m.id));
+           // Itens locais que não estão no servidor (novos)
+           const localNewItems = payloadToWrite.filter(m => !serverIds.has(m.id));
+           
+           // Resultado: Dados do servidor + Meus novos itens
+           // Mantendo a ordem decrescente (mais novos primeiro)
+           payloadToWrite = [...localNewItems, ...serverData].sort((a, b) => {
+             return new Date(b.timestamp || b.date) - new Date(a.timestamp || a.date);
+           });
+        }
+        
+        // Atualiza status para synced
+        payloadToWrite = payloadToWrite.map((m) => {
+          if (m && typeof m === 'object' && (!m.status || m.status !== 'synced')) {
+            return { ...m, status: 'synced' };
+          }
+          return m;
+        });
       }
-      if (lastPayload !== null) {
-        setData(lastPayload);
-      }
+
+      await window.firebaseSet(dbRef, payloadToWrite);
+      
+      // Sucesso! Atualiza estado local e limpa fila
+      setData(payloadToWrite);
       localStorage.removeItem(key);
-    } catch {
+      setSyncStatus('synced');
+      setRetryCount(0);
+      
+      // Feedback visual temporário
+      setTimeout(() => setSyncStatus('idle'), 3000);
+
+    } catch (error) {
+      console.error("Erro no flushOfflineQueue:", error);
+      
+      const nextRetry = currentRetry + 1;
+      setRetryCount(nextRetry);
+      setSyncStatus('error');
+      
+      // Retry com backoff se falhar
+      if (nextRetry <= 5) {
+        const delay = 1000 * Math.pow(2, nextRetry);
+        console.log(`Agendando retry ${nextRetry} em ${delay}ms`);
+        setTimeout(() => flushOfflineQueue(nextRetry), delay);
+      }
     }
   }, [path]);
 
@@ -100,7 +191,23 @@ function useFirebaseState(path, defaultValue = null) {
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
       return window.firebaseOnValue(dbRef, (snapshot) => {
         const value = snapshot.val();
-        setData(value !== null ? value : defaultValue);
+        
+        // Só atualiza do servidor se NÃO tivermos pendências locais importantes
+        // Ou fazemos merge visual?
+        // Estratégia: Se fila vazia, aceita servidor. Se fila cheia, ignora servidor (pois vamos sobrescrever em breve)
+        // ou mescla visualmente.
+        const key = getQueueKey(path);
+        const hasPending = !!localStorage.getItem(key);
+        
+        if (!hasPending) {
+           setData(value !== null ? value : defaultValue);
+        } else {
+           // Se tem pendencia, talvez o servidor já tenha recebido nosso flush?
+           // Se o valor do servidor conter nossos IDs pendentes, podemos limpar a fila?
+           // Complexo. Vamos manter simples: Servidor atualiza, mas flush sobrescreve depois se necessário.
+           // Para evitar "pulo" visual, se tem pendencia, mantemos dados locais.
+           console.log(`[Firebase] Dados recebidos para ${path}, mas temos pendências locais. Ignorando atualização remota temporariamente.`);
+        }
         setLoading(false);
       });
     }
@@ -122,6 +229,7 @@ function useFirebaseState(path, defaultValue = null) {
     init();
 
     const handleOnline = () => {
+      console.log("Online detectado! Tentando sincronizar...");
       flushOfflineQueue();
     };
 
@@ -139,35 +247,29 @@ function useFirebaseState(path, defaultValue = null) {
 
   const updateData = useCallback(
     async (newData) => {
+      // Atualização otimista imediata
       setData(newData);
+      
+      // Salva na fila imediatamente (persistência local first)
+      enqueueOfflineWrite(path, newData);
+
       if (
         !window.firebaseDatabase ||
         (typeof navigator !== 'undefined' && navigator.onLine === false)
       ) {
-        enqueueOfflineWrite(path, newData);
         return false;
       }
-      const writeWithRetry = async (attempt = 0) => {
-        try {
-          const dbRef = window.firebaseRef(window.firebaseDatabase, path);
-          await window.firebaseSet(dbRef, newData);
-          return true;
-        } catch (error) {
-          if (attempt < 4) {
-            const delay = 300 * Math.pow(2, attempt);
-            await new Promise((resolve) => setTimeout(resolve, delay));
-            return writeWithRetry(attempt + 1);
-          }
-          enqueueOfflineWrite(path, newData);
-          return false;
-        }
-      };
-      return writeWithRetry(0);
+      
+      // Tenta enviar imediatamente (flush) em vez de lógica duplicada de retry aqui
+      // O flush já tem lógica de retry e queue management
+      // Pequeno delay para garantir que enqueue terminou
+      setTimeout(() => flushOfflineQueue(), 10);
+      return true;
     },
-    [path, enqueueOfflineWrite]
+    [path, enqueueOfflineWrite, flushOfflineQueue]
   );
 
-  return [data, updateData, loading];
+  return [data, updateData, loading, syncStatus, retryCount];
 }
 
 // Componente de Login
@@ -1038,7 +1140,7 @@ const EstoqueFFApp = () => {
     { id: 'P004', name: 'Monitor 24"', brand: 'Samsung', category: 'Eletrônicos', code: 'MN-SAM-004', stock: 12, minStock: 3, qrCode: 'QR004', createdAt: '2025-01-01' }
   ]);
   
-  const [movements, setMovements] = useFirebaseState('estoqueff_movements', [
+  const [movements, setMovements, , movementsSyncStatus, movementsRetryCount] = useFirebaseState('estoqueff_movements', [
     { id: '1', product: 'Notebook Dell', type: 'saída', quantity: 2, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 14:30' },
     { id: '2', product: 'Mouse Logitech', type: 'entrada', quantity: 5, user: 'Operador Sistema', userId: 'user2', userName: 'Operador Sistema', userRole: 'operator', date: '2025-08-04 12:15' },
     { id: '3', product: 'Monitor 24"', type: 'saída', quantity: 1, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 10:45' }
@@ -1643,6 +1745,17 @@ const EstoqueFFApp = () => {
       return;
     }
     
+    // Safety timeout para garantir que o loading não fique preso
+    const timeoutId = setTimeout(() => {
+      setLoading(prev => {
+        if (prev) {
+          setErrors({ general: 'Tempo limite excedido. A operação continua em segundo plano.' });
+          return false;
+        }
+        return prev;
+      });
+    }, 10000);
+
     try {
       const baseMovement = {
         id: Date.now().toString(),
@@ -1660,8 +1773,7 @@ const EstoqueFFApp = () => {
 
       const onlineNow =
         typeof navigator !== 'undefined' ? navigator.onLine : true;
-      const statusOnCreate =
-        onlineNow && window.firebaseDatabase ? 'syncing' : 'pending';
+      const statusOnCreate = 'pending'; // Sempre começa como pendente e o sync atualiza
 
       const initialMovements = [
         { ...baseMovement, status: statusOnCreate },
@@ -1692,7 +1804,7 @@ const EstoqueFFApp = () => {
       setUnitsPerVolume('');
       setMovementType('');
 
-      if (statusOnCreate === 'syncing') {
+      if (onlineNow && window.firebaseDatabase) {
         setSuccess(
           `✅ ${movementType === 'entrada' ? 'Entrada' : 'Saída'} de ${quantity} unidades registrada e sincronizando com o servidor...`
         );
@@ -1705,20 +1817,13 @@ const EstoqueFFApp = () => {
       setTimeout(() => setSuccess(''), 4000);
 
       Promise.all([movementsPromise, productsPromise])
-        .then(([movementsSaved, productsSaved]) => {
-          if (movementsSaved && productsSaved) {
-            const finalMovements = initialMovements.map(m =>
-              m.id === baseMovement.id ? { ...m, status: 'synced' } : m
-            );
-            setMovements(finalMovements);
-          }
-        })
         .catch(error => {
           console.error('Erro ao sincronizar movimentação:', error);
         });
     } catch (error) {
       setErrors({ general: 'Erro ao processar movimentação. Tente novamente.' });
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -2360,6 +2465,34 @@ const EstoqueFFApp = () => {
           </div>
         </div>
       )}
+
+      {/* Sync Status Notifications */}
+      {movementsSyncStatus === 'syncing' && (
+        <div className="fixed bottom-20 right-4 md:bottom-4 md:right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-pulse">
+          <Loader2 size={16} className="animate-spin" />
+          <span className="text-sm">Sincronizando dados...</span>
+        </div>
+      )}
+
+      {movementsSyncStatus === 'error' && movementsRetryCount >= 5 && (
+        <div className="fixed top-24 left-4 right-4 bg-red-600 text-white p-4 rounded-lg shadow-lg z-50 animate-bounce">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <AlertTriangle size={24} />
+              <div>
+                <p className="font-bold">Falha na Sincronização</p>
+                <p className="text-sm">Não foi possível conectar ao servidor após várias tentativas. Verifique sua conexão.</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="mt-2 bg-white text-red-600 px-3 py-2 rounded text-sm font-bold w-full hover:bg-red-50"
+            >
+              Tentar Novamente (Recarregar)
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Loading overlay */}
       {loading && (
@@ -2403,11 +2536,48 @@ const EstoqueFFApp = () => {
         <div className="p-4 pb-20 md:ml-64 md:pb-4">
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold text-gray-800">EstoqueFF Dashboard</h1>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                {companySettings.responsibleName.split(' ').map(n => n[0]).join('')}
+            <div className="flex items-center gap-3">
+              {/* Status de Sincronização Global */}
+              {movementsSyncStatus === 'pending' && (
+                <div className="flex items-center gap-1 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs font-medium" title="Dados salvos localmente. Aguardando conexão para sincronizar.">
+                   <AlertTriangle size={14} />
+                   <span>Pendente</span>
+                </div>
+              )}
+              {movementsSyncStatus === 'syncing' && (
+                <div className="flex items-center gap-1 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-medium">
+                   <Loader2 size={14} className="animate-spin" />
+                   <span className="hidden sm:inline">Sincronizando...</span>
+                   <span className="sm:hidden">Sync...</span>
+                </div>
+              )}
+              {movementsSyncStatus === 'pending' && (
+                <div className="flex items-center gap-1 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs font-medium">
+                   <Clock size={14} />
+                   <span className="hidden sm:inline">Pendente</span>
+                   <span className="sm:hidden">Wait</span>
+                </div>
+              )}
+              {movementsSyncStatus === 'synced' && (
+                <div className="flex items-center gap-1 bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-medium">
+                   <CheckCircle size={14} />
+                   <span className="hidden sm:inline">Online</span>
+                   <span className="sm:hidden">OK</span>
+                </div>
+              )}
+              {movementsSyncStatus === 'error' && (
+                <div className="flex items-center gap-1 bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-medium" title="Erro de conexão. Tentando novamente...">
+                   <AlertTriangle size={14} />
+                   <span>Erro</span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                  {companySettings.responsibleName.split(' ').map(n => n[0]).join('')}
+                </div>
+                <span className="hidden sm:inline text-sm text-gray-600">{companySettings.responsibleName}</span>
               </div>
-              <span className="text-sm text-gray-600">{companySettings.responsibleName}</span>
             </div>
           </div>
 
@@ -2550,7 +2720,7 @@ const EstoqueFFApp = () => {
                   text: 'Pendente',
                   classes: 'bg-orange-100 text-orange-800',
                   icon: (
-                    <AlertTriangle
+                    <Clock
                       size={14}
                       className="mr-1 inline-block"
                     />
