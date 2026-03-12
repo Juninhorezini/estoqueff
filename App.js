@@ -13,11 +13,6 @@ const formatNumber = (number) => {
   return new Intl.NumberFormat('pt-BR').format(number);
 };
 
-const sleepMs = (ms) =>
-  new Promise(resolve => {
-    setTimeout(resolve, ms);
-  });
-
 // Função auxiliar para sanitizar objetos antes de salvar no Firebase
 const sanitizeConfig = (config) => {
   if (!config) return null;
@@ -55,48 +50,8 @@ function useFirebaseState(path, defaultValue = null) {
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState('idle'); // idle, syncing, error, synced
   const [retryCount, setRetryCount] = useState(0);
-  const flushInProgressRef = useRef(false);
 
   const getQueueKey = (p) => `estoqueff_queue_${p}`;
-
-  const isSyncDebugEnabled = () => {
-    try {
-      return localStorage.getItem('estoqueff_debug_sync') === '1';
-    } catch {
-      return false;
-    }
-  };
-
-  const appendHookSyncLog = (entry) => {
-    try {
-      const key = 'estoqueff_sync_hook_log_v1';
-      const raw = localStorage.getItem(key);
-      const parsed = raw ? JSON.parse(raw) : [];
-      const arr = Array.isArray(parsed) ? parsed : [];
-      const next = [...arr, entry].slice(-300);
-      localStorage.setItem(key, JSON.stringify(next));
-    } catch {}
-  };
-
-  const logHookSync = (event, extra) => {
-    const entry = { at: Date.now(), path, event, extra: extra ?? null };
-    appendHookSyncLog(entry);
-    if (isSyncDebugEnabled()) {
-      try {
-        console.log('[sync-hook]', entry);
-      } catch {}
-    }
-  };
-
-  const withTimeoutLocal = (promise, timeoutMs, message) => {
-    const timeoutPromise = new Promise((_, reject) => {
-      const id = setTimeout(() => {
-        clearTimeout(id);
-        reject(new Error(message || 'timeout'));
-      }, timeoutMs);
-    });
-    return Promise.race([promise, timeoutPromise]);
-  };
 
   // Carrega dados locais (cache/fila) imediatamente ao iniciar
   useEffect(() => {
@@ -109,14 +64,12 @@ function useFirebaseState(path, defaultValue = null) {
           // Usa o snapshot mais recente da fila local para exibição imediata
           const latest = queue[queue.length - 1].payload;
           console.log(`[Offline] Carregando dados locais para ${path}`, latest);
-          logHookSync('init_load_queue_snapshot', { items: queue.length });
           setData(latest);
           setLoading(false);
         }
       }
     } catch (e) {
       console.error("Erro ao ler cache local:", e);
-      logHookSync('init_load_queue_error', { message: String(e?.message || e) });
     }
   }, [path]);
 
@@ -138,17 +91,13 @@ function useFirebaseState(path, defaultValue = null) {
       
       localStorage.setItem(key, JSON.stringify(trimmedQueue));
       setSyncStatus('pending');
-      logHookSync('enqueue_snapshot', { queueSize: trimmedQueue.length });
     } catch (e) {
       console.error("Erro ao enfileirar offline:", e);
-      logHookSync('enqueue_error', { message: String(e?.message || e) });
     }
   }, []);
 
   const flushOfflineQueue = useCallback(async (currentRetry = 0) => {
     if (!window.firebaseDatabase) return;
-    if (flushInProgressRef.current) return;
-    flushInProgressRef.current = true;
     
     const key = getQueueKey(path);
     const raw = localStorage.getItem(key);
@@ -156,13 +105,10 @@ function useFirebaseState(path, defaultValue = null) {
     
     if (!queue.length) {
       setSyncStatus('idle');
-      flushInProgressRef.current = false;
-      logHookSync('flush_empty', null);
       return;
     }
 
     setSyncStatus('syncing');
-    logHookSync('flush_start', { queueSize: queue.length, currentRetry });
     
     try {
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
@@ -171,12 +117,10 @@ function useFirebaseState(path, defaultValue = null) {
       const lastItem = queue[queue.length - 1];
       let payloadToWrite = lastItem.payload;
 
-      if (
-        (path === 'estoqueff_movements' || path.endsWith('/movements')) &&
-        Array.isArray(payloadToWrite)
-      ) {
+      // Lógica de Reconciliação para Movimentações
+      if (path === 'estoqueff_movements' && Array.isArray(payloadToWrite)) {
         // 1. Busca dados atuais do servidor para não sobrescrever outros usuários
-        const serverSnapshot = await withTimeoutLocal(window.firebaseGet(dbRef), 8000, 'get_movements_timeout'); // Assumindo que firebaseGet existe ou usando onValue one-time
+        const serverSnapshot = await window.firebaseGet(dbRef); // Assumindo que firebaseGet existe ou usando onValue one-time
         // Se firebaseGet não existir como helper, usamos onValue com once
         
         let serverData = [];
@@ -195,7 +139,6 @@ function useFirebaseState(path, defaultValue = null) {
            const serverIds = new Set(serverData.map(m => m.id));
            // Itens locais que não estão no servidor (novos)
            const localNewItems = payloadToWrite.filter(m => !serverIds.has(m.id));
-           logHookSync('flush_merge_movements', { serverCount: serverData.length, localNewCount: localNewItems.length });
            
            // Resultado: Dados do servidor + Meus novos itens
            // Mantendo a ordem decrescente (mais novos primeiro)
@@ -213,21 +156,19 @@ function useFirebaseState(path, defaultValue = null) {
         });
       }
 
-      await withTimeoutLocal(window.firebaseSet(dbRef, payloadToWrite), 8000, 'set_timeout');
+      await window.firebaseSet(dbRef, payloadToWrite);
       
       // Sucesso! Atualiza estado local e limpa fila
       setData(payloadToWrite);
       localStorage.removeItem(key);
       setSyncStatus('synced');
       setRetryCount(0);
-      logHookSync('flush_success', { wroteType: Array.isArray(payloadToWrite) ? 'array' : typeof payloadToWrite });
       
       // Feedback visual temporário
       setTimeout(() => setSyncStatus('idle'), 3000);
 
     } catch (error) {
       console.error("Erro no flushOfflineQueue:", error);
-      logHookSync('flush_error', { message: String(error?.message || error), currentRetry });
       
       const nextRetry = currentRetry + 1;
       setRetryCount(nextRetry);
@@ -239,8 +180,6 @@ function useFirebaseState(path, defaultValue = null) {
         console.log(`Agendando retry ${nextRetry} em ${delay}ms`);
         setTimeout(() => flushOfflineQueue(nextRetry), delay);
       }
-    } finally {
-      flushInProgressRef.current = false;
     }
   }, [path]);
 
@@ -253,155 +192,21 @@ function useFirebaseState(path, defaultValue = null) {
       return window.firebaseOnValue(dbRef, (snapshot) => {
         const value = snapshot.val();
         
-        let inventoryOps = [];
-        try {
-          const rawOps = localStorage.getItem('estoqueff_inventory_ops_queue_v1');
-          const parsedOps = rawOps ? JSON.parse(rawOps) : [];
-          inventoryOps = Array.isArray(parsedOps) ? parsedOps : [];
-        } catch {
-          inventoryOps = [];
-        }
-
-        const isProductsPath =
-          path === 'estoqueff_products' || path.endsWith('/products');
-        const isMovementsPath =
-          path === 'estoqueff_movements' || path.endsWith('/movements');
-
-        let cachedUnsyncedMovements = [];
-        if (isMovementsPath) {
-          try {
-            const rawCached = localStorage.getItem('estoqueff_cache_movements_v1');
-            const parsedCached = rawCached ? JSON.parse(rawCached) : [];
-            const arr = Array.isArray(parsedCached) ? parsedCached : [];
-            cachedUnsyncedMovements = arr.filter(m => {
-              const s = m?.status;
-              return !!m?.id && (s === 'pending' || s === 'syncing' || s === 'error');
-            });
-          } catch {
-            cachedUnsyncedMovements = [];
-          }
-        }
-
-        const inventoryHasPending =
-          inventoryOps.length > 0 && (isProductsPath || isMovementsPath);
-
+        // Só atualiza do servidor se NÃO tivermos pendências locais importantes
+        // Ou fazemos merge visual?
+        // Estratégia: Se fila vazia, aceita servidor. Se fila cheia, ignora servidor (pois vamos sobrescrever em breve)
+        // ou mescla visualmente.
         const key = getQueueKey(path);
-        const hasPending =
-          !!localStorage.getItem(key) || inventoryHasPending || cachedUnsyncedMovements.length > 0;
-
-        const baseValue = value !== null ? value : defaultValue;
-
+        const hasPending = !!localStorage.getItem(key);
+        
         if (!hasPending) {
-          setData(baseValue);
-        } else if (inventoryHasPending) {
-          if (isMovementsPath) {
-            const serverMovements = Array.isArray(baseValue) ? baseValue : [];
-            const pendingMovements = inventoryOps
-              .filter(op => op && op.type === 'movement' && op.payload && op.payload.movement)
-              .map(op => op.payload.movement)
-              .filter(m => m && m.id);
-
-            const mergedMap = new Map();
-            serverMovements.forEach(m => {
-              if (m && m.id) mergedMap.set(m.id, m);
-            });
-
-            cachedUnsyncedMovements.forEach(m => {
-              if (!m?.id) return;
-              if (mergedMap.has(m.id)) return;
-              mergedMap.set(m.id, m);
-            });
-
-            pendingMovements.forEach(m => {
-              if (!m?.id) return;
-              if (mergedMap.has(m.id)) return;
-              mergedMap.set(m.id, { ...m, status: m.status || 'pending' });
-            });
-
-            const merged = Array.from(mergedMap.values()).sort((a, b) => {
-              const ta = new Date(a?.timestamp || a?.date || 0).getTime();
-              const tb = new Date(b?.timestamp || b?.date || 0).getTime();
-              return tb - ta;
-            });
-
-            setData(merged);
-          } else if (isProductsPath) {
-            let nextProducts = Array.isArray(baseValue) ? baseValue : [];
-
-            inventoryOps.forEach(op => {
-              if (!op || !op.type) return;
-
-              if (op.type === 'restoreBackup' && op.payload && Array.isArray(op.payload.products)) {
-                nextProducts = op.payload.products;
-                return;
-              }
-
-              if (op.type === 'deleteProduct' && op.payload && op.payload.productId) {
-                nextProducts = nextProducts.filter(p => p && p.id !== op.payload.productId);
-                return;
-              }
-
-              if (op.type === 'upsertProduct' && op.payload && op.payload.product && op.payload.product.id) {
-                const idx = nextProducts.findIndex(p => p && p.id === op.payload.product.id);
-                if (idx >= 0) {
-                  nextProducts = [
-                    ...nextProducts.slice(0, idx),
-                    { ...nextProducts[idx], ...op.payload.product },
-                    ...nextProducts.slice(idx + 1)
-                  ];
-                } else {
-                  nextProducts = [...nextProducts, op.payload.product];
-                }
-                return;
-              }
-
-              if (op.type === 'movement' && op.payload && op.payload.productId) {
-                const idx = nextProducts.findIndex(p => p && p.id === op.payload.productId);
-                if (idx === -1) return;
-                const currentStock = Number(nextProducts[idx].stock) || 0;
-                const qty = Number(op.payload.quantity) || 0;
-                const delta = op.payload.movementType === 'entrada' ? qty : -qty;
-                nextProducts = [
-                  ...nextProducts.slice(0, idx),
-                  { ...nextProducts[idx], stock: currentStock + delta },
-                  ...nextProducts.slice(idx + 1)
-                ];
-              }
-            });
-
-            setData(nextProducts);
-          } else {
-            setData(baseValue);
-          }
-        } else if (isMovementsPath && cachedUnsyncedMovements.length) {
-          const serverMovements = Array.isArray(baseValue) ? baseValue : [];
-          const mergedMap = new Map();
-          serverMovements.forEach(m => {
-            if (m && m.id) mergedMap.set(m.id, m);
-          });
-          cachedUnsyncedMovements.forEach(m => {
-            if (!m?.id) return;
-            if (mergedMap.has(m.id)) return;
-            mergedMap.set(m.id, m);
-          });
-          const merged = Array.from(mergedMap.values()).sort((a, b) => {
-            const ta = new Date(a?.timestamp || a?.date || 0).getTime();
-            const tb = new Date(b?.timestamp || b?.date || 0).getTime();
-            return tb - ta;
-          });
-          setData(merged);
+           setData(value !== null ? value : defaultValue);
         } else {
-          try {
-            const rawQueue = localStorage.getItem(key);
-            const queue = rawQueue ? JSON.parse(rawQueue) : [];
-            if (Array.isArray(queue) && queue.length > 0 && queue[queue.length - 1]?.payload) {
-              setData(queue[queue.length - 1].payload);
-            } else {
-              setData(baseValue);
-            }
-          } catch {
-            setData(baseValue);
-          }
+           // Se tem pendencia, talvez o servidor já tenha recebido nosso flush?
+           // Se o valor do servidor conter nossos IDs pendentes, podemos limpar a fila?
+           // Complexo. Vamos manter simples: Servidor atualiza, mas flush sobrescreve depois se necessário.
+           // Para evitar "pulo" visual, se tem pendencia, mantemos dados locais.
+           console.log(`[Firebase] Dados recebidos para ${path}, mas temos pendências locais. Ignorando atualização remota temporariamente.`);
         }
         setLoading(false);
       });
@@ -464,7 +269,7 @@ function useFirebaseState(path, defaultValue = null) {
     [path, enqueueOfflineWrite, flushOfflineQueue]
   );
 
-  return [data, updateData, loading, syncStatus, retryCount, setData];
+  return [data, updateData, loading, syncStatus, retryCount];
 }
 
 // Componente de Login
@@ -1327,51 +1132,19 @@ const EstoqueFFApp = () => {
       return null;
     }
   });
-
-  const [inventoryLegacyMode, setInventoryLegacyMode] = useState(() => {
-    try {
-      return localStorage.getItem('estoqueff_legacy_mode') === '1';
-    } catch {
-      return false;
-    }
-  });
   
-  const defaultProducts = useMemo(
-    () => [
-      { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
-      { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'Acessórios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
-      { id: 'P003', name: 'Teclado Mecânico', brand: 'Razer', category: 'Acessórios', code: 'KB-RZR-003', stock: 8, minStock: 5, qrCode: 'QR003', createdAt: '2025-01-01' },
-      { id: 'P004', name: 'Monitor 24"', brand: 'Samsung', category: 'Eletrônicos', code: 'MN-SAM-004', stock: 12, minStock: 3, qrCode: 'QR004', createdAt: '2025-01-01' }
-    ],
-    []
-  );
+  const [products, setProducts] = useFirebaseState('estoqueff_products', [
+    { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
+    { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'Acessórios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
+    { id: 'P003', name: 'Teclado Mecânico', brand: 'Razer', category: 'Acessórios', code: 'KB-RZR-003', stock: 8, minStock: 5, qrCode: 'QR003', createdAt: '2025-01-01' },
+    { id: 'P004', name: 'Monitor 24"', brand: 'Samsung', category: 'Eletrônicos', code: 'MN-SAM-004', stock: 12, minStock: 3, qrCode: 'QR004', createdAt: '2025-01-01' }
+  ]);
   
-  const defaultMovements = useMemo(
-    () => [
-      { id: '1', product: 'Notebook Dell', type: 'saída', quantity: 2, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 14:30' },
-      { id: '2', product: 'Mouse Logitech', type: 'entrada', quantity: 5, user: 'Operador Sistema', userId: 'user2', userName: 'Operador Sistema', userRole: 'operator', date: '2025-08-04 12:15' },
-      { id: '3', product: 'Monitor 24"', type: 'saída', quantity: 1, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 10:45' }
-    ],
-    []
-  );
-
-  const productsPath = inventoryLegacyMode ? 'estoqueff_products' : 'estoqueff_state/products';
-  const movementsPath = inventoryLegacyMode ? 'estoqueff_movements' : 'estoqueff_state/movements';
-  const auditPath = inventoryLegacyMode ? 'estoqueff_audit' : 'estoqueff_state/audit';
-  const metaPath = inventoryLegacyMode ? 'estoqueff_meta' : 'estoqueff_state/meta';
-
-  const [products, , , , , setProductsLocal] = useFirebaseState(
-    productsPath,
-    defaultProducts
-  );
-
-  const [movements, , , , , setMovementsLocal] = useFirebaseState(
-    movementsPath,
-    defaultMovements
-  );
-
-  const [auditMovements] = useFirebaseState(auditPath, []);
-  const [inventoryMeta] = useFirebaseState(metaPath, {});
+  const [movements, setMovements, , movementsSyncStatus, movementsRetryCount] = useFirebaseState('estoqueff_movements', [
+    { id: '1', product: 'Notebook Dell', type: 'saída', quantity: 2, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 14:30' },
+    { id: '2', product: 'Mouse Logitech', type: 'entrada', quantity: 5, user: 'Operador Sistema', userId: 'user2', userName: 'Operador Sistema', userRole: 'operator', date: '2025-08-04 12:15' },
+    { id: '3', product: 'Monitor 24"', type: 'saída', quantity: 1, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 10:45' }
+  ]);
 
   const [companySettings, setCompanySettings] = useFirebaseState('estoqueff_settings', {
     companyName: 'Minha Empresa',
@@ -1440,26 +1213,6 @@ const EstoqueFFApp = () => {
   const [movementUserFilter, setMovementUserFilter] = useState('all');
   const [movementProductFilter, setMovementProductFilter] = useState('all');
   const [movementProductSearchTerm, setMovementProductSearchTerm] = useState('');
-  const [inventorySyncStatus, setInventorySyncStatus] = useState('idle');
-  const [inventoryRetryCount, setInventoryRetryCount] = useState(0);
-  const [inventoryPendingCount, setInventoryPendingCount] = useState(0);
-  const [inventorySyncMs, setInventorySyncMs] = useState(null);
-  const [inventoryDivergences, setInventoryDivergences] = useState([]);
-  const [inventoryLastError, setInventoryLastError] = useState(null);
-  const flushInProgressRef = useRef(false);
-
-  const deviceId = useMemo(() => {
-    try {
-      const key = 'estoqueff_device_id';
-      const existing = localStorage.getItem(key);
-      if (existing) return existing;
-      const created = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      localStorage.setItem(key, created);
-      return created;
-    } catch {
-      return `mem_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    }
-  }, []);
 
   useEffect(() => {
     const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
@@ -1491,1000 +1244,47 @@ const EstoqueFFApp = () => {
     localStorage.removeItem('currentUser');
   };
 
-  const readInventoryOpsQueue = useCallback(() => {
-    try {
-      const raw = localStorage.getItem('estoqueff_inventory_ops_queue_v1');
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }, []);
-
-  const writeInventoryOpsQueue = useCallback((queue, nextStatus) => {
-    try {
-      const normalized = Array.isArray(queue) ? queue : [];
-      localStorage.setItem(
-        'estoqueff_inventory_ops_queue_v1',
-        JSON.stringify(normalized)
-      );
-      setInventoryPendingCount(normalized.length);
-      if (typeof nextStatus === 'string') setInventorySyncStatus(nextStatus);
-    } catch {
-      setInventoryPendingCount(0);
-    }
-  }, []);
-
-  const enqueueInventoryOp = useCallback(
-    (op) => {
-      const queue = readInventoryOpsQueue();
-      const nextQueue = [...queue, op].slice(-500);
-      writeInventoryOpsQueue(nextQueue, 'pending');
-    },
-    [readInventoryOpsQueue, writeInventoryOpsQueue]
-  );
-
-  const isSyncDebugEnabled = useCallback(() => {
-    try {
-      return localStorage.getItem('estoqueff_debug_sync') === '1';
-    } catch {
-      return false;
-    }
-  }, []);
-
-  const appendInventorySyncLog = useCallback((entry) => {
-    try {
-      const key = 'estoqueff_sync_log_v1';
-      const raw = localStorage.getItem(key);
-      const parsed = raw ? JSON.parse(raw) : [];
-      const arr = Array.isArray(parsed) ? parsed : [];
-      const next = [...arr, entry].slice(-200);
-      localStorage.setItem(key, JSON.stringify(next));
-    } catch {}
-  }, []);
-
-  const logInventorySync = useCallback(
-    (event, data) => {
-      const entry = {
-        at: Date.now(),
-        event,
-        data: data ?? null
-      };
-      appendInventorySyncLog(entry);
-      if (isSyncDebugEnabled()) {
-        try {
-          console.log('[sync]', entry);
-        } catch {}
-      }
-    },
-    [appendInventorySyncLog, isSyncDebugEnabled]
-  );
-
-  const appendRejectedInventoryOp = useCallback((info) => {
-    try {
-      const key = 'estoqueff_inventory_ops_rejected_v1';
-      const raw = localStorage.getItem(key);
-      const parsed = raw ? JSON.parse(raw) : [];
-      const arr = Array.isArray(parsed) ? parsed : [];
-      const next = [...arr, info].slice(-200);
-      localStorage.setItem(key, JSON.stringify(next));
-    } catch {}
-  }, []);
-
-  const setLocalMovementStatus = useCallback(
-    (movementId, status, extra) => {
-      if (!movementId) return;
-      setMovementsLocal(prev => {
-        const arr = Array.isArray(prev) ? prev : [];
-        return arr.map(m => {
-          if (!m || m.id !== movementId) return m;
-          return {
-            ...m,
-            status,
-            ...(extra && typeof extra === 'object' ? extra : {})
-          };
-        });
-      });
-    },
-    [setMovementsLocal]
-  );
-
-  const validateOpAgainstInventoryState = useCallback((op, state) => {
-    if (!op || !op.type) return { ok: false, reason: 'invalid_op' };
-
-    if (op.type === 'movement') {
-      const payload = op.payload || {};
-      const movement = payload.movement || {};
-      const movementId = movement.id;
-      const productId = payload.productId;
-      const movementTypeRaw = payload.movementType;
-      const movementType = String(movementTypeRaw || '')
-        .toLowerCase()
-        .replace('saída', 'saida');
-      const quantity = Number(payload.quantity) || 0;
-
-      const productsArr = Array.isArray(state?.products) ? state.products : [];
-      const movementsArr = Array.isArray(state?.movements) ? state.movements : [];
-
-      if (movementId && movementsArr.some(m => m && m.id === movementId)) {
-        return { ok: true, reason: 'duplicate' };
-      }
-
-      const idx = productsArr.findIndex(p => p && p.id === productId);
-      if (idx === -1) return { ok: false, reason: 'product_not_found' };
-      if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, reason: 'invalid_quantity' };
-      if (movementType !== 'entrada' && movementType !== 'saida') return { ok: false, reason: 'invalid_movement_type' };
-
-      const prevStock = Number(productsArr[idx]?.stock) || 0;
-      const nextStock = movementType === 'entrada' ? prevStock + quantity : prevStock - quantity;
-      if (nextStock < 0) {
-        return { ok: false, reason: 'insufficient_stock', details: { prevStock, quantity } };
-      }
-
-      return { ok: true };
-    }
-
-    if (op.type === 'deleteProduct') {
-      const productId = op.payload?.productId;
-      if (!productId) return { ok: false, reason: 'invalid_product_id' };
-      const productsArr = Array.isArray(state?.products) ? state.products : [];
-      if (!productsArr.some(p => p && p.id === productId)) {
-        return { ok: true, reason: 'noop' };
-      }
-      return { ok: true };
-    }
-
-    if (op.type === 'upsertProduct') {
-      const productId = op.payload?.product?.id;
-      if (!productId) return { ok: false, reason: 'invalid_product_id' };
-      return { ok: true };
-    }
-
-    if (op.type === 'restoreBackup') {
-      return { ok: true };
-    }
-
-    return { ok: false, reason: 'unknown_op_type' };
-  }, []);
-
-  const withTimeout = useCallback((promise, timeoutMs, message) => {
-    const timeoutPromise = new Promise((_, reject) => {
-      const id = setTimeout(() => {
-        clearTimeout(id);
-        reject(new Error(message || 'timeout'));
-      }, timeoutMs);
-    });
-    return Promise.race([promise, timeoutPromise]);
-  }, []);
-
-  const getInventoryStateSnapshot = useCallback(async () => {
-    if (!window.firebaseDatabase || !window.firebaseGet) {
-      throw new Error('firebase_not_ready');
-    }
-    const stateRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_state');
-    const snap = await withTimeout(window.firebaseGet(stateRef), 8000, 'get_state_timeout');
-    const val = snap && typeof snap.val === 'function' ? snap.val() : null;
-    return val && typeof val === 'object' ? val : { products: [], movements: [], audit: [], meta: {} };
-  }, [withTimeout]);
-
-  const applyOpToInventoryStateLocal = useCallback((op, state) => {
-    const base = state && typeof state === 'object' ? state : {};
-    const productsArr = Array.isArray(base.products) ? base.products : [];
-    const movementsArr = Array.isArray(base.movements) ? base.movements : [];
-
-    if (!op || !op.type) return base;
-
-    if (op.type === 'movement' && op.payload) {
-      const { movement, productId, movementType: movementTypeRaw, quantity } = op.payload;
-      if (!movement?.id) return base;
-      if (movementsArr.some(m => m && m.id === movement.id)) return base;
-
-      const idx = productsArr.findIndex(p => p && p.id === productId);
-      if (idx === -1) return base;
-      const prevStock = Number(productsArr[idx]?.stock) || 0;
-      const qty = Number(quantity) || 0;
-      const movementType = String(movementTypeRaw || '')
-        .toLowerCase()
-        .replace('saída', 'saida');
-      const nextStock = movementType === 'entrada' ? prevStock + qty : prevStock - qty;
-      if (nextStock < 0) return base;
-
-      const nextProducts = [...productsArr];
-      nextProducts[idx] = { ...nextProducts[idx], stock: nextStock };
-      const nextMovements = [{ ...movement, status: 'synced' }, ...movementsArr];
-      return { ...base, products: nextProducts, movements: nextMovements };
-    }
-
-    if (op.type === 'upsertProduct' && op.payload?.product?.id) {
-      const nextProduct = op.payload.product;
-      const idx = productsArr.findIndex(p => p && p.id === nextProduct.id);
-      const nextProducts = [...productsArr];
-      if (idx >= 0) nextProducts[idx] = { ...nextProducts[idx], ...nextProduct };
-      else nextProducts.push(nextProduct);
-      return { ...base, products: nextProducts };
-    }
-
-    if (op.type === 'deleteProduct' && op.payload?.productId) {
-      const nextProducts = productsArr.filter(p => p && p.id !== op.payload.productId);
-      return { ...base, products: nextProducts };
-    }
-
-    if (op.type === 'restoreBackup' && op.payload) {
-      return {
-        ...base,
-        products: Array.isArray(op.payload.products) ? op.payload.products : productsArr,
-        movements: Array.isArray(op.payload.movements) ? op.payload.movements : movementsArr
-      };
-    }
-
-    return base;
-  }, []);
-
-  useEffect(() => {
-    const queue = readInventoryOpsQueue();
-    setInventoryPendingCount(queue.length);
-    if (queue.length) setInventorySyncStatus('pending');
-  }, [readInventoryOpsQueue]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('estoqueff_cache_products_v1', JSON.stringify(products));
-      localStorage.setItem('estoqueff_cache_movements_v1', JSON.stringify(movements));
-    } catch {}
-  }, [products, movements]);
-
-  useEffect(() => {
-    try {
-      const cachedProducts = localStorage.getItem('estoqueff_cache_products_v1');
-      const cachedMovements = localStorage.getItem('estoqueff_cache_movements_v1');
-      if (cachedProducts) {
-        const parsed = JSON.parse(cachedProducts);
-        if (Array.isArray(parsed) && parsed.length) setProductsLocal(parsed);
-      }
-      if (cachedMovements) {
-        const parsed = JSON.parse(cachedMovements);
-        if (Array.isArray(parsed) && parsed.length) setMovementsLocal(parsed);
-      }
-    } catch {}
-  }, [setProductsLocal, setMovementsLocal]);
-
-  const ensureInventoryState = useCallback(async () => {
-    if (inventoryLegacyMode) return;
-    if (!window.firebaseDatabase || !window.firebaseGet || !window.firebaseSet) return;
-    const stateRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_state');
-    const snap = await window.firebaseGet(stateRef);
-    if (snap && typeof snap.exists === 'function' && snap.exists()) return;
-
-    const oldProductsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
-    const oldMovementsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_movements');
-
-    const [oldProductsSnap, oldMovementsSnap] = await Promise.all([
-      window.firebaseGet(oldProductsRef).catch(() => null),
-      window.firebaseGet(oldMovementsRef).catch(() => null)
-    ]);
-
-    const oldProducts =
-      oldProductsSnap && typeof oldProductsSnap.val === 'function'
-        ? oldProductsSnap.val()
-        : null;
-    const oldMovements =
-      oldMovementsSnap && typeof oldMovementsSnap.val === 'function'
-        ? oldMovementsSnap.val()
-        : null;
-
-    const initialProducts = Array.isArray(oldProducts) && oldProducts.length ? oldProducts : defaultProducts;
-    const initialMovements = Array.isArray(oldMovements) && oldMovements.length ? oldMovements : defaultMovements;
-
-    const now =
-      window.firebaseServerTimestamp ? window.firebaseServerTimestamp() : new Date().toISOString();
-
-    await window.firebaseSet(stateRef, {
-      products: initialProducts,
-      movements: initialMovements,
-      audit: [],
-      meta: {
-        schemaVersion: 1,
-        createdAt: now,
-        lastUpdatedAt: now
-      }
-    });
-  }, [defaultMovements, defaultProducts, inventoryLegacyMode]);
-
-  useEffect(() => {
-    ensureInventoryState().catch(() => {});
-  }, [ensureInventoryState]);
-
-  const applyInventoryOpTransaction = useCallback(async (op) => {
-    if (!window.firebaseDatabase || !window.firebaseRunTransaction) {
-      throw new Error('firebase_not_ready');
-    }
-
-    const stateRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_state');
-    const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
-
-    const result = await withTimeout(
-      window.firebaseRunTransaction(stateRef, (current) => {
-        const state = current && typeof current === 'object' ? current : {};
-
-        const productsArr = Array.isArray(state.products) ? state.products : [];
-        const movementsArr = Array.isArray(state.movements) ? state.movements : [];
-        const auditArr = Array.isArray(state.audit) ? state.audit : [];
-        const meta = state.meta && typeof state.meta === 'object' ? state.meta : {};
-
-        const now =
-          window.firebaseServerTimestamp ? window.firebaseServerTimestamp() : new Date().toISOString();
-
-        const nextMeta = {
-          ...meta,
-          lastUpdatedAt: now
-        };
-
-        if (op.type === 'movement') {
-          const { movement, productId, movementType, quantity } = op.payload;
-
-          const existing = movementsArr.find(m => m && m.id === movement.id);
-          if (existing) {
-            return {
-              ...state,
-              meta: nextMeta
-            };
-          }
-
-          const productIndex = productsArr.findIndex(p => p && p.id === productId);
-          if (productIndex === -1) return;
-
-          const product = productsArr[productIndex];
-          const prevStock = Number(product.stock) || 0;
-          const nextStock =
-            movementType === 'entrada' ? prevStock + quantity : prevStock - quantity;
-          if (nextStock < 0) return;
-
-          const nextProducts = [...productsArr];
-          nextProducts[productIndex] = {
-            ...product,
-            stock: nextStock,
-            stockVersion: (Number(product.stockVersion) || 0) + 1,
-            updatedAt: now
-          };
-
-          const syncedMovement = {
-            ...movement,
-            status: 'synced',
-            previousStock: prevStock,
-            newStock: nextStock,
-            confirmedAt: now,
-            serverTs: now
-          };
-
-          const nextMovements = [syncedMovement, ...movementsArr].slice(0, 10000);
-          const nextAudit = [
-            {
-              id: `${movement.id}_audit`,
-              kind: 'movement',
-              movementId: movement.id,
-              productId,
-              movementType,
-              quantity,
-              prevStock,
-              nextStock,
-              userId: op.userId,
-              userName: op.userName,
-              deviceId: op.deviceId,
-              clientTs: op.clientTs,
-              serverTs: now
-            },
-            ...auditArr
-          ].slice(0, 20000);
-
-          return {
-            ...state,
-            products: nextProducts,
-            movements: nextMovements,
-            audit: nextAudit,
-            meta: nextMeta
-          };
-        }
-
-        if (op.type === 'upsertProduct') {
-          const nextProduct = op.payload.product;
-          const productsIndex = productsArr.findIndex(p => p && p.id === nextProduct.id);
-          const nextProducts = [...productsArr];
-          const prevProduct = productsIndex >= 0 ? nextProducts[productsIndex] : null;
-
-          if (productsIndex >= 0) {
-            nextProducts[productsIndex] = {
-              ...prevProduct,
-              ...nextProduct,
-              stockVersion: Number(prevProduct?.stockVersion) || 0,
-              updatedAt: now
-            };
-          } else {
-            nextProducts.push({
-              ...nextProduct,
-              stockVersion: 0,
-              updatedAt: now
-            });
-          }
-
-          const nextAudit = [
-            {
-              id: `${op.opId}_audit`,
-              kind: 'product_upsert',
-              productId: nextProduct.id,
-              userId: op.userId,
-              userName: op.userName,
-              deviceId: op.deviceId,
-              clientTs: op.clientTs,
-              serverTs: now,
-              prev: prevProduct,
-              next: nextProduct
-            },
-            ...auditArr
-          ].slice(0, 20000);
-
-          return {
-            ...state,
-            products: nextProducts,
-            audit: nextAudit,
-            meta: nextMeta
-          };
-        }
-
-        if (op.type === 'deleteProduct') {
-          const { productId } = op.payload;
-          const productsIndex = productsArr.findIndex(p => p && p.id === productId);
-          if (productsIndex === -1) return;
-          const prevProduct = productsArr[productsIndex];
-          const nextProducts = productsArr.filter(p => p && p.id !== productId);
-
-          const nextAudit = [
-            {
-              id: `${op.opId}_audit`,
-              kind: 'product_delete',
-              productId,
-              userId: op.userId,
-              userName: op.userName,
-              deviceId: op.deviceId,
-              clientTs: op.clientTs,
-              serverTs: now,
-              prev: prevProduct
-            },
-            ...auditArr
-          ].slice(0, 20000);
-
-          return {
-            ...state,
-            products: nextProducts,
-            audit: nextAudit,
-            meta: nextMeta
-          };
-        }
-
-        if (op.type === 'restoreBackup') {
-          const { products: restoredProducts, movements: restoredMovements, companySettings: restoredCompanySettings, productLabelConfigs: restoredLabelConfigs } = op.payload;
-
-          const nextAudit = [
-            {
-              id: `${op.opId}_audit`,
-              kind: 'restore_backup',
-              userId: op.userId,
-              userName: op.userName,
-              deviceId: op.deviceId,
-              clientTs: op.clientTs,
-              serverTs: now
-            },
-            ...auditArr
-          ].slice(0, 20000);
-
-          return {
-            ...state,
-            products: Array.isArray(restoredProducts) ? restoredProducts : productsArr,
-            movements: Array.isArray(restoredMovements) ? restoredMovements : movementsArr,
-            audit: nextAudit,
-            meta: nextMeta,
-            companySettings: restoredCompanySettings || state.companySettings,
-            productLabelConfigs: restoredLabelConfigs || state.productLabelConfigs
-          };
-        }
-
-        return {
-          ...state,
-          meta: nextMeta
-        };
-      }),
-      8000,
-      'transaction_timeout'
-    );
-
-    const end = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    setInventorySyncMs(Math.round(end - start));
-
-    if (!result || result.committed === false) throw new Error('not_committed');
-    return result;
-  }, [withTimeout]);
-
-  const normalizeInventoryError = useCallback((err) => {
-    const message =
-      (err && typeof err === 'object' && typeof err.message === 'string' && err.message) ||
-      String(err || '');
-    const code =
-      (err && typeof err === 'object' && typeof err.code === 'string' && err.code) ||
-      (message && message.toUpperCase().includes('PERMISSION_DENIED') ? 'PERMISSION_DENIED' : '') ||
-      '';
-    return {
-      message,
-      code,
-      at: Date.now()
-    };
-  }, []);
-
-  const isPermissionDenied = useCallback((err) => {
-    const code = err?.code || '';
-    const message = err?.message || '';
-    return (
-      String(code).toUpperCase().includes('PERMISSION_DENIED') ||
-      String(message).toUpperCase().includes('PERMISSION_DENIED') ||
-      String(message).toLowerCase().includes('permission denied')
-    );
-  }, []);
-
-  const flushInventoryOpsQueueLegacy = useCallback(async (currentRetry = 0) => {
-    if (flushInProgressRef.current) return;
-    flushInProgressRef.current = true;
-    try {
-      const onlineNow = typeof navigator !== 'undefined' ? navigator.onLine : true;
-      if (!onlineNow || !window.firebaseDatabase || !window.firebaseGet || !window.firebaseSet) {
-        setInventorySyncStatus('pending');
-        logInventorySync('legacy_flush_skip', {
-          online: onlineNow,
-          hasDb: !!window.firebaseDatabase,
-          hasGet: !!window.firebaseGet,
-          hasSet: !!window.firebaseSet
-        });
-        return;
-      }
-
-      const queue = readInventoryOpsQueue();
-      if (!queue.length) {
-        setInventoryRetryCount(0);
-        setInventorySyncStatus('idle');
-        setInventoryLastError(null);
-        logInventorySync('legacy_flush_empty', null);
-        return;
-      }
-
-      setInventorySyncStatus('syncing');
-      logInventorySync('legacy_flush_start', { queueLength: queue.length, currentRetry });
-
-      const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
-      const movementsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_movements');
-
-      const [productsSnap, movementsSnap] = await Promise.all([
-        withTimeout(window.firebaseGet(productsRef), 8000, 'get_products_timeout').catch(() => null),
-        withTimeout(window.firebaseGet(movementsRef), 8000, 'get_movements_timeout').catch(() => null)
-      ]);
-
-      let serverProducts =
-        productsSnap && typeof productsSnap.val === 'function' ? productsSnap.val() : null;
-      let serverMovements =
-        movementsSnap && typeof movementsSnap.val === 'function' ? movementsSnap.val() : null;
-
-      serverProducts = Array.isArray(serverProducts) ? serverProducts : Array.isArray(defaultProducts) ? defaultProducts : [];
-      serverMovements = Array.isArray(serverMovements) ? serverMovements : Array.isArray(defaultMovements) ? defaultMovements : [];
-
-      let nextProducts = [...serverProducts];
-      let nextMovements = [...serverMovements];
-
-      let nextQueue = [...queue];
-      let processed = 0;
-
-      while (nextQueue.length && processed < 25) {
-        const op = nextQueue[0];
-        if (!op || !op.type) {
-          nextQueue = nextQueue.slice(1);
-          processed += 1;
-          continue;
-        }
-
-        const validation = validateOpAgainstInventoryState(op, {
-          products: nextProducts,
-          movements: nextMovements
-        });
-
-        if (!validation.ok) {
-          const movementId = op?.payload?.movement?.id || op?.payload?.movementId;
-          const rejection = {
-            at: Date.now(),
-            mode: 'legacy',
-            opId: op.opId,
-            type: op.type,
-            reason: validation.reason,
-            details: validation.details || null,
-            movementId: movementId || null
-          };
-          appendRejectedInventoryOp(rejection);
-          logInventorySync('op_rejected', rejection);
-          if (op.type === 'movement' && movementId) {
-            setLocalMovementStatus(movementId, 'error', {
-              syncError: validation.reason,
-              syncErrorDetails: validation.details || null
-            });
-          }
-          nextQueue = nextQueue.slice(1);
-          processed += 1;
-          setInventoryRetryCount(0);
-          writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
-          continue;
-        }
-
-        if (op.type === 'movement' && op.payload) {
-          const { movement, productId, movementType, quantity } = op.payload;
-          if (movement && movement.id) {
-            const existing = nextMovements.find(m => m && m.id === movement.id);
-            if (existing) {
-              setLocalMovementStatus(movement.id, 'synced', null);
-            } else {
-              const idx = nextProducts.findIndex(p => p && p.id === productId);
-              const prevStock = Number(nextProducts[idx].stock) || 0;
-              const qty = Number(quantity) || 0;
-              const nextStock = movementType === 'entrada' ? prevStock + qty : prevStock - qty;
-
-              const now =
-                window.firebaseServerTimestamp ? window.firebaseServerTimestamp() : new Date().toISOString();
-
-              nextProducts[idx] = {
-                ...nextProducts[idx],
-                stock: nextStock,
-                updatedAt: now
-              };
-
-              nextMovements = [
-                {
-                  ...movement,
-                  status: 'synced',
-                  previousStock: prevStock,
-                  newStock: nextStock,
-                  confirmedAt: now,
-                  serverTs: now
-                },
-                ...nextMovements
-              ].slice(0, 10000);
-
-              setLocalMovementStatus(movement.id, 'synced', {
-                previousStock: prevStock,
-                newStock: nextStock,
-                confirmedAt: now,
-                serverTs: now
-              });
-            }
-          }
-        } else if (op.type === 'upsertProduct' && op.payload && op.payload.product) {
-          const nextProduct = op.payload.product;
-          if (nextProduct && nextProduct.id) {
-            const idx = nextProducts.findIndex(p => p && p.id === nextProduct.id);
-            if (idx >= 0) {
-              nextProducts[idx] = { ...nextProducts[idx], ...nextProduct };
-            } else {
-              nextProducts = [...nextProducts, nextProduct];
-            }
-          }
-        } else if (op.type === 'deleteProduct' && op.payload && op.payload.productId) {
-          nextProducts = nextProducts.filter(p => p && p.id !== op.payload.productId);
-        } else if (op.type === 'restoreBackup' && op.payload) {
-          if (Array.isArray(op.payload.products)) nextProducts = op.payload.products;
-          if (Array.isArray(op.payload.movements)) nextMovements = op.payload.movements;
-        }
-
-        nextQueue = nextQueue.slice(1);
-        processed += 1;
-        setInventoryRetryCount(0);
-        writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
-      }
-
-      await withTimeout(window.firebaseSet(productsRef, nextProducts), 8000, 'set_products_timeout');
-      await withTimeout(window.firebaseSet(movementsRef, nextMovements), 8000, 'set_movements_timeout');
-
-      setProductsLocal(nextProducts);
-      setMovementsLocal(nextMovements);
-      setInventoryLastError(null);
-      logInventorySync('legacy_flush_success', { processed, remaining: nextQueue.length });
-    } catch (e) {
-      const info = normalizeInventoryError(e);
-      setInventoryLastError(info);
-      const nextRetry = currentRetry + 1;
-      setInventoryRetryCount(nextRetry);
-      setInventorySyncStatus('error');
-      logInventorySync('legacy_flush_error', { error: info, nextRetry });
-
-      if (nextRetry < 5) {
-        const delay = Math.min(30000, 1000 * 2 ** nextRetry);
-        setTimeout(() => flushInventoryOpsQueueLegacy(nextRetry), delay);
-      }
-    } finally {
-      flushInProgressRef.current = false;
-    }
-  }, [
-    defaultMovements,
-    defaultProducts,
-    appendRejectedInventoryOp,
-    logInventorySync,
-    normalizeInventoryError,
-    readInventoryOpsQueue,
-    setLocalMovementStatus,
-    setMovementsLocal,
-    setProductsLocal,
-    validateOpAgainstInventoryState,
-    withTimeout,
-    writeInventoryOpsQueue
-  ]);
-
-  const flushInventoryOpsQueue = useCallback(async (currentRetry = 0) => {
-    if (inventoryLegacyMode) {
-      return flushInventoryOpsQueueLegacy(currentRetry);
-    }
-    if (flushInProgressRef.current) return;
-    flushInProgressRef.current = true;
-    try {
-      if (currentRetry === 0) setInventoryLastError(null);
-      const onlineNow = typeof navigator !== 'undefined' ? navigator.onLine : true;
-      if (!onlineNow || !window.firebaseDatabase) {
-        setInventorySyncStatus('pending');
-        logInventorySync('flush_skip', { online: onlineNow, hasDb: !!window.firebaseDatabase });
-        return;
-      }
-
-      await ensureInventoryState();
-
-      const queue = readInventoryOpsQueue();
-      if (!queue.length) {
-        setInventoryRetryCount(0);
-        setInventorySyncStatus('idle');
-        setInventoryLastError(null);
-        logInventorySync('flush_empty', null);
-        return;
-      }
-
-      setInventorySyncStatus('syncing');
-      logInventorySync('flush_start', { queueLength: queue.length, currentRetry, mode: 'transaction' });
-
-      let stateSnapshot = null;
-      try {
-        stateSnapshot = await getInventoryStateSnapshot();
-      } catch (e) {
-        stateSnapshot = { products: [], movements: [] };
-      }
-
-      let nextQueue = [...queue];
-      let processed = 0;
-      while (nextQueue.length && processed < 25) {
-        const op = nextQueue[0];
-        if (!op || !op.type) {
-          nextQueue = nextQueue.slice(1);
-          processed += 1;
-          continue;
-        }
-
-        const validation = validateOpAgainstInventoryState(op, stateSnapshot);
-        if (!validation.ok) {
-          const movementId = op?.payload?.movement?.id || op?.payload?.movementId;
-          const rejection = {
-            at: Date.now(),
-            mode: 'transaction',
-            opId: op.opId,
-            type: op.type,
-            reason: validation.reason,
-            details: validation.details || null,
-            movementId: movementId || null
-          };
-          appendRejectedInventoryOp(rejection);
-          logInventorySync('op_rejected', rejection);
-          if (op.type === 'movement' && movementId) {
-            setLocalMovementStatus(movementId, 'error', {
-              syncError: validation.reason,
-              syncErrorDetails: validation.details || null
-            });
-          }
-          nextQueue = nextQueue.slice(1);
-          processed += 1;
-          setInventoryRetryCount(0);
-          writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
-          continue;
-        }
-
-        logInventorySync('op_start', { opId: op.opId, type: op.type });
-
-        try {
-          const movementId = op?.payload?.movement?.id || null;
-          if (op.type === 'movement' && movementId) {
-            setLocalMovementStatus(movementId, 'syncing', {
-              syncError: null,
-              syncErrorDetails: null
-            });
-          }
-
-          let attempt = 0;
-          while (attempt < 3) {
-            try {
-              await applyInventoryOpTransaction(op);
-              break;
-            } catch (innerErr) {
-              const innerInfo = normalizeInventoryError(innerErr);
-              logInventorySync('op_attempt_error', {
-                opId: op.opId,
-                type: op.type,
-                attempt: attempt + 1,
-                error: innerInfo
-              });
-
-              if (innerInfo?.message === 'not_committed') {
-                let fresh = stateSnapshot;
-                try {
-                  fresh = await getInventoryStateSnapshot();
-                } catch {}
-                stateSnapshot = fresh;
-
-                const revalidation = validateOpAgainstInventoryState(op, stateSnapshot);
-                if (!revalidation.ok) {
-                  const rejectedMovementId = op?.payload?.movement?.id || op?.payload?.movementId;
-                  const rejection = {
-                    at: Date.now(),
-                    mode: 'transaction',
-                    opId: op.opId,
-                    type: op.type,
-                    reason: revalidation.reason,
-                    details: revalidation.details || null,
-                    movementId: rejectedMovementId || null
-                  };
-                  appendRejectedInventoryOp(rejection);
-                  logInventorySync('op_rejected', rejection);
-                  if (op.type === 'movement' && rejectedMovementId) {
-                    setLocalMovementStatus(rejectedMovementId, 'error', {
-                      syncError: revalidation.reason,
-                      syncErrorDetails: revalidation.details || null
-                    });
-                  }
-
-                  nextQueue = nextQueue.slice(1);
-                  processed += 1;
-                  setInventoryRetryCount(0);
-                  writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
-                  attempt = 3;
-                  break;
-                }
-
-                attempt += 1;
-                if (attempt >= 3) throw innerErr;
-                await sleepMs(200 * attempt);
-                continue;
-              }
-
-              throw innerErr;
-            }
-          }
-
-          if (attempt >= 3 && nextQueue[0]?.opId !== op.opId) {
-            continue;
-          }
-
-          stateSnapshot = applyOpToInventoryStateLocal(op, stateSnapshot);
-
-          if (op.type === 'movement' && movementId) {
-            setLocalMovementStatus(movementId, 'synced', {
-              syncError: null,
-              syncErrorDetails: null,
-              confirmedAt: new Date().toISOString()
-            });
-          }
-
-          nextQueue = nextQueue.slice(1);
-          processed += 1;
-          setInventoryRetryCount(0);
-          writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
-          logInventorySync('op_success', { opId: op.opId, type: op.type, remaining: nextQueue.length });
-        } catch (err) {
-          const info = normalizeInventoryError(err);
-          logInventorySync('op_error', { opId: op.opId, type: op.type, error: info });
-
-          throw err;
-        }
-      }
-      setInventoryLastError(null);
-      logInventorySync('flush_success', { processed, remaining: nextQueue.length, mode: 'transaction' });
-    } catch (e) {
-      const info = normalizeInventoryError(e);
-      setInventoryLastError(info);
-      logInventorySync('flush_error', { error: info, currentRetry, mode: 'transaction' });
-
-      if (isPermissionDenied(info) && !inventoryLegacyMode) {
-        try {
-          localStorage.setItem('estoqueff_legacy_mode', '1');
-        } catch {}
-        setInventoryLegacyMode(true);
-        setInventoryRetryCount(0);
-        setInventorySyncStatus('pending');
-        setTimeout(() => flushInventoryOpsQueueLegacy(0).catch(() => {}), 50);
-        return;
-      }
-
-      const nextRetry = currentRetry + 1;
-      setInventoryRetryCount(nextRetry);
-      setInventorySyncStatus('error');
-
-      if (nextRetry < 5) {
-        const delay = Math.min(30000, 1000 * 2 ** nextRetry);
-        setTimeout(() => flushInventoryOpsQueue(nextRetry), delay);
-      }
-    } finally {
-      flushInProgressRef.current = false;
-    }
-  }, [
-    applyInventoryOpTransaction,
-    applyOpToInventoryStateLocal,
-    appendRejectedInventoryOp,
-    ensureInventoryState,
-    flushInventoryOpsQueueLegacy,
-    getInventoryStateSnapshot,
-    inventoryLegacyMode,
-    isPermissionDenied,
-    logInventorySync,
-    normalizeInventoryError,
-    readInventoryOpsQueue,
-    setLocalMovementStatus,
-    validateOpAgainstInventoryState,
-    writeInventoryOpsQueue
-  ]);
-
-  useEffect(() => {
-    const onOnline = () => {
-      flushInventoryOpsQueue(0).catch(() => {});
-    };
-    window.addEventListener('online', onOnline);
-    return () => window.removeEventListener('online', onOnline);
-  }, [flushInventoryOpsQueue]);
-
-  useEffect(() => {
-    flushInventoryOpsQueue(0).catch(() => {});
-  }, [flushInventoryOpsQueue]);
-
   const handleDeleteProduct = useCallback((productId) => {
   if (window.confirm('Tem certeza que deseja excluir este produto?')) {
     try {
       // Remove from Firebase
       if (window.firebaseDatabase) {
         // Remove o produto
+        const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
         const updatedProducts = products.filter(p => p.id !== productId);
-        setProductsLocal(updatedProducts);
-
-        enqueueInventoryOp({
-          opId: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
-          type: 'deleteProduct',
-          payload: { productId },
-          clientTs: Date.now(),
-          deviceId,
-          userId: currentUser?.id,
-          userName: currentUser?.name
-        });
-
-        flushInventoryOpsQueue(0).catch(() => {});
-
-        if (productLabelConfigs[productId]) {
-          const labelConfigRef = window.firebaseRef(
-            window.firebaseDatabase,
-            `estoqueff_product_label_configs/${productId}`
-          );
-          window.firebaseSet(labelConfigRef, null).catch(() => {});
-          setProductLabelConfigs(prevConfigs => {
-            const newConfigs = { ...prevConfigs };
-            delete newConfigs[productId];
-            return newConfigs;
+        window.firebaseSet(productsRef, updatedProducts)
+          .then(() => {
+            // Atualiza estado local
+            setProducts(updatedProducts);
+            
+            // Remove configuração de etiqueta se existir
+            if (productLabelConfigs[productId]) {
+              const labelConfigRef = window.firebaseRef(
+                window.firebaseDatabase, 
+                `estoqueff_product_label_configs/${productId}`
+              );
+              window.firebaseSet(labelConfigRef, null) // Usa null para remover
+                .then(() => {
+                  setProductLabelConfigs(prevConfigs => {
+                    const newConfigs = { ...prevConfigs };
+                    delete newConfigs[productId];
+                    return newConfigs;
+                  });
+                })
+                .catch(error => console.error('Erro ao remover config:', error));
+            }
+            
+            setSuccess('✅ Produto excluído com sucesso!');
+            setTimeout(() => setSuccess(''), 3000);
+          })
+          .catch(error => {
+            console.error('Erro ao excluir produto:', error);
+            setErrors({ general: 'Erro ao excluir produto. Tente novamente.' });
+            setTimeout(() => setErrors({}), 3000);
           });
-        }
-
-        setSuccess('✅ Produto excluído e sincronizando...');
-        setTimeout(() => setSuccess(''), 3000);
       } else {
         // Fallback para estado local
-        setProductsLocal(prevProducts => prevProducts.filter(p => p.id !== productId));
+        setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
         setProductLabelConfigs(prevConfigs => {
           const newConfigs = { ...prevConfigs };
           delete newConfigs[productId];
@@ -2499,7 +1299,7 @@ const EstoqueFFApp = () => {
       setTimeout(() => setErrors({}), 3000);
     }
   }
-}, [products, setProductsLocal, setErrors, setSuccess, productLabelConfigs, enqueueInventoryOp, deviceId, currentUser, flushInventoryOpsQueue]);
+}, [products, setProducts, setErrors, setSuccess, productLabelConfigs]);
 
   const getProductLabelConfig = useCallback((productId) => {
     return productLabelConfigs[productId] || defaultLabelConfig;
@@ -2867,17 +1667,7 @@ const EstoqueFFApp = () => {
         minStock: parseInt(newProduct.minStock)
       };
       
-      setProductsLocal([...products, product]);
-      enqueueInventoryOp({
-        opId: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
-        type: 'upsertProduct',
-        payload: { product },
-        clientTs: Date.now(),
-        deviceId,
-        userId: currentUser?.id,
-        userName: currentUser?.name
-      });
-      flushInventoryOpsQueue(0).catch(() => {});
+      setProducts([...products, product]);
       setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
       setShowAddProduct(false);
       setSuccess(`✅ Produto "${product.name}" adicionado com sucesso!`);
@@ -2903,9 +1693,9 @@ const EstoqueFFApp = () => {
     }
     
     try {
-      const updatedProducts = products.map(p =>
-        p.id === editingProduct.id
-          ? {
+      setProducts(products.map(p => 
+        p.id === editingProduct.id 
+          ? { 
               ...editingProduct,
               name: editingProduct.name.trim(),
               brand: editingProduct.brand?.trim() || '',
@@ -2915,24 +1705,7 @@ const EstoqueFFApp = () => {
               minStock: parseInt(editingProduct.minStock)
             }
           : p
-      );
-
-      const updatedProduct = updatedProducts.find(p => p.id === editingProduct.id);
-      setProductsLocal(updatedProducts);
-
-      if (updatedProduct) {
-        enqueueInventoryOp({
-          opId: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
-          type: 'upsertProduct',
-          payload: { product: updatedProduct },
-          clientTs: Date.now(),
-          deviceId,
-          userId: currentUser?.id,
-          userName: currentUser?.name
-        });
-        flushInventoryOpsQueue(0).catch(() => {});
-      }
-
+      ));
       setEditingProduct(null);
       setSuccess(`✅ Produto atualizado com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
@@ -2966,12 +1739,8 @@ const EstoqueFFApp = () => {
       return;
     }
     
-    const currentStock = Number(targetProduct.stock) || 0;
-    const normalizedMovementType = String(movementType || '')
-      .toLowerCase()
-      .replace('saída', 'saida');
-    if (normalizedMovementType === 'saida' && currentStock < quantity) {
-      setErrors({ quantity: `Estoque insuficiente! Disponível: ${currentStock} unidades` });
+    if (movementType === 'saída' && targetProduct.stock < quantity) {
+      setErrors({ quantity: `Estoque insuficiente! Disponível: ${targetProduct.stock} unidades` });
       setLoading(false);
       return;
     }
@@ -3023,24 +1792,8 @@ const EstoqueFFApp = () => {
           : p
       );
 
-      setMovementsLocal(initialMovements);
-      setProductsLocal(updatedProducts);
-
-      enqueueInventoryOp({
-        opId: baseMovement.id,
-        type: 'movement',
-        payload: {
-          movement: { ...baseMovement, status: statusOnCreate },
-          productId: targetProduct.id,
-          movementType,
-          quantity
-        },
-        clientTs: Date.now(),
-        deviceId,
-        userId: currentUser?.id,
-        userName: currentUser?.name
-      });
-      flushInventoryOpsQueue(0).catch(() => {});
+      const movementsPromise = setMovements(initialMovements);
+      const productsPromise = setProducts(updatedProducts);
 
       setScannedProduct(null);
       setManualSelectedProduct(null);
@@ -3062,6 +1815,11 @@ const EstoqueFFApp = () => {
       }
 
       setTimeout(() => setSuccess(''), 4000);
+
+      Promise.all([movementsPromise, productsPromise])
+        .catch(error => {
+          console.error('Erro ao sincronizar movimentação:', error);
+        });
     } catch (error) {
       setErrors({ general: 'Erro ao processar movimentação. Tente novamente.' });
     } finally {
@@ -3343,25 +2101,8 @@ const EstoqueFFApp = () => {
       try {
         const backup = JSON.parse(e.target.result);
         if (backup.products && backup.movements) {
-          setProductsLocal(backup.products);
-          setMovementsLocal(backup.movements);
-
-          enqueueInventoryOp({
-            opId: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
-            type: 'restoreBackup',
-            payload: {
-              products: backup.products,
-              movements: backup.movements,
-              companySettings: backup.companySettings,
-              productLabelConfigs: backup.productLabelConfigs
-            },
-            clientTs: Date.now(),
-            deviceId,
-            userId: currentUser?.id,
-            userName: currentUser?.name
-          });
-          flushInventoryOpsQueue(0).catch(() => {});
-
+          setProducts(backup.products);
+          setMovements(backup.movements);
           if (backup.companySettings) {
             setCompanySettings(backup.companySettings);
           }
@@ -3382,74 +2123,6 @@ const EstoqueFFApp = () => {
     reader.readAsText(file);
     event.target.value = '';
   };
-
-  const computedInventoryDivergences = useMemo(() => {
-    const items = [];
-
-    products.forEach(p => {
-      const stock = Number(p?.stock);
-      if (Number.isFinite(stock) && stock < 0) {
-        items.push({
-          kind: 'product_negative_stock',
-          productId: p.id,
-          message: `Estoque negativo (${stock})`
-        });
-      }
-    });
-
-    movements.forEach(m => {
-      if (!m?.productId) {
-        items.push({
-          kind: 'movement_missing_productId',
-          movementId: m?.id,
-          message: 'Movimentação sem productId'
-        });
-      }
-
-      if (m?.previousStock != null && m?.newStock != null) {
-        const prev = Number(m.previousStock);
-        const next = Number(m.newStock);
-        const qty = Number(m.quantity) || 0;
-        if (Number.isFinite(prev) && Number.isFinite(next)) {
-          const expected =
-            m.type === 'entrada' ? prev + qty : prev - qty;
-          if (expected !== next) {
-            items.push({
-              kind: 'movement_stock_mismatch',
-              movementId: m.id,
-              productId: m.productId,
-              message: `Saldo inconsistente (${prev} -> ${next}, esperado ${expected})`
-            });
-          }
-        }
-      }
-    });
-
-    return items;
-  }, [products, movements]);
-
-  useEffect(() => {
-    setInventoryDivergences(computedInventoryDivergences);
-  }, [computedInventoryDivergences]);
-
-  const exportAuditJson = useCallback(() => {
-    const payload = {
-      meta: inventoryMeta,
-      audit: auditMovements,
-      divergences: inventoryDivergences,
-      pendingOps: inventoryPendingCount,
-      exportedAt: new Date().toISOString()
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: 'application/json'
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `estoqueff_auditoria_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [auditMovements, inventoryDivergences, inventoryMeta, inventoryPendingCount]);
 
   // Calcular estatísticas
   const stats = useMemo(() => {
@@ -3794,14 +2467,14 @@ const EstoqueFFApp = () => {
       )}
 
       {/* Sync Status Notifications */}
-      {inventorySyncStatus === 'syncing' && (
+      {movementsSyncStatus === 'syncing' && (
         <div className="fixed bottom-20 right-4 md:bottom-4 md:right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-pulse">
           <Loader2 size={16} className="animate-spin" />
           <span className="text-sm">Sincronizando dados...</span>
         </div>
       )}
 
-      {inventorySyncStatus === 'error' && inventoryRetryCount >= 5 && (
+      {movementsSyncStatus === 'error' && movementsRetryCount >= 5 && (
         <div className="fixed top-24 left-4 right-4 bg-red-600 text-white p-4 rounded-lg shadow-lg z-50 animate-bounce">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3">
@@ -3809,22 +2482,13 @@ const EstoqueFFApp = () => {
               <div>
                 <p className="font-bold">Falha na Sincronização</p>
                 <p className="text-sm">Não foi possível conectar ao servidor após várias tentativas. Verifique sua conexão.</p>
-                {inventoryLastError?.message ? (
-                  <p className="text-xs opacity-90 break-words mt-1">
-                    Detalhes: {inventoryLastError.message}
-                  </p>
-                ) : null}
               </div>
             </div>
             <button 
-              onClick={() => {
-                setInventoryRetryCount(0);
-                setInventorySyncStatus('pending');
-                flushInventoryOpsQueue(0).catch(() => {});
-              }} 
+              onClick={() => window.location.reload()} 
               className="mt-2 bg-white text-red-600 px-3 py-2 rounded text-sm font-bold w-full hover:bg-red-50"
             >
-              Tentar Novamente
+              Tentar Novamente (Recarregar)
             </button>
           </div>
         </div>
@@ -3874,32 +2538,34 @@ const EstoqueFFApp = () => {
             <h1 className="text-2xl font-bold text-gray-800">EstoqueFF Dashboard</h1>
             <div className="flex items-center gap-3">
               {/* Status de Sincronização Global */}
-              {inventorySyncStatus === 'syncing' && (
+              {movementsSyncStatus === 'pending' && (
+                <div className="flex items-center gap-1 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs font-medium" title="Dados salvos localmente. Aguardando conexão para sincronizar.">
+                   <AlertTriangle size={14} />
+                   <span>Pendente</span>
+                </div>
+              )}
+              {movementsSyncStatus === 'syncing' && (
                 <div className="flex items-center gap-1 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-medium">
                    <Loader2 size={14} className="animate-spin" />
                    <span className="hidden sm:inline">Sincronizando...</span>
                    <span className="sm:hidden">Sync...</span>
                 </div>
               )}
-              {inventorySyncStatus !== 'syncing' &&
-                inventorySyncStatus !== 'error' &&
-                (inventoryPendingCount > 0 || inventorySyncStatus === 'pending') && (
-                  <div className="flex items-center gap-1 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs font-medium" title="Dados salvos localmente. Aguardando conexão para sincronizar.">
-                    <Clock size={14} />
-                    <span className="hidden sm:inline">Pendente ({inventoryPendingCount})</span>
-                    <span className="sm:hidden">({inventoryPendingCount})</span>
-                  </div>
-                )}
-              {inventorySyncStatus !== 'syncing' &&
-                inventorySyncStatus !== 'error' &&
-                inventoryPendingCount === 0 && (
+              {movementsSyncStatus === 'pending' && (
+                <div className="flex items-center gap-1 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs font-medium">
+                   <Clock size={14} />
+                   <span className="hidden sm:inline">Pendente</span>
+                   <span className="sm:hidden">Wait</span>
+                </div>
+              )}
+              {movementsSyncStatus === 'synced' && (
                 <div className="flex items-center gap-1 bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-medium">
                    <CheckCircle size={14} />
                    <span className="hidden sm:inline">Online</span>
                    <span className="sm:hidden">OK</span>
                 </div>
               )}
-              {inventorySyncStatus === 'error' && (
+              {movementsSyncStatus === 'error' && (
                 <div className="flex items-center gap-1 bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-medium" title="Erro de conexão. Tentando novamente...">
                    <AlertTriangle size={14} />
                    <span>Erro</span>
@@ -4048,20 +2714,6 @@ const EstoqueFFApp = () => {
                     />
                   ),
                   title: 'Aguardando confirmação de sincronização com o servidor'
-                }
-              : movementStatus === 'error'
-              ? {
-                  text: 'Erro',
-                  classes: 'bg-red-100 text-red-800',
-                  icon: (
-                    <AlertTriangle
-                      size={14}
-                      className="mr-1 inline-block"
-                    />
-                  ),
-                  title: movement.syncError
-                    ? `Não foi possível sincronizar: ${movement.syncError}`
-                    : 'Não foi possível sincronizar esta movimentação'
                 }
               : movementStatus === 'pending'
               ? {
@@ -4855,20 +3507,6 @@ const EstoqueFFApp = () => {
                           ),
                           title: 'Aguardando confirmação de sincronização com o servidor'
                         }
-                      : movementStatus === 'error'
-                      ? {
-                          text: 'Erro',
-                          classes: 'bg-red-100 text-red-800',
-                          icon: (
-                            <AlertTriangle
-                              size={14}
-                              className="mr-1 inline-block"
-                            />
-                          ),
-                          title: movement.syncError
-                            ? `Não foi possível sincronizar: ${movement.syncError}`
-                            : 'Não foi possível sincronizar esta movimentação'
-                        }
                       : movementStatus === 'pending'
                       ? {
                           text: 'Pendente',
@@ -5122,10 +3760,7 @@ const EstoqueFFApp = () => {
                 <p>📦 Total de produtos: {formatNumber(stats.totalProducts)}</p>
                 <p>📊 Total de movimentações: {movements.length}</p>
                 <p>🔄 Versão: EstoqueFF v2.0.0</p>
-                <p>📡 Sincronização: {inventorySyncStatus}</p>
-                <p>⏳ Pendências: {inventoryPendingCount}</p>
-                <p>⏱️ Última transação: {inventorySyncMs != null ? `${inventorySyncMs}ms` : '—'}</p>
-                <p>⚠️ Divergências: {inventoryDivergences.length}</p>
+                <p>✅ Status: Sistema funcionando com todas as funcionalidades</p>
               </div>
               
               <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
@@ -5138,37 +3773,6 @@ const EstoqueFFApp = () => {
                   <p>✅ Backup e restauração de dados</p>
                   <p>✅ Análise de produtos e estatísticas</p>
                 </div>
-              </div>
-
-              <div className="mt-4 p-4 bg-white border border-gray-200 rounded-lg">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div>
-                    <h5 className="font-medium text-gray-800">Auditoria e Consistência</h5>
-                    <p className="text-xs text-gray-500">Exporta auditoria e aponta divergências simples</p>
-                  </div>
-                  <button
-                    onClick={exportAuditJson}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                  >
-                    Exportar Auditoria (JSON)
-                  </button>
-                </div>
-
-                {inventoryDivergences.length > 0 && (
-                  <div className="mt-3 bg-orange-50 border border-orange-200 rounded-lg p-3">
-                    <p className="text-sm font-medium text-orange-800">
-                      Divergências detectadas ({inventoryDivergences.length})
-                    </p>
-                    <div className="mt-2 space-y-1 text-xs text-orange-800">
-                      {inventoryDivergences.slice(0, 5).map((d, idx) => (
-                        <div key={`${d.kind}_${d.movementId || d.productId || idx}`} className="flex justify-between gap-2">
-                          <span className="font-medium">{d.kind}</span>
-                          <span className="text-right">{d.message}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
