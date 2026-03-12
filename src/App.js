@@ -208,11 +208,27 @@ function useFirebaseState(path, defaultValue = null) {
         const isMovementsPath =
           path === 'estoqueff_movements' || path.endsWith('/movements');
 
+        let cachedUnsyncedMovements = [];
+        if (isMovementsPath) {
+          try {
+            const rawCached = localStorage.getItem('estoqueff_cache_movements_v1');
+            const parsedCached = rawCached ? JSON.parse(rawCached) : [];
+            const arr = Array.isArray(parsedCached) ? parsedCached : [];
+            cachedUnsyncedMovements = arr.filter(m => {
+              const s = m?.status;
+              return !!m?.id && (s === 'pending' || s === 'syncing' || s === 'error');
+            });
+          } catch {
+            cachedUnsyncedMovements = [];
+          }
+        }
+
         const inventoryHasPending =
           inventoryOps.length > 0 && (isProductsPath || isMovementsPath);
 
         const key = getQueueKey(path);
-        const hasPending = !!localStorage.getItem(key) || inventoryHasPending;
+        const hasPending =
+          !!localStorage.getItem(key) || inventoryHasPending || cachedUnsyncedMovements.length > 0;
 
         const baseValue = value !== null ? value : defaultValue;
 
@@ -226,13 +242,24 @@ function useFirebaseState(path, defaultValue = null) {
               .map(op => op.payload.movement)
               .filter(m => m && m.id);
 
-            const serverIds = new Set(serverMovements.map(m => m && m.id).filter(Boolean));
-            const merged = [
-              ...pendingMovements
-                .filter(m => !serverIds.has(m.id))
-                .map(m => ({ ...m, status: m.status || 'pending' })),
-              ...serverMovements
-            ].sort((a, b) => {
+            const mergedMap = new Map();
+            serverMovements.forEach(m => {
+              if (m && m.id) mergedMap.set(m.id, m);
+            });
+
+            cachedUnsyncedMovements.forEach(m => {
+              if (!m?.id) return;
+              if (mergedMap.has(m.id)) return;
+              mergedMap.set(m.id, m);
+            });
+
+            pendingMovements.forEach(m => {
+              if (!m?.id) return;
+              if (mergedMap.has(m.id)) return;
+              mergedMap.set(m.id, { ...m, status: m.status || 'pending' });
+            });
+
+            const merged = Array.from(mergedMap.values()).sort((a, b) => {
               const ta = new Date(a?.timestamp || a?.date || 0).getTime();
               const tb = new Date(b?.timestamp || b?.date || 0).getTime();
               return tb - ta;
@@ -1409,6 +1436,192 @@ const EstoqueFFApp = () => {
     [readInventoryOpsQueue, writeInventoryOpsQueue]
   );
 
+  const isSyncDebugEnabled = useCallback(() => {
+    try {
+      return localStorage.getItem('estoqueff_debug_sync') === '1';
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const appendInventorySyncLog = useCallback((entry) => {
+    try {
+      const key = 'estoqueff_sync_log_v1';
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const arr = Array.isArray(parsed) ? parsed : [];
+      const next = [...arr, entry].slice(-200);
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch {}
+  }, []);
+
+  const logInventorySync = useCallback(
+    (event, data) => {
+      const entry = {
+        at: Date.now(),
+        event,
+        data: data ?? null
+      };
+      appendInventorySyncLog(entry);
+      if (isSyncDebugEnabled()) {
+        try {
+          console.log('[sync]', entry);
+        } catch {}
+      }
+    },
+    [appendInventorySyncLog, isSyncDebugEnabled]
+  );
+
+  const appendRejectedInventoryOp = useCallback((info) => {
+    try {
+      const key = 'estoqueff_inventory_ops_rejected_v1';
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const arr = Array.isArray(parsed) ? parsed : [];
+      const next = [...arr, info].slice(-200);
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch {}
+  }, []);
+
+  const setLocalMovementStatus = useCallback(
+    (movementId, status, extra) => {
+      if (!movementId) return;
+      setMovementsLocal(prev => {
+        const arr = Array.isArray(prev) ? prev : [];
+        return arr.map(m => {
+          if (!m || m.id !== movementId) return m;
+          return {
+            ...m,
+            status,
+            ...(extra && typeof extra === 'object' ? extra : {})
+          };
+        });
+      });
+    },
+    [setMovementsLocal]
+  );
+
+  const validateOpAgainstInventoryState = useCallback((op, state) => {
+    if (!op || !op.type) return { ok: false, reason: 'invalid_op' };
+
+    if (op.type === 'movement') {
+      const payload = op.payload || {};
+      const movement = payload.movement || {};
+      const movementId = movement.id;
+      const productId = payload.productId;
+      const movementTypeRaw = payload.movementType;
+      const movementType = String(movementTypeRaw || '')
+        .toLowerCase()
+        .replace('saída', 'saida');
+      const quantity = Number(payload.quantity) || 0;
+
+      const productsArr = Array.isArray(state?.products) ? state.products : [];
+      const movementsArr = Array.isArray(state?.movements) ? state.movements : [];
+
+      if (movementId && movementsArr.some(m => m && m.id === movementId)) {
+        return { ok: true, reason: 'duplicate' };
+      }
+
+      const idx = productsArr.findIndex(p => p && p.id === productId);
+      if (idx === -1) return { ok: false, reason: 'product_not_found' };
+      if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, reason: 'invalid_quantity' };
+      if (movementType !== 'entrada' && movementType !== 'saida') return { ok: false, reason: 'invalid_movement_type' };
+
+      const prevStock = Number(productsArr[idx]?.stock) || 0;
+      const nextStock = movementType === 'entrada' ? prevStock + quantity : prevStock - quantity;
+      if (nextStock < 0) {
+        return { ok: false, reason: 'insufficient_stock', details: { prevStock, quantity } };
+      }
+
+      return { ok: true };
+    }
+
+    if (op.type === 'deleteProduct') {
+      const productId = op.payload?.productId;
+      if (!productId) return { ok: false, reason: 'invalid_product_id' };
+      const productsArr = Array.isArray(state?.products) ? state.products : [];
+      if (!productsArr.some(p => p && p.id === productId)) {
+        return { ok: true, reason: 'noop' };
+      }
+      return { ok: true };
+    }
+
+    if (op.type === 'upsertProduct') {
+      const productId = op.payload?.product?.id;
+      if (!productId) return { ok: false, reason: 'invalid_product_id' };
+      return { ok: true };
+    }
+
+    if (op.type === 'restoreBackup') {
+      return { ok: true };
+    }
+
+    return { ok: false, reason: 'unknown_op_type' };
+  }, []);
+
+  const getInventoryStateSnapshot = useCallback(async () => {
+    if (!window.firebaseDatabase || !window.firebaseGet) {
+      throw new Error('firebase_not_ready');
+    }
+    const stateRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_state');
+    const snap = await withTimeout(window.firebaseGet(stateRef), 8000, 'get_state_timeout');
+    const val = snap && typeof snap.val === 'function' ? snap.val() : null;
+    return val && typeof val === 'object' ? val : { products: [], movements: [], audit: [], meta: {} };
+  }, [withTimeout]);
+
+  const applyOpToInventoryStateLocal = useCallback((op, state) => {
+    const base = state && typeof state === 'object' ? state : {};
+    const productsArr = Array.isArray(base.products) ? base.products : [];
+    const movementsArr = Array.isArray(base.movements) ? base.movements : [];
+
+    if (!op || !op.type) return base;
+
+    if (op.type === 'movement' && op.payload) {
+      const { movement, productId, movementType: movementTypeRaw, quantity } = op.payload;
+      if (!movement?.id) return base;
+      if (movementsArr.some(m => m && m.id === movement.id)) return base;
+
+      const idx = productsArr.findIndex(p => p && p.id === productId);
+      if (idx === -1) return base;
+      const prevStock = Number(productsArr[idx]?.stock) || 0;
+      const qty = Number(quantity) || 0;
+      const movementType = String(movementTypeRaw || '')
+        .toLowerCase()
+        .replace('saída', 'saida');
+      const nextStock = movementType === 'entrada' ? prevStock + qty : prevStock - qty;
+      if (nextStock < 0) return base;
+
+      const nextProducts = [...productsArr];
+      nextProducts[idx] = { ...nextProducts[idx], stock: nextStock };
+      const nextMovements = [{ ...movement, status: 'synced' }, ...movementsArr];
+      return { ...base, products: nextProducts, movements: nextMovements };
+    }
+
+    if (op.type === 'upsertProduct' && op.payload?.product?.id) {
+      const nextProduct = op.payload.product;
+      const idx = productsArr.findIndex(p => p && p.id === nextProduct.id);
+      const nextProducts = [...productsArr];
+      if (idx >= 0) nextProducts[idx] = { ...nextProducts[idx], ...nextProduct };
+      else nextProducts.push(nextProduct);
+      return { ...base, products: nextProducts };
+    }
+
+    if (op.type === 'deleteProduct' && op.payload?.productId) {
+      const nextProducts = productsArr.filter(p => p && p.id !== op.payload.productId);
+      return { ...base, products: nextProducts };
+    }
+
+    if (op.type === 'restoreBackup' && op.payload) {
+      return {
+        ...base,
+        products: Array.isArray(op.payload.products) ? op.payload.products : productsArr,
+        movements: Array.isArray(op.payload.movements) ? op.payload.movements : movementsArr
+      };
+    }
+
+    return base;
+  }, []);
+
   useEffect(() => {
     const queue = readInventoryOpsQueue();
     setInventoryPendingCount(queue.length);
@@ -1746,6 +1959,7 @@ const EstoqueFFApp = () => {
       }
 
       setInventorySyncStatus('syncing');
+      logInventorySync('legacy_flush_start', { queueLength: queue.length, currentRetry });
 
       const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
       const movementsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_movements');
@@ -1777,17 +1991,48 @@ const EstoqueFFApp = () => {
           continue;
         }
 
+        const validation = validateOpAgainstInventoryState(op, {
+          products: nextProducts,
+          movements: nextMovements
+        });
+
+        if (!validation.ok) {
+          const movementId = op?.payload?.movement?.id || op?.payload?.movementId;
+          const rejection = {
+            at: Date.now(),
+            mode: 'legacy',
+            opId: op.opId,
+            type: op.type,
+            reason: validation.reason,
+            details: validation.details || null,
+            movementId: movementId || null
+          };
+          appendRejectedInventoryOp(rejection);
+          logInventorySync('op_rejected', rejection);
+          if (op.type === 'movement' && movementId) {
+            setLocalMovementStatus(movementId, 'error', {
+              syncError: validation.reason,
+              syncErrorDetails: validation.details || null
+            });
+          }
+          nextQueue = nextQueue.slice(1);
+          processed += 1;
+          setInventoryRetryCount(0);
+          writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
+          continue;
+        }
+
         if (op.type === 'movement' && op.payload) {
           const { movement, productId, movementType, quantity } = op.payload;
           if (movement && movement.id) {
             const existing = nextMovements.find(m => m && m.id === movement.id);
-            if (!existing) {
+            if (existing) {
+              setLocalMovementStatus(movement.id, 'synced', null);
+            } else {
               const idx = nextProducts.findIndex(p => p && p.id === productId);
-              if (idx === -1) throw new Error('product_not_found');
               const prevStock = Number(nextProducts[idx].stock) || 0;
               const qty = Number(quantity) || 0;
               const nextStock = movementType === 'entrada' ? prevStock + qty : prevStock - qty;
-              if (nextStock < 0) throw new Error('negative_stock');
 
               const now =
                 window.firebaseServerTimestamp ? window.firebaseServerTimestamp() : new Date().toISOString();
@@ -1809,6 +2054,13 @@ const EstoqueFFApp = () => {
                 },
                 ...nextMovements
               ].slice(0, 10000);
+
+              setLocalMovementStatus(movement.id, 'synced', {
+                previousStock: prevStock,
+                newStock: nextStock,
+                confirmedAt: now,
+                serverTs: now
+              });
             }
           }
         } else if (op.type === 'upsertProduct' && op.payload && op.payload.product) {
@@ -1840,12 +2092,14 @@ const EstoqueFFApp = () => {
       setProductsLocal(nextProducts);
       setMovementsLocal(nextMovements);
       setInventoryLastError(null);
+      logInventorySync('legacy_flush_success', { processed, remaining: nextQueue.length });
     } catch (e) {
       const info = normalizeInventoryError(e);
       setInventoryLastError(info);
       const nextRetry = currentRetry + 1;
       setInventoryRetryCount(nextRetry);
       setInventorySyncStatus('error');
+      logInventorySync('legacy_flush_error', { error: info, nextRetry });
 
       if (nextRetry < 5) {
         const delay = Math.min(30000, 1000 * 2 ** nextRetry);
@@ -1857,10 +2111,14 @@ const EstoqueFFApp = () => {
   }, [
     defaultMovements,
     defaultProducts,
+    appendRejectedInventoryOp,
+    logInventorySync,
     normalizeInventoryError,
     readInventoryOpsQueue,
+    setLocalMovementStatus,
     setMovementsLocal,
     setProductsLocal,
+    validateOpAgainstInventoryState,
     withTimeout,
     writeInventoryOpsQueue
   ]);
@@ -1890,21 +2148,155 @@ const EstoqueFFApp = () => {
       }
 
       setInventorySyncStatus('syncing');
+      logInventorySync('flush_start', { queueLength: queue.length, currentRetry, mode: 'transaction' });
+
+      let stateSnapshot = null;
+      try {
+        stateSnapshot = await getInventoryStateSnapshot();
+      } catch (e) {
+        stateSnapshot = { products: [], movements: [] };
+      }
 
       let nextQueue = [...queue];
       let processed = 0;
       while (nextQueue.length && processed < 25) {
         const op = nextQueue[0];
-        await applyInventoryOpTransaction(op);
-        nextQueue = nextQueue.slice(1);
-        processed += 1;
-        setInventoryRetryCount(0);
-        writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
+        if (!op || !op.type) {
+          nextQueue = nextQueue.slice(1);
+          processed += 1;
+          continue;
+        }
+
+        const validation = validateOpAgainstInventoryState(op, stateSnapshot);
+        if (!validation.ok) {
+          const movementId = op?.payload?.movement?.id || op?.payload?.movementId;
+          const rejection = {
+            at: Date.now(),
+            mode: 'transaction',
+            opId: op.opId,
+            type: op.type,
+            reason: validation.reason,
+            details: validation.details || null,
+            movementId: movementId || null
+          };
+          appendRejectedInventoryOp(rejection);
+          logInventorySync('op_rejected', rejection);
+          if (op.type === 'movement' && movementId) {
+            setLocalMovementStatus(movementId, 'error', {
+              syncError: validation.reason,
+              syncErrorDetails: validation.details || null
+            });
+          }
+          nextQueue = nextQueue.slice(1);
+          processed += 1;
+          setInventoryRetryCount(0);
+          writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
+          continue;
+        }
+
+        logInventorySync('op_start', { opId: op.opId, type: op.type });
+
+        try {
+          const movementId = op?.payload?.movement?.id || null;
+          if (op.type === 'movement' && movementId) {
+            setLocalMovementStatus(movementId, 'syncing', {
+              syncError: null,
+              syncErrorDetails: null
+            });
+          }
+
+          let attempt = 0;
+          while (attempt < 3) {
+            try {
+              await applyInventoryOpTransaction(op);
+              break;
+            } catch (innerErr) {
+              const innerInfo = normalizeInventoryError(innerErr);
+              logInventorySync('op_attempt_error', {
+                opId: op.opId,
+                type: op.type,
+                attempt: attempt + 1,
+                error: innerInfo
+              });
+
+              if (innerInfo?.message === 'not_committed') {
+                let fresh = stateSnapshot;
+                try {
+                  fresh = await getInventoryStateSnapshot();
+                } catch {}
+                stateSnapshot = fresh;
+
+                const revalidation = validateOpAgainstInventoryState(op, stateSnapshot);
+                if (!revalidation.ok) {
+                  const rejectedMovementId = op?.payload?.movement?.id || op?.payload?.movementId;
+                  const rejection = {
+                    at: Date.now(),
+                    mode: 'transaction',
+                    opId: op.opId,
+                    type: op.type,
+                    reason: revalidation.reason,
+                    details: revalidation.details || null,
+                    movementId: rejectedMovementId || null
+                  };
+                  appendRejectedInventoryOp(rejection);
+                  logInventorySync('op_rejected', rejection);
+                  if (op.type === 'movement' && rejectedMovementId) {
+                    setLocalMovementStatus(rejectedMovementId, 'error', {
+                      syncError: revalidation.reason,
+                      syncErrorDetails: revalidation.details || null
+                    });
+                  }
+
+                  nextQueue = nextQueue.slice(1);
+                  processed += 1;
+                  setInventoryRetryCount(0);
+                  writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
+                  attempt = 3;
+                  break;
+                }
+
+                attempt += 1;
+                if (attempt >= 3) throw innerErr;
+                await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+                continue;
+              }
+
+              throw innerErr;
+            }
+          }
+
+          if (attempt >= 3 && nextQueue[0]?.opId !== op.opId) {
+            continue;
+          }
+
+          stateSnapshot = applyOpToInventoryStateLocal(op, stateSnapshot);
+
+          if (op.type === 'movement' && movementId) {
+            setLocalMovementStatus(movementId, 'synced', {
+              syncError: null,
+              syncErrorDetails: null,
+              confirmedAt: new Date().toISOString()
+            });
+          }
+
+          nextQueue = nextQueue.slice(1);
+          processed += 1;
+          setInventoryRetryCount(0);
+          writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
+          logInventorySync('op_success', { opId: op.opId, type: op.type, remaining: nextQueue.length });
+        } catch (err) {
+          const info = normalizeInventoryError(err);
+          logInventorySync('op_error', { opId: op.opId, type: op.type, error: info });
+
+          throw err;
+        }
       }
       setInventoryLastError(null);
+      logInventorySync('flush_success', { processed, remaining: nextQueue.length, mode: 'transaction' });
     } catch (e) {
       const info = normalizeInventoryError(e);
       setInventoryLastError(info);
+      logInventorySync('flush_error', { error: info, currentRetry, mode: 'transaction' });
 
       if (isPermissionDenied(info) && !inventoryLegacyMode) {
         try {
@@ -1930,12 +2322,18 @@ const EstoqueFFApp = () => {
     }
   }, [
     applyInventoryOpTransaction,
+    applyOpToInventoryStateLocal,
+    appendRejectedInventoryOp,
     ensureInventoryState,
     flushInventoryOpsQueueLegacy,
+    getInventoryStateSnapshot,
     inventoryLegacyMode,
     isPermissionDenied,
+    logInventorySync,
     normalizeInventoryError,
     readInventoryOpsQueue,
+    setLocalMovementStatus,
+    validateOpAgainstInventoryState,
     writeInventoryOpsQueue
   ]);
 
@@ -2471,8 +2869,12 @@ const EstoqueFFApp = () => {
       return;
     }
     
-    if (movementType === 'saída' && targetProduct.stock < quantity) {
-      setErrors({ quantity: `Estoque insuficiente! Disponível: ${targetProduct.stock} unidades` });
+    const currentStock = Number(targetProduct.stock) || 0;
+    const normalizedMovementType = String(movementType || '')
+      .toLowerCase()
+      .replace('saída', 'saida');
+    if (normalizedMovementType === 'saida' && currentStock < quantity) {
+      setErrors({ quantity: `Estoque insuficiente! Disponível: ${currentStock} unidades` });
       setLoading(false);
       return;
     }
@@ -3550,6 +3952,20 @@ const EstoqueFFApp = () => {
                   ),
                   title: 'Aguardando confirmação de sincronização com o servidor'
                 }
+              : movementStatus === 'error'
+              ? {
+                  text: 'Erro',
+                  classes: 'bg-red-100 text-red-800',
+                  icon: (
+                    <AlertTriangle
+                      size={14}
+                      className="mr-1 inline-block"
+                    />
+                  ),
+                  title: movement.syncError
+                    ? `Não foi possível sincronizar: ${movement.syncError}`
+                    : 'Não foi possível sincronizar esta movimentação'
+                }
               : movementStatus === 'pending'
               ? {
                   text: 'Pendente',
@@ -4341,6 +4757,20 @@ const EstoqueFFApp = () => {
                             />
                           ),
                           title: 'Aguardando confirmação de sincronização com o servidor'
+                        }
+                      : movementStatus === 'error'
+                      ? {
+                          text: 'Erro',
+                          classes: 'bg-red-100 text-red-800',
+                          icon: (
+                            <AlertTriangle
+                              size={14}
+                              className="mr-1 inline-block"
+                            />
+                          ),
+                          title: movement.syncError
+                            ? `Não foi possível sincronizar: ${movement.syncError}`
+                            : 'Não foi possível sincronizar esta movimentação'
                         }
                       : movementStatus === 'pending'
                       ? {
