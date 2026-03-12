@@ -340,4 +340,4 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     expect(rejected.length).toBeGreaterThan(0);
     expect(rejected[rejected.length - 1].reason).toBe('insufficient_stock');
   });
-});
+}); 
