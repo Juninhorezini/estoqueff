@@ -13,6 +13,12 @@ const formatNumber = (number) => {
   return new Intl.NumberFormat('pt-BR').format(number);
 };
 
+const formatMaybeNumber = (value) => {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return '—';
+  return formatNumber(n);
+};
+
 // Função auxiliar para sanitizar objetos antes de salvar no Firebase
 const sanitizeConfig = (config) => {
   if (!config) return null;
@@ -120,7 +126,15 @@ function useFirebaseState(path, defaultValue = null) {
       // Lógica de Reconciliação para Movimentações
       if (path === 'estoqueff_movements' && Array.isArray(payloadToWrite)) {
         // 1. Busca dados atuais do servidor para não sobrescrever outros usuários
-        const serverSnapshot = await window.firebaseGet(dbRef); // Assumindo que firebaseGet existe ou usando onValue one-time
+        let serverSnapshot = null;
+        try {
+          if (typeof window.firebaseGet === 'function') {
+            serverSnapshot = await window.firebaseGet(dbRef);
+          }
+        } catch (e) {
+          console.error("Erro ao recuperar dados do Firebase (merge):", e);
+          serverSnapshot = null;
+        }
         // Se firebaseGet não existir como helper, usamos onValue com once
         
         let serverData = [];
@@ -159,7 +173,20 @@ function useFirebaseState(path, defaultValue = null) {
       await window.firebaseSet(dbRef, payloadToWrite);
       
       // Sucesso! Atualiza estado local e limpa fila
-      setData(payloadToWrite);
+      let freshValue = null;
+      try {
+        if (typeof window.firebaseGet === 'function') {
+          const freshSnapshot = await window.firebaseGet(dbRef);
+          if (freshSnapshot && freshSnapshot.exists && freshSnapshot.exists()) {
+            freshValue = freshSnapshot.val();
+          }
+        }
+      } catch (e) {
+        console.error("Erro ao recuperar dados do Firebase (pós-gravação):", e);
+        freshValue = null;
+      }
+
+      setData(freshValue !== null ? freshValue : payloadToWrite);
       localStorage.removeItem(key);
       setSyncStatus('synced');
       setRetryCount(0);
@@ -1757,12 +1784,20 @@ const EstoqueFFApp = () => {
     }, 10000);
 
     try {
+      const stockBefore = Number.isFinite(Number(targetProduct.stock)) ? Number(targetProduct.stock) : 0;
+      const stockAfter =
+        movementType === 'entrada'
+          ? stockBefore + quantity
+          : stockBefore - quantity;
+
       const baseMovement = {
         id: Date.now().toString(),
         product: targetProduct.name,
         productId: targetProduct.id,
         type: movementType,
         quantity,
+        stockBefore,
+        stockAfter,
         user: currentUser.name,
         userId: currentUser.id,
         userName: currentUser.name,
@@ -2141,6 +2176,55 @@ const EstoqueFFApp = () => {
       todayMovements: todayMovements
     };
   }, [products, movements]);
+
+  const movementBalancesById = useMemo(() => {
+    const productStockByKey = new Map();
+    products.forEach((p) => {
+      productStockByKey.set(p.id, Number.isFinite(Number(p.stock)) ? Number(p.stock) : 0);
+      productStockByKey.set(p.name, Number.isFinite(Number(p.stock)) ? Number(p.stock) : 0);
+    });
+
+    const sorted = [...movements].sort((a, b) => {
+      const ta = new Date(a?.timestamp || a?.date || 0).getTime();
+      const tb = new Date(b?.timestamp || b?.date || 0).getTime();
+      return tb - ta;
+    });
+
+    const runningAfterByKey = new Map();
+    const balances = new Map();
+
+    for (const m of sorted) {
+      const key = m?.productId || m?.product;
+      if (!key) continue;
+
+      let runningAfter = runningAfterByKey.get(key);
+      if (runningAfter === undefined) {
+        runningAfter = productStockByKey.get(key);
+        if (runningAfter === undefined) runningAfter = 0;
+      }
+
+      const hasExplicit =
+        typeof m?.stockBefore === 'number' &&
+        Number.isFinite(m.stockBefore) &&
+        typeof m?.stockAfter === 'number' &&
+        Number.isFinite(m.stockAfter);
+
+      const qty = Number.isFinite(Number(m?.quantity)) ? Number(m.quantity) : 0;
+
+      const stockAfter = hasExplicit ? m.stockAfter : runningAfter;
+      const stockBefore =
+        hasExplicit
+          ? m.stockBefore
+          : m?.type === 'entrada'
+            ? stockAfter - qty
+            : stockAfter + qty;
+
+      balances.set(m.id, { stockBefore, stockAfter });
+      runningAfterByKey.set(key, stockBefore);
+    }
+
+    return balances;
+  }, [movements, products]);
 
   // Relatórios expandidos
 
@@ -2703,6 +2787,15 @@ const EstoqueFFApp = () => {
             const movementStatus = movement.status || 'synced';
             const isEntrada = movement.type === 'entrada';
             const amountColor = isEntrada ? 'text-green-500' : 'text-red-500';
+            const derivedBalance = movementBalancesById.get(movement.id);
+            const saldoAntes =
+              typeof movement.stockBefore === 'number'
+                ? movement.stockBefore
+                : derivedBalance?.stockBefore;
+            const saldoDepois =
+              typeof movement.stockAfter === 'number'
+                ? movement.stockAfter
+                : derivedBalance?.stockAfter;
             const statusConfig = movementStatus === 'syncing'
               ? {
                   text: 'Sincronizando',
@@ -2752,6 +2845,9 @@ const EstoqueFFApp = () => {
                       return product?.brand ? `${product.brand} • ` : '';
                     })()}
                     {movement.user} • {movement.date}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Saldo: {formatMaybeNumber(saldoAntes)} → {formatMaybeNumber(saldoDepois)}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
@@ -3495,6 +3591,15 @@ const EstoqueFFApp = () => {
                     const amountClasses = isEntrada
                       ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800';
+                    const derivedBalance = movementBalancesById.get(movement.id);
+                    const saldoAntes =
+                      typeof movement.stockBefore === 'number'
+                        ? movement.stockBefore
+                        : derivedBalance?.stockBefore;
+                    const saldoDepois =
+                      typeof movement.stockAfter === 'number'
+                        ? movement.stockAfter
+                        : derivedBalance?.stockAfter;
                     const statusConfig = movementStatus === 'syncing'
                       ? {
                           text: 'Sincronizando',
@@ -3548,6 +3653,9 @@ const EstoqueFFApp = () => {
                               return product?.brand ? `${product.brand} • ` : '';
                             })()}
                             {movement.user} • {movement.date}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Saldo: {formatMaybeNumber(saldoAntes)} → {formatMaybeNumber(saldoDepois)}
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-1">
