@@ -13,6 +13,11 @@ const formatNumber = (number) => {
   return new Intl.NumberFormat('pt-BR').format(number);
 };
 
+const sleepMs = (ms) =>
+  new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
+
 // Função auxiliar para sanitizar objetos antes de salvar no Firebase
 const sanitizeConfig = (config) => {
   if (!config) return null;
@@ -312,6 +317,35 @@ function useFirebaseState(path, defaultValue = null) {
 
             setData(nextProducts);
           } else {
+            setData(baseValue);
+          }
+        } else if (isMovementsPath && cachedUnsyncedMovements.length) {
+          const serverMovements = Array.isArray(baseValue) ? baseValue : [];
+          const mergedMap = new Map();
+          serverMovements.forEach(m => {
+            if (m && m.id) mergedMap.set(m.id, m);
+          });
+          cachedUnsyncedMovements.forEach(m => {
+            if (!m?.id) return;
+            if (mergedMap.has(m.id)) return;
+            mergedMap.set(m.id, m);
+          });
+          const merged = Array.from(mergedMap.values()).sort((a, b) => {
+            const ta = new Date(a?.timestamp || a?.date || 0).getTime();
+            const tb = new Date(b?.timestamp || b?.date || 0).getTime();
+            return tb - ta;
+          });
+          setData(merged);
+        } else {
+          try {
+            const rawQueue = localStorage.getItem(key);
+            const queue = rawQueue ? JSON.parse(rawQueue) : [];
+            if (Array.isArray(queue) && queue.length > 0 && queue[queue.length - 1]?.payload) {
+              setData(queue[queue.length - 1].payload);
+            } else {
+              setData(baseValue);
+            }
+          } catch {
             setData(baseValue);
           }
         }
@@ -1559,6 +1593,16 @@ const EstoqueFFApp = () => {
     return { ok: false, reason: 'unknown_op_type' };
   }, []);
 
+  const withTimeout = useCallback((promise, timeoutMs, message) => {
+    const timeoutPromise = new Promise((_, reject) => {
+      const id = setTimeout(() => {
+        clearTimeout(id);
+        reject(new Error(message || 'timeout'));
+      }, timeoutMs);
+    });
+    return Promise.race([promise, timeoutPromise]);
+  }, []);
+
   const getInventoryStateSnapshot = useCallback(async () => {
     if (!window.firebaseDatabase || !window.firebaseGet) {
       throw new Error('firebase_not_ready');
@@ -1695,16 +1739,6 @@ const EstoqueFFApp = () => {
   useEffect(() => {
     ensureInventoryState().catch(() => {});
   }, [ensureInventoryState]);
-
-  const withTimeout = useCallback((promise, timeoutMs, message) => {
-    const timeoutPromise = new Promise((_, reject) => {
-      const id = setTimeout(() => {
-        clearTimeout(id);
-        reject(new Error(message || 'timeout'));
-      }, timeoutMs);
-    });
-    return Promise.race([promise, timeoutPromise]);
-  }, []);
 
   const applyInventoryOpTransaction = useCallback(async (op) => {
     if (!window.firebaseDatabase || !window.firebaseRunTransaction) {
@@ -2257,7 +2291,7 @@ const EstoqueFFApp = () => {
 
                 attempt += 1;
                 if (attempt >= 3) throw innerErr;
-                await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+                await sleepMs(200 * attempt);
                 continue;
               }
 

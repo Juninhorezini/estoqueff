@@ -118,26 +118,36 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
   });
 
   test('Deve carregar dados do localStorage se houver (Simulação de Reload Offline)', async () => {
-    // Prepara dados locais simulando um estado salvo offline
     const localMovements = [
-      { id: 'offline1', product: 'Produto Teste', productId: 'P001', quantity: 10, type: 'entrada', status: 'pending', date: '2025-08-20 10:00' }
+      { id: 'offline1', product: 'Produto Teste', productId: 'P001', quantity: 10, type: 'entrada', status: 'pending', date: new Date().toLocaleString('pt-BR') }
     ];
     
     localStorage.setItem('estoqueff_cache_movements_v1', JSON.stringify(localMovements));
+    mockOnValue.mockImplementation((refObj, callback) => {
+      const key = refObj?.key || '';
+      if (key === 'estoqueff_state' || key.endsWith('/products') || key.endsWith('/movements')) {
+        callback({ val: () => [] });
+        return () => {};
+      }
+      callback({ val: () => null });
+      return () => {};
+    });
 
     await act(async () => {
       render(<App />);
     });
 
-    // Login necessário para ver o dashboard e disparar efeitos que dependem de renderização completa
     await login();
 
-    // Avança timers para permitir que o useEffect processe o localStorage
     await act(async () => {
       jest.advanceTimersByTime(100);
     });
 
-    expect(screen.getByText('Produto Teste')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Movimentação'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Produto Teste')).toBeInTheDocument();
+    });
   });
 
   test('Deve exibir indicador de sincronização quando ocorrer flush da fila', async () => {
