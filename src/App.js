@@ -194,21 +194,99 @@ function useFirebaseState(path, defaultValue = null) {
       return window.firebaseOnValue(dbRef, (snapshot) => {
         const value = snapshot.val();
         
-        // Só atualiza do servidor se NÃO tivermos pendências locais importantes
-        // Ou fazemos merge visual?
-        // Estratégia: Se fila vazia, aceita servidor. Se fila cheia, ignora servidor (pois vamos sobrescrever em breve)
-        // ou mescla visualmente.
+        let inventoryOps = [];
+        try {
+          const rawOps = localStorage.getItem('estoqueff_inventory_ops_queue_v1');
+          const parsedOps = rawOps ? JSON.parse(rawOps) : [];
+          inventoryOps = Array.isArray(parsedOps) ? parsedOps : [];
+        } catch {
+          inventoryOps = [];
+        }
+
+        const isProductsPath =
+          path === 'estoqueff_products' || path.endsWith('/products');
+        const isMovementsPath =
+          path === 'estoqueff_movements' || path.endsWith('/movements');
+
+        const inventoryHasPending =
+          inventoryOps.length > 0 && (isProductsPath || isMovementsPath);
+
         const key = getQueueKey(path);
-        const hasPending = !!localStorage.getItem(key);
-        
+        const hasPending = !!localStorage.getItem(key) || inventoryHasPending;
+
+        const baseValue = value !== null ? value : defaultValue;
+
         if (!hasPending) {
-           setData(value !== null ? value : defaultValue);
-        } else {
-           // Se tem pendencia, talvez o servidor já tenha recebido nosso flush?
-           // Se o valor do servidor conter nossos IDs pendentes, podemos limpar a fila?
-           // Complexo. Vamos manter simples: Servidor atualiza, mas flush sobrescreve depois se necessário.
-           // Para evitar "pulo" visual, se tem pendencia, mantemos dados locais.
-           console.log(`[Firebase] Dados recebidos para ${path}, mas temos pendências locais. Ignorando atualização remota temporariamente.`);
+          setData(baseValue);
+        } else if (inventoryHasPending) {
+          if (isMovementsPath) {
+            const serverMovements = Array.isArray(baseValue) ? baseValue : [];
+            const pendingMovements = inventoryOps
+              .filter(op => op && op.type === 'movement' && op.payload && op.payload.movement)
+              .map(op => op.payload.movement)
+              .filter(m => m && m.id);
+
+            const serverIds = new Set(serverMovements.map(m => m && m.id).filter(Boolean));
+            const merged = [
+              ...pendingMovements
+                .filter(m => !serverIds.has(m.id))
+                .map(m => ({ ...m, status: m.status || 'pending' })),
+              ...serverMovements
+            ].sort((a, b) => {
+              const ta = new Date(a?.timestamp || a?.date || 0).getTime();
+              const tb = new Date(b?.timestamp || b?.date || 0).getTime();
+              return tb - ta;
+            });
+
+            setData(merged);
+          } else if (isProductsPath) {
+            let nextProducts = Array.isArray(baseValue) ? baseValue : [];
+
+            inventoryOps.forEach(op => {
+              if (!op || !op.type) return;
+
+              if (op.type === 'restoreBackup' && op.payload && Array.isArray(op.payload.products)) {
+                nextProducts = op.payload.products;
+                return;
+              }
+
+              if (op.type === 'deleteProduct' && op.payload && op.payload.productId) {
+                nextProducts = nextProducts.filter(p => p && p.id !== op.payload.productId);
+                return;
+              }
+
+              if (op.type === 'upsertProduct' && op.payload && op.payload.product && op.payload.product.id) {
+                const idx = nextProducts.findIndex(p => p && p.id === op.payload.product.id);
+                if (idx >= 0) {
+                  nextProducts = [
+                    ...nextProducts.slice(0, idx),
+                    { ...nextProducts[idx], ...op.payload.product },
+                    ...nextProducts.slice(idx + 1)
+                  ];
+                } else {
+                  nextProducts = [...nextProducts, op.payload.product];
+                }
+                return;
+              }
+
+              if (op.type === 'movement' && op.payload && op.payload.productId) {
+                const idx = nextProducts.findIndex(p => p && p.id === op.payload.productId);
+                if (idx === -1) return;
+                const currentStock = Number(nextProducts[idx].stock) || 0;
+                const qty = Number(op.payload.quantity) || 0;
+                const delta = op.payload.movementType === 'entrada' ? qty : -qty;
+                nextProducts = [
+                  ...nextProducts.slice(0, idx),
+                  { ...nextProducts[idx], stock: currentStock + delta },
+                  ...nextProducts.slice(idx + 1)
+                ];
+              }
+            });
+
+            setData(nextProducts);
+          } else {
+            setData(baseValue);
+          }
         }
         setLoading(false);
       });
@@ -1134,6 +1212,14 @@ const EstoqueFFApp = () => {
       return null;
     }
   });
+
+  const [inventoryLegacyMode, setInventoryLegacyMode] = useState(() => {
+    try {
+      return localStorage.getItem('estoqueff_legacy_mode') === '1';
+    } catch {
+      return false;
+    }
+  });
   
   const defaultProducts = useMemo(
     () => [
@@ -1154,18 +1240,23 @@ const EstoqueFFApp = () => {
     []
   );
 
+  const productsPath = inventoryLegacyMode ? 'estoqueff_products' : 'estoqueff_state/products';
+  const movementsPath = inventoryLegacyMode ? 'estoqueff_movements' : 'estoqueff_state/movements';
+  const auditPath = inventoryLegacyMode ? 'estoqueff_audit' : 'estoqueff_state/audit';
+  const metaPath = inventoryLegacyMode ? 'estoqueff_meta' : 'estoqueff_state/meta';
+
   const [products, , , , , setProductsLocal] = useFirebaseState(
-    'estoqueff_state/products',
+    productsPath,
     defaultProducts
   );
 
   const [movements, , , , , setMovementsLocal] = useFirebaseState(
-    'estoqueff_state/movements',
+    movementsPath,
     defaultMovements
   );
 
-  const [auditMovements] = useFirebaseState('estoqueff_state/audit', []);
-  const [inventoryMeta] = useFirebaseState('estoqueff_state/meta', {});
+  const [auditMovements] = useFirebaseState(auditPath, []);
+  const [inventoryMeta] = useFirebaseState(metaPath, {});
 
   const [companySettings, setCompanySettings] = useFirebaseState('estoqueff_settings', {
     companyName: 'Minha Empresa',
@@ -1239,6 +1330,7 @@ const EstoqueFFApp = () => {
   const [inventoryPendingCount, setInventoryPendingCount] = useState(0);
   const [inventorySyncMs, setInventorySyncMs] = useState(null);
   const [inventoryDivergences, setInventoryDivergences] = useState([]);
+  const [inventoryLastError, setInventoryLastError] = useState(null);
   const flushInProgressRef = useRef(false);
 
   const deviceId = useMemo(() => {
@@ -1346,6 +1438,7 @@ const EstoqueFFApp = () => {
   }, [setProductsLocal, setMovementsLocal]);
 
   const ensureInventoryState = useCallback(async () => {
+    if (inventoryLegacyMode) return;
     if (!window.firebaseDatabase || !window.firebaseGet || !window.firebaseSet) return;
     const stateRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_state');
     const snap = await window.firebaseGet(stateRef);
@@ -1384,7 +1477,7 @@ const EstoqueFFApp = () => {
         lastUpdatedAt: now
       }
     });
-  }, [defaultMovements, defaultProducts]);
+  }, [defaultMovements, defaultProducts, inventoryLegacyMode]);
 
   useEffect(() => {
     ensureInventoryState().catch(() => {});
@@ -1609,10 +1702,177 @@ const EstoqueFFApp = () => {
     return result;
   }, [withTimeout]);
 
-  const flushInventoryOpsQueue = useCallback(async (currentRetry = 0) => {
+  const normalizeInventoryError = useCallback((err) => {
+    const message =
+      (err && typeof err === 'object' && typeof err.message === 'string' && err.message) ||
+      String(err || '');
+    const code =
+      (err && typeof err === 'object' && typeof err.code === 'string' && err.code) ||
+      (message && message.toUpperCase().includes('PERMISSION_DENIED') ? 'PERMISSION_DENIED' : '') ||
+      '';
+    return {
+      message,
+      code,
+      at: Date.now()
+    };
+  }, []);
+
+  const isPermissionDenied = useCallback((err) => {
+    const code = err?.code || '';
+    const message = err?.message || '';
+    return (
+      String(code).toUpperCase().includes('PERMISSION_DENIED') ||
+      String(message).toUpperCase().includes('PERMISSION_DENIED') ||
+      String(message).toLowerCase().includes('permission denied')
+    );
+  }, []);
+
+  const flushInventoryOpsQueueLegacy = useCallback(async (currentRetry = 0) => {
     if (flushInProgressRef.current) return;
     flushInProgressRef.current = true;
     try {
+      const onlineNow = typeof navigator !== 'undefined' ? navigator.onLine : true;
+      if (!onlineNow || !window.firebaseDatabase || !window.firebaseGet || !window.firebaseSet) {
+        setInventorySyncStatus('pending');
+        return;
+      }
+
+      const queue = readInventoryOpsQueue();
+      if (!queue.length) {
+        setInventoryRetryCount(0);
+        setInventorySyncStatus('idle');
+        setInventoryLastError(null);
+        return;
+      }
+
+      setInventorySyncStatus('syncing');
+
+      const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
+      const movementsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_movements');
+
+      const [productsSnap, movementsSnap] = await Promise.all([
+        withTimeout(window.firebaseGet(productsRef), 8000, 'get_products_timeout').catch(() => null),
+        withTimeout(window.firebaseGet(movementsRef), 8000, 'get_movements_timeout').catch(() => null)
+      ]);
+
+      let serverProducts =
+        productsSnap && typeof productsSnap.val === 'function' ? productsSnap.val() : null;
+      let serverMovements =
+        movementsSnap && typeof movementsSnap.val === 'function' ? movementsSnap.val() : null;
+
+      serverProducts = Array.isArray(serverProducts) ? serverProducts : Array.isArray(defaultProducts) ? defaultProducts : [];
+      serverMovements = Array.isArray(serverMovements) ? serverMovements : Array.isArray(defaultMovements) ? defaultMovements : [];
+
+      let nextProducts = [...serverProducts];
+      let nextMovements = [...serverMovements];
+
+      let nextQueue = [...queue];
+      let processed = 0;
+
+      while (nextQueue.length && processed < 25) {
+        const op = nextQueue[0];
+        if (!op || !op.type) {
+          nextQueue = nextQueue.slice(1);
+          processed += 1;
+          continue;
+        }
+
+        if (op.type === 'movement' && op.payload) {
+          const { movement, productId, movementType, quantity } = op.payload;
+          if (movement && movement.id) {
+            const existing = nextMovements.find(m => m && m.id === movement.id);
+            if (!existing) {
+              const idx = nextProducts.findIndex(p => p && p.id === productId);
+              if (idx === -1) throw new Error('product_not_found');
+              const prevStock = Number(nextProducts[idx].stock) || 0;
+              const qty = Number(quantity) || 0;
+              const nextStock = movementType === 'entrada' ? prevStock + qty : prevStock - qty;
+              if (nextStock < 0) throw new Error('negative_stock');
+
+              const now =
+                window.firebaseServerTimestamp ? window.firebaseServerTimestamp() : new Date().toISOString();
+
+              nextProducts[idx] = {
+                ...nextProducts[idx],
+                stock: nextStock,
+                updatedAt: now
+              };
+
+              nextMovements = [
+                {
+                  ...movement,
+                  status: 'synced',
+                  previousStock: prevStock,
+                  newStock: nextStock,
+                  confirmedAt: now,
+                  serverTs: now
+                },
+                ...nextMovements
+              ].slice(0, 10000);
+            }
+          }
+        } else if (op.type === 'upsertProduct' && op.payload && op.payload.product) {
+          const nextProduct = op.payload.product;
+          if (nextProduct && nextProduct.id) {
+            const idx = nextProducts.findIndex(p => p && p.id === nextProduct.id);
+            if (idx >= 0) {
+              nextProducts[idx] = { ...nextProducts[idx], ...nextProduct };
+            } else {
+              nextProducts = [...nextProducts, nextProduct];
+            }
+          }
+        } else if (op.type === 'deleteProduct' && op.payload && op.payload.productId) {
+          nextProducts = nextProducts.filter(p => p && p.id !== op.payload.productId);
+        } else if (op.type === 'restoreBackup' && op.payload) {
+          if (Array.isArray(op.payload.products)) nextProducts = op.payload.products;
+          if (Array.isArray(op.payload.movements)) nextMovements = op.payload.movements;
+        }
+
+        nextQueue = nextQueue.slice(1);
+        processed += 1;
+        setInventoryRetryCount(0);
+        writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
+      }
+
+      await withTimeout(window.firebaseSet(productsRef, nextProducts), 8000, 'set_products_timeout');
+      await withTimeout(window.firebaseSet(movementsRef, nextMovements), 8000, 'set_movements_timeout');
+
+      setProductsLocal(nextProducts);
+      setMovementsLocal(nextMovements);
+      setInventoryLastError(null);
+    } catch (e) {
+      const info = normalizeInventoryError(e);
+      setInventoryLastError(info);
+      const nextRetry = currentRetry + 1;
+      setInventoryRetryCount(nextRetry);
+      setInventorySyncStatus('error');
+
+      if (nextRetry < 5) {
+        const delay = Math.min(30000, 1000 * 2 ** nextRetry);
+        setTimeout(() => flushInventoryOpsQueueLegacy(nextRetry), delay);
+      }
+    } finally {
+      flushInProgressRef.current = false;
+    }
+  }, [
+    defaultMovements,
+    defaultProducts,
+    normalizeInventoryError,
+    readInventoryOpsQueue,
+    setMovementsLocal,
+    setProductsLocal,
+    withTimeout,
+    writeInventoryOpsQueue
+  ]);
+
+  const flushInventoryOpsQueue = useCallback(async (currentRetry = 0) => {
+    if (inventoryLegacyMode) {
+      return flushInventoryOpsQueueLegacy(currentRetry);
+    }
+    if (flushInProgressRef.current) return;
+    flushInProgressRef.current = true;
+    try {
+      if (currentRetry === 0) setInventoryLastError(null);
       const onlineNow = typeof navigator !== 'undefined' ? navigator.onLine : true;
       if (!onlineNow || !window.firebaseDatabase) {
         setInventorySyncStatus('pending');
@@ -1625,6 +1885,7 @@ const EstoqueFFApp = () => {
       if (!queue.length) {
         setInventoryRetryCount(0);
         setInventorySyncStatus('idle');
+        setInventoryLastError(null);
         return;
       }
 
@@ -1640,7 +1901,22 @@ const EstoqueFFApp = () => {
         setInventoryRetryCount(0);
         writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
       }
+      setInventoryLastError(null);
     } catch (e) {
+      const info = normalizeInventoryError(e);
+      setInventoryLastError(info);
+
+      if (isPermissionDenied(info) && !inventoryLegacyMode) {
+        try {
+          localStorage.setItem('estoqueff_legacy_mode', '1');
+        } catch {}
+        setInventoryLegacyMode(true);
+        setInventoryRetryCount(0);
+        setInventorySyncStatus('pending');
+        setTimeout(() => flushInventoryOpsQueueLegacy(0).catch(() => {}), 50);
+        return;
+      }
+
       const nextRetry = currentRetry + 1;
       setInventoryRetryCount(nextRetry);
       setInventorySyncStatus('error');
@@ -1655,6 +1931,10 @@ const EstoqueFFApp = () => {
   }, [
     applyInventoryOpTransaction,
     ensureInventoryState,
+    flushInventoryOpsQueueLegacy,
+    inventoryLegacyMode,
+    isPermissionDenied,
+    normalizeInventoryError,
     readInventoryOpsQueue,
     writeInventoryOpsQueue
   ]);
@@ -3030,13 +3310,22 @@ const EstoqueFFApp = () => {
               <div>
                 <p className="font-bold">Falha na Sincronização</p>
                 <p className="text-sm">Não foi possível conectar ao servidor após várias tentativas. Verifique sua conexão.</p>
+                {inventoryLastError?.message ? (
+                  <p className="text-xs opacity-90 break-words mt-1">
+                    Detalhes: {inventoryLastError.message}
+                  </p>
+                ) : null}
               </div>
             </div>
             <button 
-              onClick={() => window.location.reload()} 
+              onClick={() => {
+                setInventoryRetryCount(0);
+                setInventorySyncStatus('pending');
+                flushInventoryOpsQueue(0).catch(() => {});
+              }} 
               className="mt-2 bg-white text-red-600 px-3 py-2 rounded text-sm font-bold w-full hover:bg-red-50"
             >
-              Tentar Novamente (Recarregar)
+              Tentar Novamente
             </button>
           </div>
         </div>
