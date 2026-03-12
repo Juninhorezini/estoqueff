@@ -2846,9 +2846,6 @@ const EstoqueFFApp = () => {
                     })()}
                     {movement.user} • {movement.date}
                   </p>
-                  <p className="text-xs text-gray-400">
-                    Saldo: {formatMaybeNumber(saldoAntes)} → {formatMaybeNumber(saldoDepois)}
-                  </p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <div className={`font-bold text-lg ${amountColor}`}>
@@ -2862,6 +2859,9 @@ const EstoqueFFApp = () => {
                     {statusConfig.icon}
                     <span>{statusConfig.text}</span>
                   </div>
+                  <p className="movement-balance">
+                    Saldo: {formatMaybeNumber(saldoAntes)} → {formatMaybeNumber(saldoDepois)}
+                  </p>
                 </div>
               </div>
             );
@@ -3654,9 +3654,6 @@ const EstoqueFFApp = () => {
                             })()}
                             {movement.user} • {movement.date}
                           </p>
-                          <p className="text-xs text-gray-500">
-                            Saldo: {formatMaybeNumber(saldoAntes)} → {formatMaybeNumber(saldoDepois)}
-                          </p>
                         </div>
                         <div className="flex flex-col items-end gap-1">
                           <div
@@ -3672,6 +3669,9 @@ const EstoqueFFApp = () => {
                             {statusConfig.icon}
                             <span>{statusConfig.text}</span>
                           </div>
+                          <p className="movement-balance">
+                            Saldo: {formatMaybeNumber(saldoAntes)} → {formatMaybeNumber(saldoDepois)}
+                          </p>
                         </div>
                       </div>
                     );
