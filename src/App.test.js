@@ -35,18 +35,27 @@ const mockSet = jest.fn();
 const mockOnValue = jest.fn();
 const mockRef = jest.fn();
 const mockGet = jest.fn();
+const mockRunTransaction = jest.fn();
+const mockServerTimestamp = jest.fn();
 
 window.firebaseDatabase = {};
 window.firebaseRef = mockRef;
 window.firebaseOnValue = mockOnValue;
 window.firebaseSet = mockSet;
 window.firebaseGet = mockGet;
+window.firebaseRunTransaction = mockRunTransaction;
+window.firebaseServerTimestamp = mockServerTimestamp;
 
 describe('EstoqueFF - Testes de Sincronização Offline', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     localStorage.clear();
+
+    Object.defineProperty(window.navigator, 'onLine', {
+      value: true,
+      configurable: true
+    });
     
     // Setup padrão dos mocks
     mockRef.mockImplementation((db, path) => ({ key: path }));
@@ -56,6 +65,19 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     });
     mockSet.mockResolvedValue(true);
     mockGet.mockResolvedValue({ exists: () => false, val: () => null });
+    mockServerTimestamp.mockImplementation(() => 'server_ts');
+    mockRunTransaction.mockImplementation(async (ref, updater) => {
+      const current = {
+        products: [
+          { id: 'P001', name: 'Produto Base', stock: 10, stockVersion: 0 }
+        ],
+        movements: [],
+        audit: [],
+        meta: { schemaVersion: 1, lastUpdatedAt: 'server_ts' }
+      };
+      updater(current);
+      return { committed: true };
+    });
   });
 
   afterEach(() => {
@@ -82,13 +104,10 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
   test('Deve carregar dados do localStorage se houver (Simulação de Reload Offline)', async () => {
     // Prepara dados locais simulando um estado salvo offline
     const localMovements = [
-      { id: 'offline1', product: 'Produto Teste', quantity: 10, type: 'entrada', status: 'pending', date: '2025-08-20 10:00' }
-    ];
-    const queueData = [
-      { payload: localMovements, ts: Date.now(), id: '1' }
+      { id: 'offline1', product: 'Produto Teste', productId: 'P001', quantity: 10, type: 'entrada', status: 'pending', date: '2025-08-20 10:00' }
     ];
     
-    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify(queueData));
+    localStorage.setItem('estoqueff_cache_movements_v1', JSON.stringify(localMovements));
 
     await act(async () => {
       render(<App />);
@@ -102,16 +121,41 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
       jest.advanceTimersByTime(100);
     });
 
-    // Verifica se os dados locais foram carregados no estado
-    // Precisamos navegar para a tela de relatórios ou verificar algum efeito colateral
-    // Como não conseguimos ver o estado interno facilmente, verificamos se o flush foi tentado
-    // O flushOfflineQueue deve ser chamado na inicialização
-    expect(mockSet).toHaveBeenCalled();
+    expect(screen.getByText('Produto Teste')).toBeInTheDocument();
   });
 
   test('Deve exibir indicador de sincronização quando ocorrer flush da fila', async () => {
-    // Simula fila pendente
-    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{ payload: [], ts: 1, id: '1' }]));
+    localStorage.setItem(
+      'estoqueff_inventory_ops_queue_v1',
+      JSON.stringify([
+        {
+          opId: 'op1',
+          type: 'movement',
+          payload: {
+            movement: {
+              id: 'm1',
+              product: 'Produto Base',
+              productId: 'P001',
+              type: 'entrada',
+              quantity: 1,
+              userId: 'user1',
+              userName: 'Administrador',
+              userRole: 'admin',
+              date: '2025-08-20 10:00',
+              timestamp: '2025-08-20T10:00:00.000Z',
+              status: 'pending'
+            },
+            productId: 'P001',
+            movementType: 'entrada',
+            quantity: 1
+          },
+          clientTs: Date.now(),
+          deviceId: 'test_device',
+          userId: 'user1',
+          userName: 'Administrador'
+        }
+      ])
+    );
 
     await act(async () => {
       render(<App />);
@@ -119,20 +163,45 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
 
     await login();
 
-    // O hook dispara flushOfflineQueue na montagem
-    // O status deve mudar para 'syncing' e depois 'synced' ou 'error'
-    
-    // Verifica se tentou salvar no Firebase
     await waitFor(() => {
-      expect(mockSet).toHaveBeenCalled();
+      expect(mockRunTransaction).toHaveBeenCalled();
     });
   });
 
   test('Deve lidar com erro de conexão e tentar novamente (Retry)', async () => {
-    // Simula erro no Firebase
-    mockSet.mockRejectedValueOnce(new Error('Network Error'));
-    
-    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{ payload: [], ts: 1, id: '1' }]));
+    mockRunTransaction.mockRejectedValueOnce(new Error('Network Error'));
+
+    localStorage.setItem(
+      'estoqueff_inventory_ops_queue_v1',
+      JSON.stringify([
+        {
+          opId: 'op1',
+          type: 'movement',
+          payload: {
+            movement: {
+              id: 'm1',
+              product: 'Produto Base',
+              productId: 'P001',
+              type: 'entrada',
+              quantity: 1,
+              userId: 'user1',
+              userName: 'Administrador',
+              userRole: 'admin',
+              date: '2025-08-20 10:00',
+              timestamp: '2025-08-20T10:00:00.000Z',
+              status: 'pending'
+            },
+            productId: 'P001',
+            movementType: 'entrada',
+            quantity: 1
+          },
+          clientTs: Date.now(),
+          deviceId: 'test_device',
+          userId: 'user1',
+          userName: 'Administrador'
+        }
+      ])
+    );
 
     await act(async () => {
       render(<App />);
@@ -140,20 +209,16 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
 
     await login();
 
-    // Primeiro flush falha
     await act(async () => {
       jest.advanceTimersByTime(100); 
     });
     
-    expect(mockSet).toHaveBeenCalledTimes(1);
+    expect(mockRunTransaction).toHaveBeenCalledTimes(1);
 
-    // O sistema deve agendar um retry (backoff)
-    // Vamos avançar o tempo para cobrir o primeiro backoff (1000ms)
     await act(async () => {
-      jest.advanceTimersByTime(2000);
+      jest.advanceTimersByTime(2500);
     });
 
-    // Deve ter tentado novamente
-    expect(mockSet).toHaveBeenCalledTimes(2);
+    expect(mockRunTransaction).toHaveBeenCalledTimes(2);
   });
 });

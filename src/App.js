@@ -117,8 +117,10 @@ function useFirebaseState(path, defaultValue = null) {
       const lastItem = queue[queue.length - 1];
       let payloadToWrite = lastItem.payload;
 
-      // Lógica de Reconciliação para Movimentações
-      if (path === 'estoqueff_movements' && Array.isArray(payloadToWrite)) {
+      if (
+        (path === 'estoqueff_movements' || path.endsWith('/movements')) &&
+        Array.isArray(payloadToWrite)
+      ) {
         // 1. Busca dados atuais do servidor para não sobrescrever outros usuários
         const serverSnapshot = await window.firebaseGet(dbRef); // Assumindo que firebaseGet existe ou usando onValue one-time
         // Se firebaseGet não existir como helper, usamos onValue com once
@@ -269,7 +271,7 @@ function useFirebaseState(path, defaultValue = null) {
     [path, enqueueOfflineWrite, flushOfflineQueue]
   );
 
-  return [data, updateData, loading, syncStatus, retryCount];
+  return [data, updateData, loading, syncStatus, retryCount, setData];
 }
 
 // Componente de Login
@@ -1133,18 +1135,37 @@ const EstoqueFFApp = () => {
     }
   });
   
-  const [products, setProducts] = useFirebaseState('estoqueff_products', [
-    { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
-    { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'Acessórios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
-    { id: 'P003', name: 'Teclado Mecânico', brand: 'Razer', category: 'Acessórios', code: 'KB-RZR-003', stock: 8, minStock: 5, qrCode: 'QR003', createdAt: '2025-01-01' },
-    { id: 'P004', name: 'Monitor 24"', brand: 'Samsung', category: 'Eletrônicos', code: 'MN-SAM-004', stock: 12, minStock: 3, qrCode: 'QR004', createdAt: '2025-01-01' }
-  ]);
+  const defaultProducts = useMemo(
+    () => [
+      { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
+      { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'Acessórios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
+      { id: 'P003', name: 'Teclado Mecânico', brand: 'Razer', category: 'Acessórios', code: 'KB-RZR-003', stock: 8, minStock: 5, qrCode: 'QR003', createdAt: '2025-01-01' },
+      { id: 'P004', name: 'Monitor 24"', brand: 'Samsung', category: 'Eletrônicos', code: 'MN-SAM-004', stock: 12, minStock: 3, qrCode: 'QR004', createdAt: '2025-01-01' }
+    ],
+    []
+  );
   
-  const [movements, setMovements, , movementsSyncStatus, movementsRetryCount] = useFirebaseState('estoqueff_movements', [
-    { id: '1', product: 'Notebook Dell', type: 'saída', quantity: 2, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 14:30' },
-    { id: '2', product: 'Mouse Logitech', type: 'entrada', quantity: 5, user: 'Operador Sistema', userId: 'user2', userName: 'Operador Sistema', userRole: 'operator', date: '2025-08-04 12:15' },
-    { id: '3', product: 'Monitor 24"', type: 'saída', quantity: 1, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 10:45' }
-  ]);
+  const defaultMovements = useMemo(
+    () => [
+      { id: '1', product: 'Notebook Dell', type: 'saída', quantity: 2, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 14:30' },
+      { id: '2', product: 'Mouse Logitech', type: 'entrada', quantity: 5, user: 'Operador Sistema', userId: 'user2', userName: 'Operador Sistema', userRole: 'operator', date: '2025-08-04 12:15' },
+      { id: '3', product: 'Monitor 24"', type: 'saída', quantity: 1, user: 'Administrador', userId: 'user1', userName: 'Administrador', userRole: 'admin', date: '2025-08-04 10:45' }
+    ],
+    []
+  );
+
+  const [products, , , , , setProductsLocal] = useFirebaseState(
+    'estoqueff_state/products',
+    defaultProducts
+  );
+
+  const [movements, , , , , setMovementsLocal] = useFirebaseState(
+    'estoqueff_state/movements',
+    defaultMovements
+  );
+
+  const [auditMovements] = useFirebaseState('estoqueff_state/audit', []);
+  const [inventoryMeta] = useFirebaseState('estoqueff_state/meta', {});
 
   const [companySettings, setCompanySettings] = useFirebaseState('estoqueff_settings', {
     companyName: 'Minha Empresa',
@@ -1213,6 +1234,25 @@ const EstoqueFFApp = () => {
   const [movementUserFilter, setMovementUserFilter] = useState('all');
   const [movementProductFilter, setMovementProductFilter] = useState('all');
   const [movementProductSearchTerm, setMovementProductSearchTerm] = useState('');
+  const [inventorySyncStatus, setInventorySyncStatus] = useState('idle');
+  const [inventoryRetryCount, setInventoryRetryCount] = useState(0);
+  const [inventoryPendingCount, setInventoryPendingCount] = useState(0);
+  const [inventorySyncMs, setInventorySyncMs] = useState(null);
+  const [inventoryDivergences, setInventoryDivergences] = useState([]);
+  const flushInProgressRef = useRef(false);
+
+  const deviceId = useMemo(() => {
+    try {
+      const key = 'estoqueff_device_id';
+      const existing = localStorage.getItem(key);
+      if (existing) return existing;
+      const created = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      localStorage.setItem(key, created);
+      return created;
+    } catch {
+      return `mem_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    }
+  }, []);
 
   useEffect(() => {
     const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
@@ -1244,47 +1284,432 @@ const EstoqueFFApp = () => {
     localStorage.removeItem('currentUser');
   };
 
+  const readInventoryOpsQueue = useCallback(() => {
+    try {
+      const raw = localStorage.getItem('estoqueff_inventory_ops_queue_v1');
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const writeInventoryOpsQueue = useCallback((queue, nextStatus) => {
+    try {
+      const normalized = Array.isArray(queue) ? queue : [];
+      localStorage.setItem(
+        'estoqueff_inventory_ops_queue_v1',
+        JSON.stringify(normalized)
+      );
+      setInventoryPendingCount(normalized.length);
+      if (typeof nextStatus === 'string') setInventorySyncStatus(nextStatus);
+    } catch {
+      setInventoryPendingCount(0);
+    }
+  }, []);
+
+  const enqueueInventoryOp = useCallback(
+    (op) => {
+      const queue = readInventoryOpsQueue();
+      const nextQueue = [...queue, op].slice(-500);
+      writeInventoryOpsQueue(nextQueue, 'pending');
+    },
+    [readInventoryOpsQueue, writeInventoryOpsQueue]
+  );
+
+  useEffect(() => {
+    const queue = readInventoryOpsQueue();
+    setInventoryPendingCount(queue.length);
+    if (queue.length) setInventorySyncStatus('pending');
+  }, [readInventoryOpsQueue]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('estoqueff_cache_products_v1', JSON.stringify(products));
+      localStorage.setItem('estoqueff_cache_movements_v1', JSON.stringify(movements));
+    } catch {}
+  }, [products, movements]);
+
+  useEffect(() => {
+    try {
+      const cachedProducts = localStorage.getItem('estoqueff_cache_products_v1');
+      const cachedMovements = localStorage.getItem('estoqueff_cache_movements_v1');
+      if (cachedProducts) {
+        const parsed = JSON.parse(cachedProducts);
+        if (Array.isArray(parsed) && parsed.length) setProductsLocal(parsed);
+      }
+      if (cachedMovements) {
+        const parsed = JSON.parse(cachedMovements);
+        if (Array.isArray(parsed) && parsed.length) setMovementsLocal(parsed);
+      }
+    } catch {}
+  }, [setProductsLocal, setMovementsLocal]);
+
+  const ensureInventoryState = useCallback(async () => {
+    if (!window.firebaseDatabase || !window.firebaseGet || !window.firebaseSet) return;
+    const stateRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_state');
+    const snap = await window.firebaseGet(stateRef);
+    if (snap && typeof snap.exists === 'function' && snap.exists()) return;
+
+    const oldProductsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
+    const oldMovementsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_movements');
+
+    const [oldProductsSnap, oldMovementsSnap] = await Promise.all([
+      window.firebaseGet(oldProductsRef).catch(() => null),
+      window.firebaseGet(oldMovementsRef).catch(() => null)
+    ]);
+
+    const oldProducts =
+      oldProductsSnap && typeof oldProductsSnap.val === 'function'
+        ? oldProductsSnap.val()
+        : null;
+    const oldMovements =
+      oldMovementsSnap && typeof oldMovementsSnap.val === 'function'
+        ? oldMovementsSnap.val()
+        : null;
+
+    const initialProducts = Array.isArray(oldProducts) && oldProducts.length ? oldProducts : defaultProducts;
+    const initialMovements = Array.isArray(oldMovements) && oldMovements.length ? oldMovements : defaultMovements;
+
+    const now =
+      window.firebaseServerTimestamp ? window.firebaseServerTimestamp() : new Date().toISOString();
+
+    await window.firebaseSet(stateRef, {
+      products: initialProducts,
+      movements: initialMovements,
+      audit: [],
+      meta: {
+        schemaVersion: 1,
+        createdAt: now,
+        lastUpdatedAt: now
+      }
+    });
+  }, [defaultMovements, defaultProducts]);
+
+  useEffect(() => {
+    ensureInventoryState().catch(() => {});
+  }, [ensureInventoryState]);
+
+  const withTimeout = useCallback((promise, timeoutMs, message) => {
+    const timeoutPromise = new Promise((_, reject) => {
+      const id = setTimeout(() => {
+        clearTimeout(id);
+        reject(new Error(message || 'timeout'));
+      }, timeoutMs);
+    });
+    return Promise.race([promise, timeoutPromise]);
+  }, []);
+
+  const applyInventoryOpTransaction = useCallback(async (op) => {
+    if (!window.firebaseDatabase || !window.firebaseRunTransaction) {
+      throw new Error('firebase_not_ready');
+    }
+
+    const stateRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_state');
+    const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+    const result = await withTimeout(
+      window.firebaseRunTransaction(stateRef, (current) => {
+        const state = current && typeof current === 'object' ? current : {};
+
+        const productsArr = Array.isArray(state.products) ? state.products : [];
+        const movementsArr = Array.isArray(state.movements) ? state.movements : [];
+        const auditArr = Array.isArray(state.audit) ? state.audit : [];
+        const meta = state.meta && typeof state.meta === 'object' ? state.meta : {};
+
+        const now =
+          window.firebaseServerTimestamp ? window.firebaseServerTimestamp() : new Date().toISOString();
+
+        const nextMeta = {
+          ...meta,
+          lastUpdatedAt: now
+        };
+
+        if (op.type === 'movement') {
+          const { movement, productId, movementType, quantity } = op.payload;
+
+          const existing = movementsArr.find(m => m && m.id === movement.id);
+          if (existing) {
+            return {
+              ...state,
+              meta: nextMeta
+            };
+          }
+
+          const productIndex = productsArr.findIndex(p => p && p.id === productId);
+          if (productIndex === -1) return;
+
+          const product = productsArr[productIndex];
+          const prevStock = Number(product.stock) || 0;
+          const nextStock =
+            movementType === 'entrada' ? prevStock + quantity : prevStock - quantity;
+          if (nextStock < 0) return;
+
+          const nextProducts = [...productsArr];
+          nextProducts[productIndex] = {
+            ...product,
+            stock: nextStock,
+            stockVersion: (Number(product.stockVersion) || 0) + 1,
+            updatedAt: now
+          };
+
+          const syncedMovement = {
+            ...movement,
+            status: 'synced',
+            previousStock: prevStock,
+            newStock: nextStock,
+            confirmedAt: now,
+            serverTs: now
+          };
+
+          const nextMovements = [syncedMovement, ...movementsArr].slice(0, 10000);
+          const nextAudit = [
+            {
+              id: `${movement.id}_audit`,
+              kind: 'movement',
+              movementId: movement.id,
+              productId,
+              movementType,
+              quantity,
+              prevStock,
+              nextStock,
+              userId: op.userId,
+              userName: op.userName,
+              deviceId: op.deviceId,
+              clientTs: op.clientTs,
+              serverTs: now
+            },
+            ...auditArr
+          ].slice(0, 20000);
+
+          return {
+            ...state,
+            products: nextProducts,
+            movements: nextMovements,
+            audit: nextAudit,
+            meta: nextMeta
+          };
+        }
+
+        if (op.type === 'upsertProduct') {
+          const nextProduct = op.payload.product;
+          const productsIndex = productsArr.findIndex(p => p && p.id === nextProduct.id);
+          const nextProducts = [...productsArr];
+          const prevProduct = productsIndex >= 0 ? nextProducts[productsIndex] : null;
+
+          if (productsIndex >= 0) {
+            nextProducts[productsIndex] = {
+              ...prevProduct,
+              ...nextProduct,
+              stockVersion: Number(prevProduct?.stockVersion) || 0,
+              updatedAt: now
+            };
+          } else {
+            nextProducts.push({
+              ...nextProduct,
+              stockVersion: 0,
+              updatedAt: now
+            });
+          }
+
+          const nextAudit = [
+            {
+              id: `${op.opId}_audit`,
+              kind: 'product_upsert',
+              productId: nextProduct.id,
+              userId: op.userId,
+              userName: op.userName,
+              deviceId: op.deviceId,
+              clientTs: op.clientTs,
+              serverTs: now,
+              prev: prevProduct,
+              next: nextProduct
+            },
+            ...auditArr
+          ].slice(0, 20000);
+
+          return {
+            ...state,
+            products: nextProducts,
+            audit: nextAudit,
+            meta: nextMeta
+          };
+        }
+
+        if (op.type === 'deleteProduct') {
+          const { productId } = op.payload;
+          const productsIndex = productsArr.findIndex(p => p && p.id === productId);
+          if (productsIndex === -1) return;
+          const prevProduct = productsArr[productsIndex];
+          const nextProducts = productsArr.filter(p => p && p.id !== productId);
+
+          const nextAudit = [
+            {
+              id: `${op.opId}_audit`,
+              kind: 'product_delete',
+              productId,
+              userId: op.userId,
+              userName: op.userName,
+              deviceId: op.deviceId,
+              clientTs: op.clientTs,
+              serverTs: now,
+              prev: prevProduct
+            },
+            ...auditArr
+          ].slice(0, 20000);
+
+          return {
+            ...state,
+            products: nextProducts,
+            audit: nextAudit,
+            meta: nextMeta
+          };
+        }
+
+        if (op.type === 'restoreBackup') {
+          const { products: restoredProducts, movements: restoredMovements, companySettings: restoredCompanySettings, productLabelConfigs: restoredLabelConfigs } = op.payload;
+
+          const nextAudit = [
+            {
+              id: `${op.opId}_audit`,
+              kind: 'restore_backup',
+              userId: op.userId,
+              userName: op.userName,
+              deviceId: op.deviceId,
+              clientTs: op.clientTs,
+              serverTs: now
+            },
+            ...auditArr
+          ].slice(0, 20000);
+
+          return {
+            ...state,
+            products: Array.isArray(restoredProducts) ? restoredProducts : productsArr,
+            movements: Array.isArray(restoredMovements) ? restoredMovements : movementsArr,
+            audit: nextAudit,
+            meta: nextMeta,
+            companySettings: restoredCompanySettings || state.companySettings,
+            productLabelConfigs: restoredLabelConfigs || state.productLabelConfigs
+          };
+        }
+
+        return {
+          ...state,
+          meta: nextMeta
+        };
+      }),
+      8000,
+      'transaction_timeout'
+    );
+
+    const end = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    setInventorySyncMs(Math.round(end - start));
+
+    if (!result || result.committed === false) throw new Error('not_committed');
+    return result;
+  }, [withTimeout]);
+
+  const flushInventoryOpsQueue = useCallback(async (currentRetry = 0) => {
+    if (flushInProgressRef.current) return;
+    flushInProgressRef.current = true;
+    try {
+      const onlineNow = typeof navigator !== 'undefined' ? navigator.onLine : true;
+      if (!onlineNow || !window.firebaseDatabase) {
+        setInventorySyncStatus('pending');
+        return;
+      }
+
+      await ensureInventoryState();
+
+      const queue = readInventoryOpsQueue();
+      if (!queue.length) {
+        setInventoryRetryCount(0);
+        setInventorySyncStatus('idle');
+        return;
+      }
+
+      setInventorySyncStatus('syncing');
+
+      let nextQueue = [...queue];
+      let processed = 0;
+      while (nextQueue.length && processed < 25) {
+        const op = nextQueue[0];
+        await applyInventoryOpTransaction(op);
+        nextQueue = nextQueue.slice(1);
+        processed += 1;
+        setInventoryRetryCount(0);
+        writeInventoryOpsQueue(nextQueue, nextQueue.length ? 'syncing' : 'synced');
+      }
+    } catch (e) {
+      const nextRetry = currentRetry + 1;
+      setInventoryRetryCount(nextRetry);
+      setInventorySyncStatus('error');
+
+      if (nextRetry < 5) {
+        const delay = Math.min(30000, 1000 * 2 ** nextRetry);
+        setTimeout(() => flushInventoryOpsQueue(nextRetry), delay);
+      }
+    } finally {
+      flushInProgressRef.current = false;
+    }
+  }, [
+    applyInventoryOpTransaction,
+    ensureInventoryState,
+    readInventoryOpsQueue,
+    writeInventoryOpsQueue
+  ]);
+
+  useEffect(() => {
+    const onOnline = () => {
+      flushInventoryOpsQueue(0).catch(() => {});
+    };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [flushInventoryOpsQueue]);
+
+  useEffect(() => {
+    flushInventoryOpsQueue(0).catch(() => {});
+  }, [flushInventoryOpsQueue]);
+
   const handleDeleteProduct = useCallback((productId) => {
   if (window.confirm('Tem certeza que deseja excluir este produto?')) {
     try {
       // Remove from Firebase
       if (window.firebaseDatabase) {
         // Remove o produto
-        const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
         const updatedProducts = products.filter(p => p.id !== productId);
-        window.firebaseSet(productsRef, updatedProducts)
-          .then(() => {
-            // Atualiza estado local
-            setProducts(updatedProducts);
-            
-            // Remove configuração de etiqueta se existir
-            if (productLabelConfigs[productId]) {
-              const labelConfigRef = window.firebaseRef(
-                window.firebaseDatabase, 
-                `estoqueff_product_label_configs/${productId}`
-              );
-              window.firebaseSet(labelConfigRef, null) // Usa null para remover
-                .then(() => {
-                  setProductLabelConfigs(prevConfigs => {
-                    const newConfigs = { ...prevConfigs };
-                    delete newConfigs[productId];
-                    return newConfigs;
-                  });
-                })
-                .catch(error => console.error('Erro ao remover config:', error));
-            }
-            
-            setSuccess('✅ Produto excluído com sucesso!');
-            setTimeout(() => setSuccess(''), 3000);
-          })
-          .catch(error => {
-            console.error('Erro ao excluir produto:', error);
-            setErrors({ general: 'Erro ao excluir produto. Tente novamente.' });
-            setTimeout(() => setErrors({}), 3000);
+        setProductsLocal(updatedProducts);
+
+        enqueueInventoryOp({
+          opId: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+          type: 'deleteProduct',
+          payload: { productId },
+          clientTs: Date.now(),
+          deviceId,
+          userId: currentUser?.id,
+          userName: currentUser?.name
+        });
+
+        flushInventoryOpsQueue(0).catch(() => {});
+
+        if (productLabelConfigs[productId]) {
+          const labelConfigRef = window.firebaseRef(
+            window.firebaseDatabase,
+            `estoqueff_product_label_configs/${productId}`
+          );
+          window.firebaseSet(labelConfigRef, null).catch(() => {});
+          setProductLabelConfigs(prevConfigs => {
+            const newConfigs = { ...prevConfigs };
+            delete newConfigs[productId];
+            return newConfigs;
           });
+        }
+
+        setSuccess('✅ Produto excluído e sincronizando...');
+        setTimeout(() => setSuccess(''), 3000);
       } else {
         // Fallback para estado local
-        setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
+        setProductsLocal(prevProducts => prevProducts.filter(p => p.id !== productId));
         setProductLabelConfigs(prevConfigs => {
           const newConfigs = { ...prevConfigs };
           delete newConfigs[productId];
@@ -1299,7 +1724,7 @@ const EstoqueFFApp = () => {
       setTimeout(() => setErrors({}), 3000);
     }
   }
-}, [products, setProducts, setErrors, setSuccess, productLabelConfigs]);
+}, [products, setProductsLocal, setErrors, setSuccess, productLabelConfigs, enqueueInventoryOp, deviceId, currentUser, flushInventoryOpsQueue]);
 
   const getProductLabelConfig = useCallback((productId) => {
     return productLabelConfigs[productId] || defaultLabelConfig;
@@ -1667,7 +2092,17 @@ const EstoqueFFApp = () => {
         minStock: parseInt(newProduct.minStock)
       };
       
-      setProducts([...products, product]);
+      setProductsLocal([...products, product]);
+      enqueueInventoryOp({
+        opId: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        type: 'upsertProduct',
+        payload: { product },
+        clientTs: Date.now(),
+        deviceId,
+        userId: currentUser?.id,
+        userName: currentUser?.name
+      });
+      flushInventoryOpsQueue(0).catch(() => {});
       setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
       setShowAddProduct(false);
       setSuccess(`✅ Produto "${product.name}" adicionado com sucesso!`);
@@ -1693,9 +2128,9 @@ const EstoqueFFApp = () => {
     }
     
     try {
-      setProducts(products.map(p => 
-        p.id === editingProduct.id 
-          ? { 
+      const updatedProducts = products.map(p =>
+        p.id === editingProduct.id
+          ? {
               ...editingProduct,
               name: editingProduct.name.trim(),
               brand: editingProduct.brand?.trim() || '',
@@ -1705,7 +2140,24 @@ const EstoqueFFApp = () => {
               minStock: parseInt(editingProduct.minStock)
             }
           : p
-      ));
+      );
+
+      const updatedProduct = updatedProducts.find(p => p.id === editingProduct.id);
+      setProductsLocal(updatedProducts);
+
+      if (updatedProduct) {
+        enqueueInventoryOp({
+          opId: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+          type: 'upsertProduct',
+          payload: { product: updatedProduct },
+          clientTs: Date.now(),
+          deviceId,
+          userId: currentUser?.id,
+          userName: currentUser?.name
+        });
+        flushInventoryOpsQueue(0).catch(() => {});
+      }
+
       setEditingProduct(null);
       setSuccess(`✅ Produto atualizado com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
@@ -1792,8 +2244,24 @@ const EstoqueFFApp = () => {
           : p
       );
 
-      const movementsPromise = setMovements(initialMovements);
-      const productsPromise = setProducts(updatedProducts);
+      setMovementsLocal(initialMovements);
+      setProductsLocal(updatedProducts);
+
+      enqueueInventoryOp({
+        opId: baseMovement.id,
+        type: 'movement',
+        payload: {
+          movement: { ...baseMovement, status: statusOnCreate },
+          productId: targetProduct.id,
+          movementType,
+          quantity
+        },
+        clientTs: Date.now(),
+        deviceId,
+        userId: currentUser?.id,
+        userName: currentUser?.name
+      });
+      flushInventoryOpsQueue(0).catch(() => {});
 
       setScannedProduct(null);
       setManualSelectedProduct(null);
@@ -1815,11 +2283,6 @@ const EstoqueFFApp = () => {
       }
 
       setTimeout(() => setSuccess(''), 4000);
-
-      Promise.all([movementsPromise, productsPromise])
-        .catch(error => {
-          console.error('Erro ao sincronizar movimentação:', error);
-        });
     } catch (error) {
       setErrors({ general: 'Erro ao processar movimentação. Tente novamente.' });
     } finally {
@@ -2101,8 +2564,25 @@ const EstoqueFFApp = () => {
       try {
         const backup = JSON.parse(e.target.result);
         if (backup.products && backup.movements) {
-          setProducts(backup.products);
-          setMovements(backup.movements);
+          setProductsLocal(backup.products);
+          setMovementsLocal(backup.movements);
+
+          enqueueInventoryOp({
+            opId: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            type: 'restoreBackup',
+            payload: {
+              products: backup.products,
+              movements: backup.movements,
+              companySettings: backup.companySettings,
+              productLabelConfigs: backup.productLabelConfigs
+            },
+            clientTs: Date.now(),
+            deviceId,
+            userId: currentUser?.id,
+            userName: currentUser?.name
+          });
+          flushInventoryOpsQueue(0).catch(() => {});
+
           if (backup.companySettings) {
             setCompanySettings(backup.companySettings);
           }
@@ -2123,6 +2603,74 @@ const EstoqueFFApp = () => {
     reader.readAsText(file);
     event.target.value = '';
   };
+
+  const computedInventoryDivergences = useMemo(() => {
+    const items = [];
+
+    products.forEach(p => {
+      const stock = Number(p?.stock);
+      if (Number.isFinite(stock) && stock < 0) {
+        items.push({
+          kind: 'product_negative_stock',
+          productId: p.id,
+          message: `Estoque negativo (${stock})`
+        });
+      }
+    });
+
+    movements.forEach(m => {
+      if (!m?.productId) {
+        items.push({
+          kind: 'movement_missing_productId',
+          movementId: m?.id,
+          message: 'Movimentação sem productId'
+        });
+      }
+
+      if (m?.previousStock != null && m?.newStock != null) {
+        const prev = Number(m.previousStock);
+        const next = Number(m.newStock);
+        const qty = Number(m.quantity) || 0;
+        if (Number.isFinite(prev) && Number.isFinite(next)) {
+          const expected =
+            m.type === 'entrada' ? prev + qty : prev - qty;
+          if (expected !== next) {
+            items.push({
+              kind: 'movement_stock_mismatch',
+              movementId: m.id,
+              productId: m.productId,
+              message: `Saldo inconsistente (${prev} -> ${next}, esperado ${expected})`
+            });
+          }
+        }
+      }
+    });
+
+    return items;
+  }, [products, movements]);
+
+  useEffect(() => {
+    setInventoryDivergences(computedInventoryDivergences);
+  }, [computedInventoryDivergences]);
+
+  const exportAuditJson = useCallback(() => {
+    const payload = {
+      meta: inventoryMeta,
+      audit: auditMovements,
+      divergences: inventoryDivergences,
+      pendingOps: inventoryPendingCount,
+      exportedAt: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `estoqueff_auditoria_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [auditMovements, inventoryDivergences, inventoryMeta, inventoryPendingCount]);
 
   // Calcular estatísticas
   const stats = useMemo(() => {
@@ -2467,14 +3015,14 @@ const EstoqueFFApp = () => {
       )}
 
       {/* Sync Status Notifications */}
-      {movementsSyncStatus === 'syncing' && (
+      {inventorySyncStatus === 'syncing' && (
         <div className="fixed bottom-20 right-4 md:bottom-4 md:right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-pulse">
           <Loader2 size={16} className="animate-spin" />
           <span className="text-sm">Sincronizando dados...</span>
         </div>
       )}
 
-      {movementsSyncStatus === 'error' && movementsRetryCount >= 5 && (
+      {inventorySyncStatus === 'error' && inventoryRetryCount >= 5 && (
         <div className="fixed top-24 left-4 right-4 bg-red-600 text-white p-4 rounded-lg shadow-lg z-50 animate-bounce">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3">
@@ -2538,34 +3086,32 @@ const EstoqueFFApp = () => {
             <h1 className="text-2xl font-bold text-gray-800">EstoqueFF Dashboard</h1>
             <div className="flex items-center gap-3">
               {/* Status de Sincronização Global */}
-              {movementsSyncStatus === 'pending' && (
-                <div className="flex items-center gap-1 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs font-medium" title="Dados salvos localmente. Aguardando conexão para sincronizar.">
-                   <AlertTriangle size={14} />
-                   <span>Pendente</span>
-                </div>
-              )}
-              {movementsSyncStatus === 'syncing' && (
+              {inventorySyncStatus === 'syncing' && (
                 <div className="flex items-center gap-1 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-medium">
                    <Loader2 size={14} className="animate-spin" />
                    <span className="hidden sm:inline">Sincronizando...</span>
                    <span className="sm:hidden">Sync...</span>
                 </div>
               )}
-              {movementsSyncStatus === 'pending' && (
-                <div className="flex items-center gap-1 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs font-medium">
-                   <Clock size={14} />
-                   <span className="hidden sm:inline">Pendente</span>
-                   <span className="sm:hidden">Wait</span>
-                </div>
-              )}
-              {movementsSyncStatus === 'synced' && (
+              {inventorySyncStatus !== 'syncing' &&
+                inventorySyncStatus !== 'error' &&
+                (inventoryPendingCount > 0 || inventorySyncStatus === 'pending') && (
+                  <div className="flex items-center gap-1 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs font-medium" title="Dados salvos localmente. Aguardando conexão para sincronizar.">
+                    <Clock size={14} />
+                    <span className="hidden sm:inline">Pendente ({inventoryPendingCount})</span>
+                    <span className="sm:hidden">({inventoryPendingCount})</span>
+                  </div>
+                )}
+              {inventorySyncStatus !== 'syncing' &&
+                inventorySyncStatus !== 'error' &&
+                inventoryPendingCount === 0 && (
                 <div className="flex items-center gap-1 bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-medium">
                    <CheckCircle size={14} />
                    <span className="hidden sm:inline">Online</span>
                    <span className="sm:hidden">OK</span>
                 </div>
               )}
-              {movementsSyncStatus === 'error' && (
+              {inventorySyncStatus === 'error' && (
                 <div className="flex items-center gap-1 bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-medium" title="Erro de conexão. Tentando novamente...">
                    <AlertTriangle size={14} />
                    <span>Erro</span>
@@ -3760,7 +4306,10 @@ const EstoqueFFApp = () => {
                 <p>📦 Total de produtos: {formatNumber(stats.totalProducts)}</p>
                 <p>📊 Total de movimentações: {movements.length}</p>
                 <p>🔄 Versão: EstoqueFF v2.0.0</p>
-                <p>✅ Status: Sistema funcionando com todas as funcionalidades</p>
+                <p>📡 Sincronização: {inventorySyncStatus}</p>
+                <p>⏳ Pendências: {inventoryPendingCount}</p>
+                <p>⏱️ Última transação: {inventorySyncMs != null ? `${inventorySyncMs}ms` : '—'}</p>
+                <p>⚠️ Divergências: {inventoryDivergences.length}</p>
               </div>
               
               <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
@@ -3773,6 +4322,37 @@ const EstoqueFFApp = () => {
                   <p>✅ Backup e restauração de dados</p>
                   <p>✅ Análise de produtos e estatísticas</p>
                 </div>
+              </div>
+
+              <div className="mt-4 p-4 bg-white border border-gray-200 rounded-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h5 className="font-medium text-gray-800">Auditoria e Consistência</h5>
+                    <p className="text-xs text-gray-500">Exporta auditoria e aponta divergências simples</p>
+                  </div>
+                  <button
+                    onClick={exportAuditJson}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                  >
+                    Exportar Auditoria (JSON)
+                  </button>
+                </div>
+
+                {inventoryDivergences.length > 0 && (
+                  <div className="mt-3 bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <p className="text-sm font-medium text-orange-800">
+                      Divergências detectadas ({inventoryDivergences.length})
+                    </p>
+                    <div className="mt-2 space-y-1 text-xs text-orange-800">
+                      {inventoryDivergences.slice(0, 5).map((d, idx) => (
+                        <div key={`${d.kind}_${d.movementId || d.productId || idx}`} className="flex justify-between gap-2">
+                          <span className="font-medium">{d.kind}</span>
+                          <span className="text-right">{d.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
