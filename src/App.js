@@ -55,8 +55,48 @@ function useFirebaseState(path, defaultValue = null) {
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState('idle'); // idle, syncing, error, synced
   const [retryCount, setRetryCount] = useState(0);
+  const flushInProgressRef = useRef(false);
 
   const getQueueKey = (p) => `estoqueff_queue_${p}`;
+
+  const isSyncDebugEnabled = () => {
+    try {
+      return localStorage.getItem('estoqueff_debug_sync') === '1';
+    } catch {
+      return false;
+    }
+  };
+
+  const appendHookSyncLog = (entry) => {
+    try {
+      const key = 'estoqueff_sync_hook_log_v1';
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const arr = Array.isArray(parsed) ? parsed : [];
+      const next = [...arr, entry].slice(-300);
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch {}
+  };
+
+  const logHookSync = (event, extra) => {
+    const entry = { at: Date.now(), path, event, extra: extra ?? null };
+    appendHookSyncLog(entry);
+    if (isSyncDebugEnabled()) {
+      try {
+        console.log('[sync-hook]', entry);
+      } catch {}
+    }
+  };
+
+  const withTimeoutLocal = (promise, timeoutMs, message) => {
+    const timeoutPromise = new Promise((_, reject) => {
+      const id = setTimeout(() => {
+        clearTimeout(id);
+        reject(new Error(message || 'timeout'));
+      }, timeoutMs);
+    });
+    return Promise.race([promise, timeoutPromise]);
+  };
 
   // Carrega dados locais (cache/fila) imediatamente ao iniciar
   useEffect(() => {
@@ -69,12 +109,14 @@ function useFirebaseState(path, defaultValue = null) {
           // Usa o snapshot mais recente da fila local para exibição imediata
           const latest = queue[queue.length - 1].payload;
           console.log(`[Offline] Carregando dados locais para ${path}`, latest);
+          logHookSync('init_load_queue_snapshot', { items: queue.length });
           setData(latest);
           setLoading(false);
         }
       }
     } catch (e) {
       console.error("Erro ao ler cache local:", e);
+      logHookSync('init_load_queue_error', { message: String(e?.message || e) });
     }
   }, [path]);
 
@@ -96,13 +138,17 @@ function useFirebaseState(path, defaultValue = null) {
       
       localStorage.setItem(key, JSON.stringify(trimmedQueue));
       setSyncStatus('pending');
+      logHookSync('enqueue_snapshot', { queueSize: trimmedQueue.length });
     } catch (e) {
       console.error("Erro ao enfileirar offline:", e);
+      logHookSync('enqueue_error', { message: String(e?.message || e) });
     }
   }, []);
 
   const flushOfflineQueue = useCallback(async (currentRetry = 0) => {
     if (!window.firebaseDatabase) return;
+    if (flushInProgressRef.current) return;
+    flushInProgressRef.current = true;
     
     const key = getQueueKey(path);
     const raw = localStorage.getItem(key);
@@ -110,10 +156,13 @@ function useFirebaseState(path, defaultValue = null) {
     
     if (!queue.length) {
       setSyncStatus('idle');
+      flushInProgressRef.current = false;
+      logHookSync('flush_empty', null);
       return;
     }
 
     setSyncStatus('syncing');
+    logHookSync('flush_start', { queueSize: queue.length, currentRetry });
     
     try {
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
@@ -127,7 +176,7 @@ function useFirebaseState(path, defaultValue = null) {
         Array.isArray(payloadToWrite)
       ) {
         // 1. Busca dados atuais do servidor para não sobrescrever outros usuários
-        const serverSnapshot = await window.firebaseGet(dbRef); // Assumindo que firebaseGet existe ou usando onValue one-time
+        const serverSnapshot = await withTimeoutLocal(window.firebaseGet(dbRef), 8000, 'get_movements_timeout'); // Assumindo que firebaseGet existe ou usando onValue one-time
         // Se firebaseGet não existir como helper, usamos onValue com once
         
         let serverData = [];
@@ -146,6 +195,7 @@ function useFirebaseState(path, defaultValue = null) {
            const serverIds = new Set(serverData.map(m => m.id));
            // Itens locais que não estão no servidor (novos)
            const localNewItems = payloadToWrite.filter(m => !serverIds.has(m.id));
+           logHookSync('flush_merge_movements', { serverCount: serverData.length, localNewCount: localNewItems.length });
            
            // Resultado: Dados do servidor + Meus novos itens
            // Mantendo a ordem decrescente (mais novos primeiro)
@@ -163,19 +213,21 @@ function useFirebaseState(path, defaultValue = null) {
         });
       }
 
-      await window.firebaseSet(dbRef, payloadToWrite);
+      await withTimeoutLocal(window.firebaseSet(dbRef, payloadToWrite), 8000, 'set_timeout');
       
       // Sucesso! Atualiza estado local e limpa fila
       setData(payloadToWrite);
       localStorage.removeItem(key);
       setSyncStatus('synced');
       setRetryCount(0);
+      logHookSync('flush_success', { wroteType: Array.isArray(payloadToWrite) ? 'array' : typeof payloadToWrite });
       
       // Feedback visual temporário
       setTimeout(() => setSyncStatus('idle'), 3000);
 
     } catch (error) {
       console.error("Erro no flushOfflineQueue:", error);
+      logHookSync('flush_error', { message: String(error?.message || error), currentRetry });
       
       const nextRetry = currentRetry + 1;
       setRetryCount(nextRetry);
@@ -187,6 +239,8 @@ function useFirebaseState(path, defaultValue = null) {
         console.log(`Agendando retry ${nextRetry} em ${delay}ms`);
         setTimeout(() => flushOfflineQueue(nextRetry), delay);
       }
+    } finally {
+      flushInProgressRef.current = false;
     }
   }, [path]);
 
@@ -1981,6 +2035,12 @@ const EstoqueFFApp = () => {
       const onlineNow = typeof navigator !== 'undefined' ? navigator.onLine : true;
       if (!onlineNow || !window.firebaseDatabase || !window.firebaseGet || !window.firebaseSet) {
         setInventorySyncStatus('pending');
+        logInventorySync('legacy_flush_skip', {
+          online: onlineNow,
+          hasDb: !!window.firebaseDatabase,
+          hasGet: !!window.firebaseGet,
+          hasSet: !!window.firebaseSet
+        });
         return;
       }
 
@@ -1989,6 +2049,7 @@ const EstoqueFFApp = () => {
         setInventoryRetryCount(0);
         setInventorySyncStatus('idle');
         setInventoryLastError(null);
+        logInventorySync('legacy_flush_empty', null);
         return;
       }
 
@@ -2168,6 +2229,7 @@ const EstoqueFFApp = () => {
       const onlineNow = typeof navigator !== 'undefined' ? navigator.onLine : true;
       if (!onlineNow || !window.firebaseDatabase) {
         setInventorySyncStatus('pending');
+        logInventorySync('flush_skip', { online: onlineNow, hasDb: !!window.firebaseDatabase });
         return;
       }
 
@@ -2178,6 +2240,7 @@ const EstoqueFFApp = () => {
         setInventoryRetryCount(0);
         setInventorySyncStatus('idle');
         setInventoryLastError(null);
+        logInventorySync('flush_empty', null);
         return;
       }
 
