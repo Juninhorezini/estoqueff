@@ -13,9 +13,12 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
+    "sync-src": "node -e \"const fs=require('fs'); const path=require('path'); fs.mkdirSync('src',{recursive:true}); ['index.js','index.css','App.js','App.css','App.test.js'].forEach((f)=>{ if(fs.existsSync(f)) fs.copyFileSync(f, path.join('src', f)); });\"",
+    "prestart": "npm run sync-src",
     "start": "react-scripts start",
-    "prebuild": "npm install jsqr",
+    "prebuild": "npm run sync-src",
     "build": "react-scripts build",
+    "pretest": "npm run sync-src",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
