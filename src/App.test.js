@@ -35,12 +35,14 @@ const mockSet = jest.fn();
 const mockOnValue = jest.fn();
 const mockRef = jest.fn();
 const mockGet = jest.fn();
+const mockRunTransaction = jest.fn();
 
 window.firebaseDatabase = {};
 window.firebaseRef = mockRef;
 window.firebaseOnValue = mockOnValue;
 window.firebaseSet = mockSet;
 window.firebaseGet = mockGet;
+window.firebaseRunTransaction = mockRunTransaction;
 
 describe('EstoqueFF - Testes de Sincronização Offline', () => {
   beforeEach(() => {
@@ -56,6 +58,7 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     });
     mockSet.mockResolvedValue(true);
     mockGet.mockResolvedValue({ exists: () => false, val: () => null });
+    mockRunTransaction.mockReset();
   });
 
   afterEach(() => {
@@ -155,5 +158,104 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
 
     // Deve ter tentado novamente
     expect(mockSet).toHaveBeenCalledTimes(2);
+  });
+
+  test('Aplica delta via transação e grava auditoria ao sincronizar movimentação pendente', async () => {
+    const now = Date.now();
+    const localMovements = [
+      { id: 'm1', product: 'Notebook Dell', productId: 'P001', quantity: 2, type: 'saída', status: 'pending', date: '2025-08-20 10:00', timestamp: new Date(now).toISOString(), userId: 'user1', userName: 'Administrador' }
+    ];
+    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{ payload: localMovements, ts: now, id: '1' }]));
+
+    let serverProducts = [
+      { id: 'P001', name: 'Notebook Dell', stock: 10 }
+    ];
+
+    mockRunTransaction.mockImplementation(async (_ref, updater) => {
+      const next = updater(serverProducts);
+      serverProducts = next;
+      return { committed: true, snapshot: { val: () => serverProducts } };
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    await login();
+
+    await waitFor(() => {
+      expect(mockRunTransaction).toHaveBeenCalled();
+    });
+
+    expect(serverProducts.find(p => p.id === 'P001').stock).toBe(8);
+
+    const setCalls = mockSet.mock.calls.map(([ref, payload]) => ({ key: ref?.key, payload }));
+    expect(setCalls.some(c => c.key === 'estoqueff_movements')).toBe(true);
+    expect(setCalls.some(c => c.key === 'estoqueff_stock_delta_audit/m1')).toBe(true);
+  });
+
+  test('Não reaplica delta se já marcado como aplicado localmente', async () => {
+    const now = Date.now();
+    const localMovements = [
+      { id: 'm2', product: 'Notebook Dell', productId: 'P001', quantity: 1, type: 'entrada', status: 'pending', date: '2025-08-20 10:00', timestamp: new Date(now).toISOString(), userId: 'user1', userName: 'Administrador' }
+    ];
+    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{ payload: localMovements, ts: now, id: '1' }]));
+    localStorage.setItem('estoqueff_applied_stock_deltas', JSON.stringify({ m2: now }));
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    await login();
+
+    await waitFor(() => {
+      expect(mockSet).toHaveBeenCalled();
+    });
+
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+  });
+
+  test('Mantém fila e faz retry quando a transação falha', async () => {
+    const now = Date.now();
+    const localMovements = [
+      { id: 'm3', product: 'Notebook Dell', productId: 'P001', quantity: 2, type: 'saída', status: 'pending', date: '2025-08-20 10:00', timestamp: new Date(now).toISOString(), userId: 'user1', userName: 'Administrador' }
+    ];
+    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{ payload: localMovements, ts: now, id: '1' }]));
+
+    let serverProducts = [
+      { id: 'P001', name: 'Notebook Dell', stock: 10 }
+    ];
+
+    mockRunTransaction
+      .mockImplementationOnce(async () => {
+        throw new Error('Transaction failed');
+      })
+      .mockImplementation(async (_ref, updater) => {
+        const next = updater(serverProducts);
+        serverProducts = next;
+        return { committed: true, snapshot: { val: () => serverProducts } };
+      });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    await login();
+
+    await waitFor(() => {
+      expect(mockRunTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    expect(localStorage.getItem('estoqueff_queue_estoqueff_movements')).toBeTruthy();
+
+    await act(async () => {
+      jest.advanceTimersByTime(2500);
+    });
+
+    await waitFor(() => {
+      expect(mockRunTransaction).toHaveBeenCalledTimes(2);
+    });
+
+    expect(serverProducts.find(p => p.id === 'P001').stock).toBe(8);
   });
 });

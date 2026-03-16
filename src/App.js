@@ -19,6 +19,75 @@ const formatMaybeNumber = (value) => {
   return formatNumber(n);
 };
 
+let syncClientIdCache = null;
+
+const getSyncClientId = () => {
+  if (syncClientIdCache) return syncClientIdCache;
+  try {
+    const existing = localStorage.getItem('estoqueff_sync_client_id');
+    if (existing) {
+      syncClientIdCache = existing;
+      return existing;
+    }
+    const generated = `client_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    localStorage.setItem('estoqueff_sync_client_id', generated);
+    syncClientIdCache = generated;
+    return generated;
+  } catch {
+    syncClientIdCache = `client_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    return syncClientIdCache;
+  }
+};
+
+const isSyncDebugEnabled = () => {
+  try {
+    return localStorage.getItem('estoqueff_debug_sync') === '1';
+  } catch {
+    return false;
+  }
+};
+
+const getLocalAppliedStockDeltaKey = () => 'estoqueff_applied_stock_deltas';
+
+const readLocalAppliedStockDeltas = () => {
+  try {
+    const raw = localStorage.getItem(getLocalAppliedStockDeltaKey());
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+};
+
+const writeLocalAppliedStockDeltas = (map) => {
+  try {
+    localStorage.setItem(getLocalAppliedStockDeltaKey(), JSON.stringify(map));
+  } catch {
+  }
+};
+
+const hasLocalAppliedStockDelta = (movementId) => {
+  const map = readLocalAppliedStockDeltas();
+  return !!map?.[movementId];
+};
+
+const markLocalAppliedStockDelta = (movementId) => {
+  const map = readLocalAppliedStockDeltas();
+  map[movementId] = Date.now();
+  const entries = Object.entries(map);
+  if (entries.length > 500) {
+    entries.sort((a, b) => a[1] - b[1]);
+    const trimmed = entries.slice(entries.length - 500);
+    const next = {};
+    for (const [id, ts] of trimmed) next[id] = ts;
+    writeLocalAppliedStockDeltas(next);
+    return;
+  }
+  writeLocalAppliedStockDeltas(map);
+};
+
 // Função auxiliar para sanitizar objetos antes de salvar no Firebase
 const sanitizeConfig = (config) => {
   if (!config) return null;
@@ -58,6 +127,20 @@ function useFirebaseState(path, defaultValue = null) {
   const [retryCount, setRetryCount] = useState(0);
 
   const getQueueKey = (p) => `estoqueff_queue_${p}`;
+  const clientId = getSyncClientId();
+  const debugEnabled = isSyncDebugEnabled();
+  const debugLog = useCallback((event, details) => {
+    if (!debugEnabled) return;
+    try {
+      if (details !== undefined) {
+        console.log(`[Sync][${clientId}][${path}] ${event}`, details);
+      } else {
+        console.log(`[Sync][${clientId}][${path}] ${event}`);
+      }
+    } catch {
+    }
+  }, [clientId, debugEnabled, path]);
+  const setLocalData = useCallback((newData) => setData(newData), []);
 
   // Carrega dados locais (cache/fila) imediatamente ao iniciar
   useEffect(() => {
@@ -69,7 +152,7 @@ function useFirebaseState(path, defaultValue = null) {
         if (queue.length > 0) {
           // Usa o snapshot mais recente da fila local para exibição imediata
           const latest = queue[queue.length - 1].payload;
-          console.log(`[Offline] Carregando dados locais para ${path}`, latest);
+          debugLog('offline_load', { queueLength: queue.length });
           setData(latest);
           setLoading(false);
         }
@@ -77,7 +160,7 @@ function useFirebaseState(path, defaultValue = null) {
     } catch (e) {
       console.error("Erro ao ler cache local:", e);
     }
-  }, [path]);
+  }, [path, debugLog]);
 
   const enqueueOfflineWrite = useCallback((p, payload) => {
     try {
@@ -97,10 +180,11 @@ function useFirebaseState(path, defaultValue = null) {
       
       localStorage.setItem(key, JSON.stringify(trimmedQueue));
       setSyncStatus('pending');
+      debugLog('enqueue', { queueLength: trimmedQueue.length });
     } catch (e) {
       console.error("Erro ao enfileirar offline:", e);
     }
-  }, []);
+  }, [debugLog]);
 
   const flushOfflineQueue = useCallback(async (currentRetry = 0) => {
     if (!window.firebaseDatabase) return;
@@ -125,6 +209,69 @@ function useFirebaseState(path, defaultValue = null) {
 
       // Lógica de Reconciliação para Movimentações
       if (path === 'estoqueff_movements' && Array.isArray(payloadToWrite)) {
+        const pendingMovements = payloadToWrite.filter(m => m && typeof m === 'object' && (m.status === 'pending' || m.status === 'syncing'));
+        const deltaResults = {
+          applied: new Set(),
+          failed: new Map()
+        };
+
+        if (pendingMovements.length > 0 && typeof window.firebaseRunTransaction === 'function') {
+          for (const movement of pendingMovements) {
+            try {
+              if (!movement?.id || !movement?.productId || !Number.isFinite(Number(movement.quantity))) continue;
+              if (hasLocalAppliedStockDelta(movement.id)) {
+                deltaResults.applied.add(movement.id);
+                continue;
+              }
+              const delta = movement.type === 'entrada' ? Number(movement.quantity) : -Number(movement.quantity);
+              const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
+              let observedBefore = null;
+              let observedAfter = null;
+              const tx = await window.firebaseRunTransaction(productsRef, (current) => {
+                const arr = Array.isArray(current) ? current : [];
+                const idx = arr.findIndex(p => p && p.id === movement.productId);
+                if (idx === -1) return arr;
+                const p = arr[idx] || {};
+                const before = Number.isFinite(Number(p.stock)) ? Number(p.stock) : 0;
+                const after = before + delta;
+                observedBefore = before;
+                observedAfter = after;
+                const next = [...arr];
+                next[idx] = { ...p, stock: after };
+                return next;
+              });
+              if (!tx || tx.committed !== true) {
+                throw new Error('Transaction not committed');
+              }
+              markLocalAppliedStockDelta(movement.id);
+              deltaResults.applied.add(movement.id);
+              try {
+                const auditRef = window.firebaseRef(window.firebaseDatabase, `estoqueff_stock_delta_audit/${movement.id}`);
+                await window.firebaseSet(auditRef, {
+                  movementId: movement.id,
+                  productId: movement.productId,
+                  product: movement.product,
+                  userId: movement.userId,
+                  userName: movement.userName,
+                  type: movement.type,
+                  quantity: Number(movement.quantity),
+                  delta,
+                  observedBefore,
+                  observedAfter,
+                  clientId,
+                  appliedAt: new Date().toISOString()
+                });
+              } catch (auditError) {
+                debugLog('delta_audit_write_failed', { movementId: movement.id, error: String(auditError?.message || auditError) });
+              }
+              debugLog('delta_applied', { movementId: movement.id, productId: movement.productId, delta, observedBefore, observedAfter });
+            } catch (e) {
+              deltaResults.failed.set(movement.id, e);
+              debugLog('delta_failed', { movementId: movement?.id, error: String(e?.message || e) });
+            }
+          }
+        }
+
         // 1. Busca dados atuais do servidor para não sobrescrever outros usuários
         let serverSnapshot = null;
         try {
@@ -149,23 +296,34 @@ function useFirebaseState(path, defaultValue = null) {
 
         // Se conseguimos ler do servidor, fazemos merge
         if (Array.isArray(serverData)) {
-           // Mapa de IDs do servidor
-           const serverIds = new Set(serverData.map(m => m.id));
-           // Itens locais que não estão no servidor (novos)
-           const localNewItems = payloadToWrite.filter(m => !serverIds.has(m.id));
-           
-           // Resultado: Dados do servidor + Meus novos itens
-           // Mantendo a ordem decrescente (mais novos primeiro)
-           payloadToWrite = [...localNewItems, ...serverData].sort((a, b) => {
-             return new Date(b.timestamp || b.date) - new Date(a.timestamp || a.date);
-           });
+          const byId = new Map(serverData.filter(m => m && typeof m === 'object' && m.id).map(m => [m.id, m]));
+          for (const localMovement of payloadToWrite) {
+            if (!localMovement || typeof localMovement !== 'object' || !localMovement.id) continue;
+            const serverMovement = byId.get(localMovement.id);
+            if (!serverMovement) {
+              byId.set(localMovement.id, localMovement);
+              continue;
+            }
+            if (localMovement.status === 'synced' && serverMovement.status !== 'synced') {
+              byId.set(localMovement.id, { ...serverMovement, ...localMovement });
+            } else if (localMovement.timestamp && !serverMovement.timestamp) {
+              byId.set(localMovement.id, { ...serverMovement, ...localMovement });
+            }
+          }
+          const sortTime = (m) => {
+            const ts = Date.parse(m?.timestamp || '');
+            if (Number.isFinite(ts)) return ts;
+            const dt = Date.parse(m?.date || '');
+            if (Number.isFinite(dt)) return dt;
+            return 0;
+          };
+          payloadToWrite = Array.from(byId.values()).sort((a, b) => sortTime(b) - sortTime(a));
         }
         
-        // Atualiza status para synced
         payloadToWrite = payloadToWrite.map((m) => {
-          if (m && typeof m === 'object' && (!m.status || m.status !== 'synced')) {
-            return { ...m, status: 'synced' };
-          }
+          if (!m || typeof m !== 'object') return m;
+          if (m.status === 'synced') return m;
+          if (m.id && deltaResults.applied?.has(m.id)) return { ...m, status: 'synced' };
           return m;
         });
       }
@@ -187,9 +345,27 @@ function useFirebaseState(path, defaultValue = null) {
       }
 
       setData(freshValue !== null ? freshValue : payloadToWrite);
-      localStorage.removeItem(key);
-      setSyncStatus('synced');
-      setRetryCount(0);
+      const hasRemainingPending = Array.isArray(payloadToWrite)
+        ? payloadToWrite.some(m => m && typeof m === 'object' && (m.status === 'pending' || m.status === 'syncing'))
+        : false;
+      if (!hasRemainingPending) {
+        localStorage.removeItem(key);
+        setSyncStatus('synced');
+        setRetryCount(0);
+      } else {
+        try {
+          localStorage.setItem(key, JSON.stringify([{ payload: payloadToWrite, ts: Date.now(), id: Date.now().toString() }]));
+        } catch {
+        }
+        setSyncStatus('error');
+        const nextRetry = currentRetry + 1;
+        setRetryCount(nextRetry);
+        if (nextRetry <= 5) {
+          const delay = 1000 * Math.pow(2, nextRetry);
+          debugLog('flush_retry_scheduled', { nextRetry, delay });
+          setTimeout(() => flushOfflineQueue(nextRetry), delay);
+        }
+      }
       
       // Feedback visual temporário
       setTimeout(() => setSyncStatus('idle'), 3000);
@@ -204,11 +380,11 @@ function useFirebaseState(path, defaultValue = null) {
       // Retry com backoff se falhar
       if (nextRetry <= 5) {
         const delay = 1000 * Math.pow(2, nextRetry);
-        console.log(`Agendando retry ${nextRetry} em ${delay}ms`);
+        debugLog('flush_retry_scheduled', { nextRetry, delay });
         setTimeout(() => flushOfflineQueue(nextRetry), delay);
       }
     }
-  }, [path]);
+  }, [clientId, debugLog, path]);
 
   useEffect(() => {
     let unsubscribe = null;
@@ -233,7 +409,7 @@ function useFirebaseState(path, defaultValue = null) {
            // Se o valor do servidor conter nossos IDs pendentes, podemos limpar a fila?
            // Complexo. Vamos manter simples: Servidor atualiza, mas flush sobrescreve depois se necessário.
            // Para evitar "pulo" visual, se tem pendencia, mantemos dados locais.
-           console.log(`[Firebase] Dados recebidos para ${path}, mas temos pendências locais. Ignorando atualização remota temporariamente.`);
+           debugLog('server_update_ignored_due_to_pending_queue');
         }
         setLoading(false);
       });
@@ -256,7 +432,7 @@ function useFirebaseState(path, defaultValue = null) {
     init();
 
     const handleOnline = () => {
-      console.log("Online detectado! Tentando sincronizar...");
+      debugLog('online_event_flush');
       flushOfflineQueue();
     };
 
@@ -270,7 +446,7 @@ function useFirebaseState(path, defaultValue = null) {
       window.removeEventListener('online', handleOnline);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path]);
+  }, [path, debugLog, flushOfflineQueue]);
 
   const updateData = useCallback(
     async (newData) => {
@@ -296,7 +472,7 @@ function useFirebaseState(path, defaultValue = null) {
     [path, enqueueOfflineWrite, flushOfflineQueue]
   );
 
-  return [data, updateData, loading, syncStatus, retryCount];
+  return [data, updateData, loading, syncStatus, retryCount, setLocalData];
 }
 
 // Componente de Login
@@ -1160,7 +1336,7 @@ const EstoqueFFApp = () => {
     }
   });
   
-  const [products, setProducts] = useFirebaseState('estoqueff_products', [
+  const [products, setProducts, , , , setProductsLocal] = useFirebaseState('estoqueff_products', [
     { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
     { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'Acessórios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
     { id: 'P003', name: 'Teclado Mecânico', brand: 'Razer', category: 'Acessórios', code: 'KB-RZR-003', stock: 8, minStock: 5, qrCode: 'QR003', createdAt: '2025-01-01' },
@@ -1828,7 +2004,9 @@ const EstoqueFFApp = () => {
       );
 
       const movementsPromise = setMovements(initialMovements);
-      const productsPromise = setProducts(updatedProducts);
+      const productsPromise = typeof setProductsLocal === 'function'
+        ? setProductsLocal(updatedProducts)
+        : setProducts(updatedProducts);
 
       setScannedProduct(null);
       setManualSelectedProduct(null);
