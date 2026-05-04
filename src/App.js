@@ -1387,6 +1387,7 @@ const EstoqueFFApp = () => {
   const [movementQuantity, setMovementQuantity] = useState(0);
   const [volumes, setVolumes] = useState('');
   const [unitsPerVolume, setUnitsPerVolume] = useState('');
+  const [movementObservation, setMovementObservation] = useState('');
   const [selectedProduct, setSelectedProduct] = useState('');
   const [showLabelEditor, setShowLabelEditor] = useState(false);
   const [editingLabelForProduct, setEditingLabelForProduct] = useState(null);
@@ -1979,7 +1980,8 @@ const EstoqueFFApp = () => {
         userName: currentUser.name,
         userRole: currentUser.role,
         date: new Date().toLocaleString('pt-BR'),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        ...(movementObservation.trim() ? { observation: movementObservation.trim() } : {})
       };
 
       const onlineNow =
@@ -2016,6 +2018,7 @@ const EstoqueFFApp = () => {
       setVolumes('');
       setUnitsPerVolume('');
       setMovementType('');
+      setMovementObservation('');
 
       if (onlineNow && window.firebaseDatabase) {
         setSuccess(
@@ -3024,6 +3027,11 @@ const EstoqueFFApp = () => {
                     })()}
                     {movement.user} • {movement.date}
                   </p>
+                  {!!movement.observation && (
+                    <p className="text-sm text-gray-600">
+                      {movement.observation}
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <div className={`font-bold text-lg ${amountColor}`}>
@@ -3365,6 +3373,21 @@ const EstoqueFFApp = () => {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Observação</label>
+                  <input
+                    type="text"
+                    value={movementObservation}
+                    onChange={(e) => setMovementObservation(e.target.value)}
+                    className="w-full px-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:border-blue-500"
+                    style={{ fontSize: '16px' }}
+                    placeholder="Digite uma observação (opcional)"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                  />
+                </div>
+
                 <div className="flex gap-3">
                   <button
                     onClick={() => {
@@ -3372,6 +3395,7 @@ const EstoqueFFApp = () => {
 					  setMovementQuantity('');
 					  setVolumes('');
 					  setUnitsPerVolume('');
+                      setMovementObservation('');
                       setManualSelectedProduct(null);
                       setShowManualMovement(false);
 						setMovementQuantity('');
@@ -3832,6 +3856,11 @@ const EstoqueFFApp = () => {
                             })()}
                             {movement.user} • {movement.date}
                           </p>
+                          {!!movement.observation && (
+                            <p className="text-sm text-gray-600">
+                              {movement.observation}
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-col items-end gap-1">
                           <div
