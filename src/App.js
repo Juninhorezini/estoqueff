@@ -2466,7 +2466,7 @@ const EstoqueFFApp = () => {
       const selectedProd = products.find(p => p.id === movementProductFilter);
       filtered = filtered.filter(m => 
         m.productId === movementProductFilter ||
-        (!!selectedProd && m.product === selectedProd.name)
+        (!m.productId && !!selectedProd && m.product === selectedProd.name)
       );
     }
     
