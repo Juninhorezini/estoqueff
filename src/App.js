@@ -272,7 +272,7 @@ function useFirebaseState(path, defaultValue = null) {
     } catch (e) {
       console.error("Erro ao ler cache local:", e);
     }
-  }, [path, debugLog]);
+  }, [path, debugLog, defaultValue]);
 
   const enqueueOfflineWrite = useCallback((p, payload) => {
     try {
@@ -505,6 +505,8 @@ function useFirebaseState(path, defaultValue = null) {
           const movementRef = window.firebaseRef(window.firebaseDatabase, `${MOVEMENTS_PATH}/${movement.id}`);
           await window.firebaseSet(movementRef, movement);
         }
+      } else {
+        await window.firebaseSet(dbRef, payloadToWrite);
       }
       
       // Sucesso! Atualiza estado local e limpa fila
@@ -566,7 +568,7 @@ function useFirebaseState(path, defaultValue = null) {
         setTimeout(() => flushOfflineQueue(nextRetry), delay);
       }
     }
-  }, [clientId, debugLog, path]);
+  }, [clientId, debugLog, path, defaultValue]);
 
   useEffect(() => {
     let unsubscribe = null;
@@ -1518,7 +1520,7 @@ const EstoqueFFApp = () => {
     }
   });
   
-  const [products, setProducts, , , , setProductsLocal] = useFirebaseState('estoqueff_products', [
+  const [products, setProducts] = useFirebaseState('estoqueff_products', [
     { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
     { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'Acessórios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
     { id: 'P003', name: 'Teclado Mecânico', brand: 'Razer', category: 'Acessórios', code: 'KB-RZR-003', stock: 8, minStock: 5, qrCode: 'QR003', createdAt: '2025-01-01' },
@@ -2175,22 +2177,7 @@ const EstoqueFFApp = () => {
         ...movements
       ];
 
-      const updatedProducts = products.map(p =>
-        p.id === targetProduct.id
-          ? {
-              ...p,
-              stock:
-                movementType === 'entrada'
-                  ? p.stock + quantity
-                  : p.stock - quantity
-            }
-          : p
-      );
-
       const movementsPromise = setMovements(initialMovements);
-      const productsPromise = typeof setProductsLocal === 'function'
-        ? setProductsLocal(updatedProducts)
-        : setProducts(updatedProducts);
 
       setScannedProduct(null);
       setManualSelectedProduct(null);
@@ -2214,10 +2201,9 @@ const EstoqueFFApp = () => {
 
       setTimeout(() => setSuccess(''), 4000);
 
-      Promise.all([movementsPromise, productsPromise])
-        .catch(error => {
-          console.error('Erro ao sincronizar movimentação:', error);
-        });
+      Promise.resolve(movementsPromise).catch(error => {
+        console.error('Erro ao sincronizar movimentação:', error);
+      });
     } catch (error) {
       setErrors({ general: 'Erro ao processar movimentação. Tente novamente.' });
     } finally {
@@ -2529,6 +2515,7 @@ const EstoqueFFApp = () => {
     const todayISO = today.toISOString().slice(0, 10);
     
     const todayMovements = movements.filter(movement => {
+      if (!isMovementEffectiveForStock(movement)) return false;
       return movement.date.includes(todayBR) || movement.date.includes(todayISO);
     }).length;
     

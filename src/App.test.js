@@ -59,6 +59,16 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     mockSet.mockResolvedValue(true);
     mockGet.mockResolvedValue({ exists: () => false, val: () => null });
     mockRunTransaction.mockReset();
+    mockRunTransaction.mockImplementation(async (_ref, updater) => {
+      const current = [
+        { id: 'P001', name: 'Produto Teste', stock: 10 }
+      ];
+      const next = updater(current);
+      if (typeof next === 'undefined') {
+        return { committed: false, snapshot: { val: () => current } };
+      }
+      return { committed: true, snapshot: { val: () => next } };
+    });
   });
 
   afterEach(() => {
@@ -85,7 +95,18 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
   test('Deve carregar dados do localStorage se houver (Simulação de Reload Offline)', async () => {
     // Prepara dados locais simulando um estado salvo offline
     const localMovements = [
-      { id: 'offline1', product: 'Produto Teste', quantity: 10, type: 'entrada', status: 'pending', date: '2025-08-20 10:00' }
+      {
+        id: 'offline1',
+        product: 'Produto Teste',
+        productId: 'P001',
+        quantity: 10,
+        type: 'entrada',
+        status: 'pending',
+        date: '2025-08-20 10:00',
+        timestamp: '2025-08-20T10:00:00.000Z',
+        userId: 'user1',
+        userName: 'Administrador'
+      }
     ];
     const queueData = [
       { payload: localMovements, ts: Date.now(), id: '1' }
@@ -114,7 +135,22 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
 
   test('Deve exibir indicador de sincronização quando ocorrer flush da fila', async () => {
     // Simula fila pendente
-    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{ payload: [], ts: 1, id: '1' }]));
+    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{
+      payload: [{
+        id: 'pending1',
+        product: 'Produto Teste',
+        productId: 'P001',
+        quantity: 1,
+        type: 'entrada',
+        status: 'pending',
+        date: '2025-08-20 10:00',
+        timestamp: '2025-08-20T10:00:00.000Z',
+        userId: 'user1',
+        userName: 'Administrador'
+      }],
+      ts: 1,
+      id: '1'
+    }]));
 
     await act(async () => {
       render(<App />);
@@ -132,10 +168,36 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
   });
 
   test('Deve lidar com erro de conexão e tentar novamente (Retry)', async () => {
-    // Simula erro no Firebase
-    mockSet.mockRejectedValueOnce(new Error('Network Error'));
+    // Simula falha na transação para manter a movimentação pendente e disparar retry
+    mockRunTransaction
+      .mockImplementationOnce(async () => {
+        throw new Error('Network Error');
+      })
+      .mockImplementation(async (_ref, updater) => {
+        const current = [{ id: 'P001', name: 'Produto Teste', stock: 10 }];
+        const next = updater(current);
+        if (typeof next === 'undefined') {
+          return { committed: false, snapshot: { val: () => current } };
+        }
+        return { committed: true, snapshot: { val: () => next } };
+      });
     
-    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{ payload: [], ts: 1, id: '1' }]));
+    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{
+      payload: [{
+        id: 'retry1',
+        product: 'Produto Teste',
+        productId: 'P001',
+        quantity: 1,
+        type: 'entrada',
+        status: 'pending',
+        date: '2025-08-20 10:00',
+        timestamp: '2025-08-20T10:00:00.000Z',
+        userId: 'user1',
+        userName: 'Administrador'
+      }],
+      ts: 1,
+      id: '1'
+    }]));
 
     await act(async () => {
       render(<App />);
@@ -148,7 +210,7 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
       jest.advanceTimersByTime(100); 
     });
     
-    expect(mockSet).toHaveBeenCalledTimes(1);
+    expect(mockRunTransaction).toHaveBeenCalledTimes(1);
 
     // O sistema deve agendar um retry (backoff)
     // Vamos avançar o tempo para cobrir o primeiro backoff (1000ms)
@@ -157,7 +219,7 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     });
 
     // Deve ter tentado novamente
-    expect(mockSet).toHaveBeenCalledTimes(2);
+    expect(mockRunTransaction).toHaveBeenCalledTimes(2);
   });
 
   test('Aplica delta via transação e grava auditoria ao sincronizar movimentação pendente', async () => {
@@ -190,7 +252,7 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     expect(serverProducts.find(p => p.id === 'P001').stock).toBe(8);
 
     const setCalls = mockSet.mock.calls.map(([ref, payload]) => ({ key: ref?.key, payload }));
-    expect(setCalls.some(c => c.key === 'estoqueff_movements')).toBe(true);
+    expect(setCalls.some(c => c.key === 'estoqueff_movements/m1')).toBe(true);
     expect(setCalls.some(c => c.key === 'estoqueff_stock_delta_audit/m1')).toBe(true);
   });
 
@@ -213,6 +275,8 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     });
 
     expect(mockRunTransaction).not.toHaveBeenCalled();
+    const setCalls = mockSet.mock.calls.map(([ref, payload]) => ({ key: ref?.key, payload }));
+    expect(setCalls.some(c => c.key === 'estoqueff_movements/m2')).toBe(true);
   });
 
   test('Mantém fila e faz retry quando a transação falha', async () => {
@@ -257,5 +321,48 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     });
 
     expect(serverProducts.find(p => p.id === 'P001').stock).toBe(8);
+  });
+
+  test('Marca movimentação como rejeitada quando o saldo do servidor é insuficiente', async () => {
+    const now = Date.now();
+    const localMovements = [
+      {
+        id: 'm4',
+        product: 'Notebook Dell',
+        productId: 'P001',
+        quantity: 20,
+        type: 'saída',
+        status: 'pending',
+        date: '2025-08-20 10:00',
+        timestamp: new Date(now).toISOString(),
+        userId: 'user1',
+        userName: 'Administrador'
+      }
+    ];
+    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{ payload: localMovements, ts: now, id: '1' }]));
+
+    mockRunTransaction.mockImplementation(async (_ref, updater) => {
+      const current = [{ id: 'P001', name: 'Notebook Dell', stock: 5 }];
+      const next = updater(current);
+      if (typeof next === 'undefined') {
+        return { committed: false, snapshot: { val: () => current } };
+      }
+      return { committed: true, snapshot: { val: () => next } };
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    await login();
+
+    await waitFor(() => {
+      expect(mockRunTransaction).toHaveBeenCalled();
+    });
+
+    const movementWrite = mockSet.mock.calls.find(([ref]) => ref?.key === 'estoqueff_movements/m4');
+    expect(movementWrite).toBeTruthy();
+    expect(movementWrite[1].status).toBe('rejected');
+    expect(movementWrite[1].rejectedCode).toBe('insufficient_stock');
   });
 });
