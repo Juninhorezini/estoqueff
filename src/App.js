@@ -19,6 +19,118 @@ const formatMaybeNumber = (value) => {
   return formatNumber(n);
 };
 
+const MOVEMENTS_PATH = 'estoqueff_movements';
+const PRODUCTS_PATH = 'estoqueff_products';
+const MOVEMENT_PENDING_STATUSES = new Set(['pending', 'syncing']);
+
+const sortMovementsByTime = (items = []) => {
+  const sortTime = (movement) => {
+    const ts = Date.parse(movement?.timestamp || '');
+    if (Number.isFinite(ts)) return ts;
+    const dt = Date.parse(movement?.date || '');
+    if (Number.isFinite(dt)) return dt;
+    return 0;
+  };
+
+  return [...items].sort((a, b) => sortTime(b) - sortTime(a));
+};
+
+const normalizeMovementsValue = (value, defaultValue = []) => {
+  const source = value ?? defaultValue ?? [];
+  const byId = new Map();
+
+  const appendMovement = (movement, fallbackId = null) => {
+    if (!movement || typeof movement !== 'object') return;
+    const normalized = { ...movement };
+    const movementId = normalized.id || fallbackId;
+    if (!movementId) return;
+    normalized.id = movementId;
+    byId.set(movementId, {
+      ...(byId.get(movementId) || {}),
+      ...normalized
+    });
+  };
+
+  if (Array.isArray(source)) {
+    source.forEach((movement) => appendMovement(movement));
+  } else if (source && typeof source === 'object') {
+    Object.entries(source).forEach(([key, movement]) => appendMovement(movement, key));
+  }
+
+  return sortMovementsByTime(Array.from(byId.values()));
+};
+
+const normalizeRemoteValue = (path, value, defaultValue = null) => {
+  if (path === MOVEMENTS_PATH) {
+    return normalizeMovementsValue(value, defaultValue);
+  }
+  return value !== null ? value : defaultValue;
+};
+
+const hasPendingMovementStatus = (status) => MOVEMENT_PENDING_STATUSES.has(status);
+
+const isMovementRejected = (movement) => movement?.status === 'rejected';
+
+const isMovementEffectiveForStock = (movement) => !isMovementRejected(movement);
+
+const getMovementStatusConfig = (movementStatus) => {
+  if (movementStatus === 'syncing') {
+    return {
+      text: 'Sincronizando',
+      classes: 'bg-blue-100 text-blue-800',
+      icon: <Loader2 size={14} className="mr-1 inline-block animate-spin" />,
+      title: 'Aguardando confirmação de sincronização com o servidor'
+    };
+  }
+
+  if (movementStatus === 'pending') {
+    return {
+      text: 'Pendente',
+      classes: 'bg-orange-100 text-orange-800',
+      icon: <Clock size={14} className="mr-1 inline-block" />,
+      title: 'Registrado localmente. Será sincronizado quando a conexão estiver estável'
+    };
+  }
+
+  if (movementStatus === 'rejected') {
+    return {
+      text: 'Rejeitada',
+      classes: 'bg-red-100 text-red-800',
+      icon: <AlertTriangle size={14} className="mr-1 inline-block" />,
+      title: 'Movimentação rejeitada por conflito de estoque ou validação do servidor'
+    };
+  }
+
+  return {
+    text: 'Sincronizado',
+    classes: 'bg-green-100 text-green-800',
+    icon: <CheckCircle size={14} className="mr-1 inline-block" />,
+    title: 'Movimentação confirmada no servidor'
+  };
+};
+
+const mergeMovementCollections = (serverMovements = [], localMovements = []) => {
+  const byId = new Map();
+
+  normalizeMovementsValue(serverMovements).forEach((movement) => {
+    byId.set(movement.id, movement);
+  });
+
+  normalizeMovementsValue(localMovements).forEach((movement) => {
+    const serverMovement = byId.get(movement.id);
+    if (!serverMovement) {
+      byId.set(movement.id, movement);
+      return;
+    }
+
+    if (hasPendingMovementStatus(movement.status) || movement.status === 'rejected') {
+      byId.set(movement.id, { ...serverMovement, ...movement });
+    }
+  });
+
+  return sortMovementsByTime(Array.from(byId.values()));
+};
+
 let syncClientIdCache = null;
 
 const getSyncClientId = () => {
@@ -153,7 +265,7 @@ function useFirebaseState(path, defaultValue = null) {
           // Usa o snapshot mais recente da fila local para exibição imediata
           const latest = queue[queue.length - 1].payload;
           debugLog('offline_load', { queueLength: queue.length });
-          setData(latest);
+          setData(normalizeRemoteValue(path, latest, defaultValue));
           setLoading(false);
         }
       }
@@ -208,127 +320,192 @@ function useFirebaseState(path, defaultValue = null) {
       let payloadToWrite = lastItem.payload;
 
       // Lógica de Reconciliação para Movimentações
-      if (path === 'estoqueff_movements' && Array.isArray(payloadToWrite)) {
-        const pendingMovements = payloadToWrite.filter(m => m && typeof m === 'object' && (m.status === 'pending' || m.status === 'syncing'));
-        const deltaResults = {
-          applied: new Set(),
-          failed: new Map()
-        };
+      if (path === MOVEMENTS_PATH) {
+        payloadToWrite = normalizeMovementsValue(payloadToWrite);
+
+        const pendingMovements = payloadToWrite.filter(
+          (movement) => movement && typeof movement === 'object' && hasPendingMovementStatus(movement.status)
+        );
+        const movementOutcomes = new Map();
 
         if (pendingMovements.length > 0 && typeof window.firebaseRunTransaction === 'function') {
           for (const movement of pendingMovements) {
             try {
               if (!movement?.id || !movement?.productId || !Number.isFinite(Number(movement.quantity))) continue;
+
               if (hasLocalAppliedStockDelta(movement.id)) {
-                deltaResults.applied.add(movement.id);
-                continue;
-              }
-              const delta = movement.type === 'entrada' ? Number(movement.quantity) : -Number(movement.quantity);
-              const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
-              let observedBefore = null;
-              let observedAfter = null;
-              const tx = await window.firebaseRunTransaction(productsRef, (current) => {
-                const arr = Array.isArray(current) ? current : [];
-                const idx = arr.findIndex(p => p && p.id === movement.productId);
-                if (idx === -1) return arr;
-                const p = arr[idx] || {};
-                const before = Number.isFinite(Number(p.stock)) ? Number(p.stock) : 0;
-                const after = before + delta;
-                observedBefore = before;
-                observedAfter = after;
-                const next = [...arr];
-                next[idx] = { ...p, stock: after };
-                return next;
-              });
-              if (!tx || tx.committed !== true) {
-                throw new Error('Transaction not committed');
-              }
-              markLocalAppliedStockDelta(movement.id);
-              deltaResults.applied.add(movement.id);
-              try {
-                const auditRef = window.firebaseRef(window.firebaseDatabase, `estoqueff_stock_delta_audit/${movement.id}`);
-                await window.firebaseSet(auditRef, {
-                  movementId: movement.id,
-                  productId: movement.productId,
-                  product: movement.product,
-                  userId: movement.userId,
-                  userName: movement.userName,
-                  type: movement.type,
-                  quantity: Number(movement.quantity),
-                  delta,
-                  observedBefore,
-                  observedAfter,
-                  clientId,
-                  appliedAt: new Date().toISOString()
+                movementOutcomes.set(movement.id, { outcome: 'already_applied' });
+              } else {
+                const delta = movement.type === 'entrada' ? Number(movement.quantity) : -Number(movement.quantity);
+                const productsRef = window.firebaseRef(window.firebaseDatabase, PRODUCTS_PATH);
+                let observedBefore = null;
+                let observedAfter = null;
+                let transactionMode = 'applied';
+                let rejectedReason = null;
+
+                const tx = await window.firebaseRunTransaction(productsRef, (current) => {
+                  const arr = Array.isArray(current) ? current : [];
+                  const idx = arr.findIndex((product) => product && product.id === movement.productId);
+                  if (idx === -1) {
+                    rejectedReason = {
+                      code: 'product_not_found',
+                      message: 'Produto não encontrado no servidor.'
+                    };
+                    return;
+                  }
+
+                  const product = arr[idx] || {};
+                  const before = Number.isFinite(Number(product.stock)) ? Number(product.stock) : 0;
+                  observedBefore = before;
+                  observedAfter = before;
+
+                  const appliedMapRaw =
+                    product && typeof product._syncAppliedMovements === 'object' && product._syncAppliedMovements
+                      ? product._syncAppliedMovements
+                      : {};
+                  const appliedMap = { ...appliedMapRaw };
+
+                  if (appliedMap[movement.id]) {
+                    transactionMode = 'already_applied';
+                    return arr;
+                  }
+
+                  const quantity = Number(movement.quantity);
+                  if (movement.type === 'saída' && before < quantity) {
+                    rejectedReason = {
+                      code: 'insufficient_stock',
+                      message: `Saldo insuficiente no servidor. Disponível: ${before}, solicitado: ${quantity}.`,
+                      availableStock: before,
+                      requestedQuantity: quantity
+                    };
+                    return;
+                  }
+
+                  const after = before + delta;
+                  observedAfter = after;
+                  appliedMap[movement.id] = Date.now();
+                  const appliedEntries = Object.entries(appliedMap);
+                  if (appliedEntries.length > 200) {
+                    appliedEntries.sort((a, b) => Number(a[1]) - Number(b[1]));
+                    const trimmedEntries = appliedEntries.slice(appliedEntries.length - 200);
+                    Object.keys(appliedMap).forEach((key) => delete appliedMap[key]);
+                    trimmedEntries.forEach(([key, value]) => {
+                      appliedMap[key] = value;
+                    });
+                  }
+
+                  const next = [...arr];
+                  next[idx] = {
+                    ...product,
+                    stock: after,
+                    _syncAppliedMovements: appliedMap
+                  };
+                  return next;
                 });
-              } catch (auditError) {
-                debugLog('delta_audit_write_failed', { movementId: movement.id, error: String(auditError?.message || auditError) });
+
+                if ((!tx || tx.committed !== true) && rejectedReason) {
+                  movementOutcomes.set(movement.id, {
+                    outcome: 'rejected',
+                    observedBefore,
+                    observedAfter,
+                    rejectedReason
+                  });
+                  debugLog('delta_rejected', {
+                    movementId: movement.id,
+                    reason: rejectedReason.code,
+                    observedBefore
+                  });
+                } else if (!tx || tx.committed !== true) {
+                  throw new Error('Transaction not committed');
+                } else {
+                  markLocalAppliedStockDelta(movement.id);
+                  movementOutcomes.set(movement.id, {
+                    outcome: transactionMode,
+                    observedBefore,
+                    observedAfter
+                  });
+                  try {
+                    const auditRef = window.firebaseRef(window.firebaseDatabase, `estoqueff_stock_delta_audit/${movement.id}`);
+                    await window.firebaseSet(auditRef, {
+                      movementId: movement.id,
+                      productId: movement.productId,
+                      product: movement.product,
+                      userId: movement.userId,
+                      userName: movement.userName,
+                      type: movement.type,
+                      quantity: Number(movement.quantity),
+                      delta,
+                      observedBefore,
+                      observedAfter,
+                      clientId,
+                      outcome: transactionMode,
+                      appliedAt: new Date().toISOString()
+                    });
+                  } catch (auditError) {
+                    debugLog('delta_audit_write_failed', { movementId: movement.id, error: String(auditError?.message || auditError) });
+                  }
+                  debugLog('delta_applied', {
+                    movementId: movement.id,
+                    productId: movement.productId,
+                    delta,
+                    observedBefore,
+                    observedAfter,
+                    outcome: transactionMode
+                  });
+                }
               }
-              debugLog('delta_applied', { movementId: movement.id, productId: movement.productId, delta, observedBefore, observedAfter });
             } catch (e) {
-              deltaResults.failed.set(movement.id, e);
+              movementOutcomes.set(movement.id, {
+                outcome: 'failed',
+                error: String(e?.message || e)
+              });
               debugLog('delta_failed', { movementId: movement?.id, error: String(e?.message || e) });
             }
           }
         }
 
-        // 1. Busca dados atuais do servidor para não sobrescrever outros usuários
-        let serverSnapshot = null;
-        try {
-          if (typeof window.firebaseGet === 'function') {
-            serverSnapshot = await window.firebaseGet(dbRef);
-          }
-        } catch (e) {
-          console.error("Erro ao recuperar dados do Firebase (merge):", e);
-          serverSnapshot = null;
-        }
-        // Se firebaseGet não existir como helper, usamos onValue com once
-        
-        let serverData = [];
-        if (serverSnapshot && serverSnapshot.exists && serverSnapshot.exists()) {
-           serverData = serverSnapshot.val() || [];
-        } else {
-           // Fallback se não conseguir ler ou não existir helper direto
-           // Tentaremos usar o próprio onValue wrapped numa promise se necessário, 
-           // mas por segurança, se falhar a leitura, seguimos com o snapshot local (risco de overwrite)
-           // ou abortamos. Vamos tentar ser otimistas.
-        }
+        payloadToWrite = payloadToWrite.map((movement) => {
+          if (!movement || typeof movement !== 'object' || !movement.id) return movement;
+          const outcome = movementOutcomes.get(movement.id);
+          if (!outcome) return movement;
 
-        // Se conseguimos ler do servidor, fazemos merge
-        if (Array.isArray(serverData)) {
-          const byId = new Map(serverData.filter(m => m && typeof m === 'object' && m.id).map(m => [m.id, m]));
-          for (const localMovement of payloadToWrite) {
-            if (!localMovement || typeof localMovement !== 'object' || !localMovement.id) continue;
-            const serverMovement = byId.get(localMovement.id);
-            if (!serverMovement) {
-              byId.set(localMovement.id, localMovement);
-              continue;
-            }
-            if (localMovement.status === 'synced' && serverMovement.status !== 'synced') {
-              byId.set(localMovement.id, { ...serverMovement, ...localMovement });
-            } else if (localMovement.timestamp && !serverMovement.timestamp) {
-              byId.set(localMovement.id, { ...serverMovement, ...localMovement });
-            }
+          if (outcome.outcome === 'applied' || outcome.outcome === 'already_applied') {
+            return {
+              ...movement,
+              status: 'synced',
+              syncError: null,
+              syncedAt: new Date().toISOString()
+            };
           }
-          const sortTime = (m) => {
-            const ts = Date.parse(m?.timestamp || '');
-            if (Number.isFinite(ts)) return ts;
-            const dt = Date.parse(m?.date || '');
-            if (Number.isFinite(dt)) return dt;
-            return 0;
-          };
-          payloadToWrite = Array.from(byId.values()).sort((a, b) => sortTime(b) - sortTime(a));
-        }
-        
-        payloadToWrite = payloadToWrite.map((m) => {
-          if (!m || typeof m !== 'object') return m;
-          if (m.status === 'synced') return m;
-          if (m.id && deltaResults.applied?.has(m.id)) return { ...m, status: 'synced' };
-          return m;
+
+          if (outcome.outcome === 'rejected') {
+            return {
+              ...movement,
+              status: 'rejected',
+              syncError: outcome.rejectedReason?.message || 'Movimentação rejeitada pelo servidor.',
+              rejectedCode: outcome.rejectedReason?.code || 'server_rejected',
+              rejectedAt: new Date().toISOString(),
+              stockBefore: null,
+              stockAfter: null
+            };
+          }
+
+          return movement;
         });
-      }
 
-      await window.firebaseSet(dbRef, payloadToWrite);
+        const movementsToPersist = payloadToWrite.filter(
+          (movement) =>
+            movement &&
+            typeof movement === 'object' &&
+            movement.id &&
+            (movement.status === 'synced' || movement.status === 'rejected')
+        );
+
+        for (const movement of movementsToPersist) {
+          const movementRef = window.firebaseRef(window.firebaseDatabase, `${MOVEMENTS_PATH}/${movement.id}`);
+          await window.firebaseSet(movementRef, movement);
+        }
+      }
       
       // Sucesso! Atualiza estado local e limpa fila
       let freshValue = null;
@@ -336,7 +513,7 @@ function useFirebaseState(path, defaultValue = null) {
         if (typeof window.firebaseGet === 'function') {
           const freshSnapshot = await window.firebaseGet(dbRef);
           if (freshSnapshot && freshSnapshot.exists && freshSnapshot.exists()) {
-            freshValue = freshSnapshot.val();
+            freshValue = normalizeRemoteValue(path, freshSnapshot.val(), defaultValue);
           }
         }
       } catch (e) {
@@ -344,9 +521,14 @@ function useFirebaseState(path, defaultValue = null) {
         freshValue = null;
       }
 
-      setData(freshValue !== null ? freshValue : payloadToWrite);
+      const nextValue =
+        path === MOVEMENTS_PATH
+          ? mergeMovementCollections(freshValue !== null ? freshValue : [], payloadToWrite)
+          : (freshValue !== null ? freshValue : payloadToWrite);
+
+      setData(nextValue);
       const hasRemainingPending = Array.isArray(payloadToWrite)
-        ? payloadToWrite.some(m => m && typeof m === 'object' && (m.status === 'pending' || m.status === 'syncing'))
+        ? payloadToWrite.some((movement) => movement && typeof movement === 'object' && hasPendingMovementStatus(movement.status))
         : false;
       if (!hasRemainingPending) {
         localStorage.removeItem(key);
@@ -403,7 +585,7 @@ function useFirebaseState(path, defaultValue = null) {
         const hasPending = !!localStorage.getItem(key);
         
         if (!hasPending) {
-           setData(value !== null ? value : defaultValue);
+           setData(normalizeRemoteValue(path, value, defaultValue));
         } else {
            // Se tem pendencia, talvez o servidor já tenha recebido nosso flush?
            // Se o valor do servidor conter nossos IDs pendentes, podemos limpar a fila?
@@ -2365,11 +2547,7 @@ const EstoqueFFApp = () => {
       productStockByKey.set(p.name, Number.isFinite(Number(p.stock)) ? Number(p.stock) : 0);
     });
 
-    const sorted = [...movements].sort((a, b) => {
-      const ta = new Date(a?.timestamp || a?.date || 0).getTime();
-      const tb = new Date(b?.timestamp || b?.date || 0).getTime();
-      return tb - ta;
-    });
+    const sorted = sortMovementsByTime(movements).filter(isMovementEffectiveForStock);
 
     const runningAfterByKey = new Map();
     const balances = new Map();
@@ -2490,7 +2668,9 @@ const EstoqueFFApp = () => {
   const topMovedProducts = useMemo(() => {
     const productStats = {};
     
-    movements.forEach(movement => {
+    movements
+      .filter(isMovementEffectiveForStock)
+      .forEach(movement => {
       if (!productStats[movement.productId]) {
         productStats[movement.productId] = {
           productId: movement.productId,
@@ -2509,7 +2689,7 @@ const EstoqueFFApp = () => {
 
   const leastMovedProducts = useMemo(() => {
     const allProducts = products.map(product => {
-      const productMovements = movements.filter(m => m.productId === product.id);
+      const productMovements = movements.filter(m => m.productId === product.id && isMovementEffectiveForStock(m));
       return {
         productId: product.id,
         productName: product.name,
@@ -2977,41 +3157,7 @@ const EstoqueFFApp = () => {
               typeof movement.stockAfter === 'number'
                 ? movement.stockAfter
                 : derivedBalance?.stockAfter;
-            const statusConfig = movementStatus === 'syncing'
-              ? {
-                  text: 'Sincronizando',
-                  classes: 'bg-blue-100 text-blue-800',
-                  icon: (
-                    <Loader2
-                      size={14}
-                      className="mr-1 inline-block animate-spin"
-                    />
-                  ),
-                  title: 'Aguardando confirmação de sincronização com o servidor'
-                }
-              : movementStatus === 'pending'
-              ? {
-                  text: 'Pendente',
-                  classes: 'bg-orange-100 text-orange-800',
-                  icon: (
-                    <Clock
-                      size={14}
-                      className="mr-1 inline-block"
-                    />
-                  ),
-                  title: 'Registrado localmente. Será sincronizado quando a conexão estiver estável'
-                }
-              : {
-                  text: 'Sincronizado',
-                  classes: 'bg-green-100 text-green-800',
-                  icon: (
-                    <CheckCircle
-                      size={14}
-                      className="mr-1 inline-block"
-                    />
-                  ),
-                  title: 'Movimentação confirmada no servidor'
-                };
+            const statusConfig = getMovementStatusConfig(movementStatus);
 
             return (
               <div
@@ -3046,7 +3192,9 @@ const EstoqueFFApp = () => {
                     <span>{statusConfig.text}</span>
                   </div>
                   <p className="movement-balance">
-                    Saldo: {formatMaybeNumber(saldoAntes)} → {formatMaybeNumber(saldoDepois)}
+                    {movementStatus === 'rejected'
+                      ? (movement.syncError || 'Movimentação rejeitada pelo servidor')
+                      : `Saldo: ${formatMaybeNumber(saldoAntes)} → ${formatMaybeNumber(saldoDepois)}`}
                   </p>
                 </div>
               </div>
@@ -3802,41 +3950,7 @@ const EstoqueFFApp = () => {
                       typeof movement.stockAfter === 'number'
                         ? movement.stockAfter
                         : derivedBalance?.stockAfter;
-                    const statusConfig = movementStatus === 'syncing'
-                      ? {
-                          text: 'Sincronizando',
-                          classes: 'bg-blue-100 text-blue-800',
-                          icon: (
-                            <Loader2
-                              size={14}
-                              className="mr-1 inline-block animate-spin"
-                            />
-                          ),
-                          title: 'Aguardando confirmação de sincronização com o servidor'
-                        }
-                      : movementStatus === 'pending'
-                      ? {
-                          text: 'Pendente',
-                          classes: 'bg-orange-100 text-orange-800',
-                          icon: (
-                            <AlertTriangle
-                              size={14}
-                              className="mr-1 inline-block"
-                            />
-                          ),
-                          title: 'Registrado localmente. Será sincronizado quando a conexão estiver estável'
-                        }
-                      : {
-                          text: 'Sincronizado',
-                          classes: 'bg-green-100 text-green-800',
-                          icon: (
-                            <CheckCircle
-                              size={14}
-                              className="mr-1 inline-block"
-                            />
-                          ),
-                          title: 'Movimentação confirmada no servidor'
-                        };
+                    const statusConfig = getMovementStatusConfig(movementStatus);
 
                     return (
                       <div
@@ -3877,7 +3991,9 @@ const EstoqueFFApp = () => {
                             <span>{statusConfig.text}</span>
                           </div>
                           <p className="movement-balance">
-                            Saldo: {formatMaybeNumber(saldoAntes)} → {formatMaybeNumber(saldoDepois)}
+                            {movementStatus === 'rejected'
+                              ? (movement.syncError || 'Movimentação rejeitada pelo servidor')
+                              : `Saldo: ${formatMaybeNumber(saldoAntes)} → ${formatMaybeNumber(saldoDepois)}`}
                           </p>
                         </div>
                       </div>
