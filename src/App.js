@@ -1500,7 +1500,7 @@ const defaultLabelConfig = {
   codeFontSize: 12,
   descriptionFontSize: 10,
   quantityFontSize: 14,
-  qrSize: 30,
+  qrSize: 45,
   backgroundColor: '#ffffff',
   textColor: '#000000',
   borderColor: '#cccccc',
