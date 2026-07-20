@@ -5,7 +5,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import jsQR from 'jsqr';
-import './App.css';
+import './App.css'; 
 
 // Função para formatar números com separador de milhares
 const formatNumber = (number) => {
