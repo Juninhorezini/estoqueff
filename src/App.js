@@ -22,6 +22,7 @@ const formatMaybeNumber = (value) => {
 const MOVEMENTS_PATH = 'estoqueff_movements';
 const PRODUCTS_PATH = 'estoqueff_products';
 const MOVEMENT_PENDING_STATUSES = new Set(['pending', 'syncing']);
+const MOVEMENT_TERMINAL_STATUSES = new Set(['synced', 'rejected']);
 
 const sortMovementsByTime = (items = []) => {
   const sortTime = (movement) => {
@@ -60,14 +61,40 @@ const normalizeMovementsValue = (value, defaultValue = []) => {
   return sortMovementsByTime(Array.from(byId.values()));
 };
 
+const normalizeProductsValue = (value, defaultValue = []) => {
+  const source = value ?? defaultValue ?? [];
+
+  if (Array.isArray(source)) {
+    return source.filter((product) => product && typeof product === 'object');
+  }
+
+  if (source && typeof source === 'object') {
+    return Object.entries(source)
+      .map(([key, product]) => {
+        if (!product || typeof product !== 'object') return null;
+        return {
+          ...product,
+          id: product.id || key
+        };
+      })
+      .filter(Boolean);
+  }
+
+  return Array.isArray(defaultValue) ? defaultValue : [];
+};
+
 const normalizeRemoteValue = (path, value, defaultValue = null) => {
   if (path === MOVEMENTS_PATH) {
     return normalizeMovementsValue(value, defaultValue);
+  }
+  if (path === PRODUCTS_PATH) {
+    return normalizeProductsValue(value, defaultValue);
   }
   return value !== null ? value : defaultValue;
 };
 
 const hasPendingMovementStatus = (status) => MOVEMENT_PENDING_STATUSES.has(status);
+const hasTerminalMovementStatus = (status) => MOVEMENT_TERMINAL_STATUSES.has(status);
 
 const isMovementRejected = (movement) => movement?.status === 'rejected';
 
@@ -109,6 +136,30 @@ const getMovementStatusConfig = (movementStatus) => {
   };
 };
 
+const resolveMovementConflict = (serverMovement, localMovement) => {
+  if (!serverMovement) return localMovement;
+  if (!localMovement) return serverMovement;
+
+  const serverTerminal = hasTerminalMovementStatus(serverMovement.status);
+  const localTerminal = hasTerminalMovementStatus(localMovement.status);
+  const localPending = hasPendingMovementStatus(localMovement.status);
+  const serverPending = hasPendingMovementStatus(serverMovement.status);
+
+  if (serverTerminal) {
+    return { ...localMovement, ...serverMovement };
+  }
+
+  if (localTerminal && serverPending) {
+    return { ...serverMovement, ...localMovement };
+  }
+
+  if (localPending || localTerminal) {
+    return { ...serverMovement, ...localMovement };
+  }
+
+  return { ...serverMovement, ...localMovement };
+};
+
 const mergeMovementCollections = (serverMovements = [], localMovements = []) => {
   const byId = new Map();
 
@@ -123,9 +174,7 @@ const mergeMovementCollections = (serverMovements = [], localMovements = []) => 
       return;
     }
 
-    if (hasPendingMovementStatus(movement.status) || movement.status === 'rejected') {
-      byId.set(movement.id, { ...serverMovement, ...movement });
-    }
+    byId.set(movement.id, resolveMovementConflict(serverMovement, movement));
   });
 
   return sortMovementsByTime(Array.from(byId.values()));
@@ -200,6 +249,18 @@ const markLocalAppliedStockDelta = (movementId) => {
   writeLocalAppliedStockDeltas(map);
 };
 
+const readLatestQueuedPayload = (storageKey) => {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return null;
+    const queue = JSON.parse(raw);
+    if (!Array.isArray(queue) || queue.length === 0) return null;
+    return queue[queue.length - 1]?.payload ?? null;
+  } catch {
+    return null;
+  }
+};
+
 // Função auxiliar para sanitizar objetos antes de salvar no Firebase
 const sanitizeConfig = (config) => {
   if (!config) return null;
@@ -233,10 +294,14 @@ const sanitizeConfig = (config) => {
 
 // Hook Firebase usando window globals com suporte a fila offline, retry e reconciliação
 function useFirebaseState(path, defaultValue = null) {
-  const [data, setData] = useState(defaultValue);
+  const defaultValueRef = useRef(defaultValue);
+  const stableDefaultValue = defaultValueRef.current;
+  const [data, setData] = useState(stableDefaultValue);
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState('idle'); // idle, syncing, error, synced
   const [retryCount, setRetryCount] = useState(0);
+  const dataRef = useRef(stableDefaultValue);
+  const latestServerValueRef = useRef(normalizeRemoteValue(path, stableDefaultValue, stableDefaultValue));
 
   const getQueueKey = (p) => `estoqueff_queue_${p}`;
   const clientId = getSyncClientId();
@@ -252,27 +317,29 @@ function useFirebaseState(path, defaultValue = null) {
     } catch {
     }
   }, [clientId, debugEnabled, path]);
-  const setLocalData = useCallback((newData) => setData(newData), []);
+  const setLocalData = useCallback((newData) => {
+    dataRef.current = newData;
+    setData(newData);
+  }, []);
+
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   // Carrega dados locais (cache/fila) imediatamente ao iniciar
   useEffect(() => {
     try {
       const key = getQueueKey(path);
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        const queue = JSON.parse(raw);
-        if (queue.length > 0) {
-          // Usa o snapshot mais recente da fila local para exibição imediata
-          const latest = queue[queue.length - 1].payload;
-          debugLog('offline_load', { queueLength: queue.length });
-          setData(normalizeRemoteValue(path, latest, defaultValue));
-          setLoading(false);
-        }
+      const latest = readLatestQueuedPayload(key);
+      if (latest !== null) {
+        debugLog('offline_load', { hasSnapshot: true });
+        setData(normalizeRemoteValue(path, latest, stableDefaultValue));
+        setLoading(false);
       }
     } catch (e) {
       console.error("Erro ao ler cache local:", e);
     }
-  }, [path, debugLog, defaultValue]);
+  }, [path, debugLog, stableDefaultValue]);
 
   const enqueueOfflineWrite = useCallback((p, payload) => {
     try {
@@ -512,10 +579,10 @@ function useFirebaseState(path, defaultValue = null) {
       // Sucesso! Atualiza estado local e limpa fila
       let freshValue = null;
       try {
-        if (typeof window.firebaseGet === 'function') {
+        if (path !== MOVEMENTS_PATH && typeof window.firebaseGet === 'function') {
           const freshSnapshot = await window.firebaseGet(dbRef);
           if (freshSnapshot && freshSnapshot.exists && freshSnapshot.exists()) {
-            freshValue = normalizeRemoteValue(path, freshSnapshot.val(), defaultValue);
+            freshValue = normalizeRemoteValue(path, freshSnapshot.val(), stableDefaultValue);
           }
         }
       } catch (e) {
@@ -525,7 +592,7 @@ function useFirebaseState(path, defaultValue = null) {
 
       const nextValue =
         path === MOVEMENTS_PATH
-          ? mergeMovementCollections(freshValue !== null ? freshValue : [], payloadToWrite)
+          ? mergeMovementCollections(latestServerValueRef.current ?? [], payloadToWrite)
           : (freshValue !== null ? freshValue : payloadToWrite);
 
       setData(nextValue);
@@ -568,7 +635,7 @@ function useFirebaseState(path, defaultValue = null) {
         setTimeout(() => flushOfflineQueue(nextRetry), delay);
       }
     }
-  }, [clientId, debugLog, path, defaultValue]);
+  }, [clientId, debugLog, path, stableDefaultValue]);
 
   useEffect(() => {
     let unsubscribe = null;
@@ -578,21 +645,20 @@ function useFirebaseState(path, defaultValue = null) {
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
       return window.firebaseOnValue(dbRef, (snapshot) => {
         const value = snapshot.val();
+        const serverValue = normalizeRemoteValue(path, value, stableDefaultValue);
+        latestServerValueRef.current = serverValue;
         
-        // Só atualiza do servidor se NÃO tivermos pendências locais importantes
-        // Ou fazemos merge visual?
-        // Estratégia: Se fila vazia, aceita servidor. Se fila cheia, ignora servidor (pois vamos sobrescrever em breve)
-        // ou mescla visualmente.
         const key = getQueueKey(path);
-        const hasPending = !!localStorage.getItem(key);
+        const queuedPayload = readLatestQueuedPayload(key);
+        const hasPending = queuedPayload !== null;
         
         if (!hasPending) {
-           setData(normalizeRemoteValue(path, value, defaultValue));
+           setData(serverValue);
+        } else if (path === MOVEMENTS_PATH) {
+           const localValue = normalizeRemoteValue(path, queuedPayload, dataRef.current);
+           setData(mergeMovementCollections(serverValue, localValue));
+           debugLog('server_update_merged_with_pending_queue');
         } else {
-           // Se tem pendencia, talvez o servidor já tenha recebido nosso flush?
-           // Se o valor do servidor conter nossos IDs pendentes, podemos limpar a fila?
-           // Complexo. Vamos manter simples: Servidor atualiza, mas flush sobrescreve depois se necessário.
-           // Para evitar "pulo" visual, se tem pendencia, mantemos dados locais.
            debugLog('server_update_ignored_due_to_pending_queue');
         }
         setLoading(false);
@@ -634,11 +700,17 @@ function useFirebaseState(path, defaultValue = null) {
 
   const updateData = useCallback(
     async (newData) => {
+      const resolvedData =
+        typeof newData === 'function'
+          ? newData(dataRef.current)
+          : newData;
+
       // Atualização otimista imediata
-      setData(newData);
+      setData(resolvedData);
+      dataRef.current = resolvedData;
       
       // Salva na fila imediatamente (persistência local first)
-      enqueueOfflineWrite(path, newData);
+      enqueueOfflineWrite(path, resolvedData);
 
       if (
         !window.firebaseDatabase ||
@@ -4559,6 +4631,13 @@ const EstoqueFFApp = () => {
       )}
     </div>
   );
+};
+
+export {
+  mergeMovementCollections,
+  normalizeMovementsValue,
+  normalizeProductsValue,
+  normalizeRemoteValue
 };
 
 export default EstoqueFFApp;

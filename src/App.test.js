@@ -1,7 +1,11 @@
 import React from 'react';
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import App from './App';
+import App, {
+  mergeMovementCollections,
+  normalizeProductsValue,
+  normalizeRemoteValue
+} from './App';
 
 // Mock dos ícones Lucide para evitar erros de renderização
 jest.mock('lucide-react', () => ({
@@ -364,5 +368,45 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     expect(movementWrite).toBeTruthy();
     expect(movementWrite[1].status).toBe('rejected');
     expect(movementWrite[1].rejectedCode).toBe('insufficient_stock');
+  });
+
+  test('Prioriza estado terminal do servidor sobre movimentação pendente local', () => {
+    const merged = mergeMovementCollections(
+      [
+        {
+          id: 'm5',
+          status: 'synced',
+          syncedAt: '2026-07-20T10:00:00.000Z',
+          productId: 'P001'
+        }
+      ],
+      [
+        {
+          id: 'm5',
+          status: 'pending',
+          productId: 'P001',
+          syncError: 'offline'
+        }
+      ]
+    );
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0].status).toBe('synced');
+    expect(merged[0].syncedAt).toBe('2026-07-20T10:00:00.000Z');
+  });
+
+  test('Normaliza produtos vindos do Firebase como objeto indexado por id', () => {
+    const normalized = normalizeProductsValue({
+      P001: { name: 'Notebook Dell', stock: 10 },
+      P002: { id: 'P002', name: 'Mouse', stock: 5 }
+    });
+
+    expect(normalized).toEqual([
+      { id: 'P001', name: 'Notebook Dell', stock: 10 },
+      { id: 'P002', name: 'Mouse', stock: 5 }
+    ]);
+    expect(normalizeRemoteValue('estoqueff_products', { P001: { name: 'Notebook Dell', stock: 10 } })).toEqual([
+      { id: 'P001', name: 'Notebook Dell', stock: 10 }
+    ]);
   });
 });
