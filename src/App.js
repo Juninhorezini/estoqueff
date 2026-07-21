@@ -24,6 +24,18 @@ const PRODUCTS_PATH = 'estoqueff_products';
 const MOVEMENT_PENDING_STATUSES = new Set(['pending', 'syncing']);
 const MOVEMENT_TERMINAL_STATUSES = new Set(['synced', 'rejected']);
 
+const generateClientRecordId = (prefix = '') => {
+  const cryptoId =
+    typeof globalThis !== 'undefined' &&
+    globalThis.crypto &&
+    typeof globalThis.crypto.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : null;
+  const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const normalizedId = cryptoId || fallbackId;
+  return prefix ? `${prefix}${normalizedId}` : normalizedId;
+};
+
 const sortMovementsByTime = (items = []) => {
   const sortTime = (movement) => {
     const ts = Date.parse(movement?.timestamp || '');
@@ -60,6 +72,30 @@ const normalizeMovementsValue = (value, defaultValue = []) => {
 
   return sortMovementsByTime(Array.from(byId.values()));
 };
+
+const buildProductsMap = (value, defaultValue = []) => {
+  const normalizedProducts = normalizeProductsValue(value, defaultValue);
+  return normalizedProducts.reduce((acc, product) => {
+    if (!product?.id) return acc;
+    acc[product.id] = product;
+    return acc;
+  }, {});
+};
+
+const upsertProductInCollection = (products = [], product) => {
+  const nextProducts = normalizeProductsValue(products);
+  const index = nextProducts.findIndex((item) => item.id === product?.id);
+  if (index === -1) {
+    return [...nextProducts, product];
+  }
+
+  const updated = [...nextProducts];
+  updated[index] = product;
+  return updated;
+};
+
+const removeProductFromCollection = (products = [], productId) =>
+  normalizeProductsValue(products).filter((product) => product.id !== productId);
 
 const normalizeProductsValue = (value, defaultValue = []) => {
   const source = value ?? defaultValue ?? [];
@@ -318,8 +354,12 @@ function useFirebaseState(path, defaultValue = null) {
     }
   }, [clientId, debugEnabled, path]);
   const setLocalData = useCallback((newData) => {
-    dataRef.current = newData;
-    setData(newData);
+    const resolvedData =
+      typeof newData === 'function'
+        ? newData(dataRef.current)
+        : newData;
+    dataRef.current = resolvedData;
+    setData(resolvedData);
   }, []);
 
   useEffect(() => {
@@ -404,16 +444,23 @@ function useFirebaseState(path, defaultValue = null) {
                 movementOutcomes.set(movement.id, { outcome: 'already_applied' });
               } else {
                 const delta = movement.type === 'entrada' ? Number(movement.quantity) : -Number(movement.quantity);
-                const productsRef = window.firebaseRef(window.firebaseDatabase, PRODUCTS_PATH);
+                // Cada movimentação altera apenas o produto-alvo para reduzir contenção entre usuários.
+                const productRef = window.firebaseRef(
+                  window.firebaseDatabase,
+                  `${PRODUCTS_PATH}/${movement.productId}`
+                );
                 let observedBefore = null;
                 let observedAfter = null;
                 let transactionMode = 'applied';
                 let rejectedReason = null;
 
-                const tx = await window.firebaseRunTransaction(productsRef, (current) => {
-                  const arr = Array.isArray(current) ? current : [];
-                  const idx = arr.findIndex((product) => product && product.id === movement.productId);
-                  if (idx === -1) {
+                const tx = await window.firebaseRunTransaction(productRef, (current) => {
+                  const product =
+                    current && typeof current === 'object'
+                      ? { ...current, id: current.id || movement.productId }
+                      : null;
+
+                  if (!product) {
                     rejectedReason = {
                       code: 'product_not_found',
                       message: 'Produto não encontrado no servidor.'
@@ -421,7 +468,6 @@ function useFirebaseState(path, defaultValue = null) {
                     return;
                   }
 
-                  const product = arr[idx] || {};
                   const before = Number.isFinite(Number(product.stock)) ? Number(product.stock) : 0;
                   observedBefore = before;
                   observedAfter = before;
@@ -434,7 +480,7 @@ function useFirebaseState(path, defaultValue = null) {
 
                   if (appliedMap[movement.id]) {
                     transactionMode = 'already_applied';
-                    return arr;
+                    return product;
                   }
 
                   const quantity = Number(movement.quantity);
@@ -461,13 +507,12 @@ function useFirebaseState(path, defaultValue = null) {
                     });
                   }
 
-                  const next = [...arr];
-                  next[idx] = {
+                  return {
                     ...product,
+                    id: product.id || movement.productId,
                     stock: after,
                     _syncAppliedMovements: appliedMap
                   };
-                  return next;
                 });
 
                 if ((!tx || tx.committed !== true) && rejectedReason) {
@@ -851,7 +896,7 @@ const UserManagement = ({ users, setUsers, currentUser }) => {
     } else {
       const newUser = {
         ...formData,
-        id: Date.now().toString(),
+        id: generateClientRecordId('user_'),
         createdAt: new Date().toISOString()
       };
       setUsers([...users, newUser]);
@@ -1592,7 +1637,7 @@ const EstoqueFFApp = () => {
     }
   });
   
-  const [products, setProducts] = useFirebaseState('estoqueff_products', [
+  const [products, setProducts, , , , setLocalProducts] = useFirebaseState('estoqueff_products', [
     { id: 'P001', name: 'Notebook Dell', brand: 'Dell', category: 'Eletrônicos', code: 'NB-DELL-001', stock: 15, minStock: 5, qrCode: 'QR001', createdAt: '2025-01-01' },
     { id: 'P002', name: 'Mouse Logitech', brand: 'Logitech', category: 'Acessórios', code: 'MS-LOG-002', stock: 3, minStock: 10, qrCode: 'QR002', createdAt: '2025-01-01' },
     { id: 'P003', name: 'Teclado Mecânico', brand: 'Razer', category: 'Acessórios', code: 'KB-RZR-003', stock: 8, minStock: 5, qrCode: 'QR003', createdAt: '2025-01-01' },
@@ -1704,18 +1749,67 @@ const EstoqueFFApp = () => {
     localStorage.removeItem('currentUser');
   };
 
+  const persistProductRecord = useCallback(async (product) => {
+    if (!window.firebaseDatabase) return false;
+    const productRef = window.firebaseRef(window.firebaseDatabase, `${PRODUCTS_PATH}/${product.id}`);
+    // Escrita granular evita sobrescrever o snapshot inteiro de produtos em cenários concorrentes.
+    await window.firebaseSet(productRef, product);
+    return true;
+  }, []);
+
+  const removeProductRecord = useCallback(async (productId) => {
+    if (!window.firebaseDatabase) return false;
+    const productRef = window.firebaseRef(window.firebaseDatabase, `${PRODUCTS_PATH}/${productId}`);
+    await window.firebaseSet(productRef, null);
+    return true;
+  }, []);
+
+  const replaceProductsCollection = useCallback(async (nextProducts) => {
+    if (!window.firebaseDatabase) return false;
+    const productsRef = window.firebaseRef(window.firebaseDatabase, PRODUCTS_PATH);
+    // Migração/restore ainda precisam substituir a coleção inteira de forma controlada.
+    await window.firebaseSet(productsRef, buildProductsMap(nextProducts));
+    return true;
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const migrateLegacyProductsShape = async () => {
+      if (!window.firebaseDatabase || typeof window.firebaseGet !== 'function') return;
+      try {
+        const productsRef = window.firebaseRef(window.firebaseDatabase, PRODUCTS_PATH);
+        const snapshot = await window.firebaseGet(productsRef);
+        if (!snapshot || !snapshot.exists || !snapshot.exists()) return;
+        const rawValue = snapshot.val();
+        if (!Array.isArray(rawValue)) return;
+
+        const migratedProducts = normalizeProductsValue(rawValue);
+        await window.firebaseSet(productsRef, buildProductsMap(migratedProducts));
+        if (!cancelled) {
+          setLocalProducts(migratedProducts);
+        }
+      } catch (error) {
+        console.error('Erro ao migrar coleção legada de produtos:', error);
+      }
+    };
+
+    migrateLegacyProductsShape();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setLocalProducts]);
+
   const handleDeleteProduct = useCallback((productId) => {
   if (window.confirm('Tem certeza que deseja excluir este produto?')) {
     try {
       // Remove from Firebase
       if (window.firebaseDatabase) {
-        // Remove o produto
-        const productsRef = window.firebaseRef(window.firebaseDatabase, 'estoqueff_products');
-        const updatedProducts = products.filter(p => p.id !== productId);
-        window.firebaseSet(productsRef, updatedProducts)
+        removeProductRecord(productId)
           .then(() => {
             // Atualiza estado local
-            setProducts(updatedProducts);
+            setLocalProducts(prevProducts => removeProductFromCollection(prevProducts, productId));
             
             // Remove configuração de etiqueta se existir
             if (productLabelConfigs[productId]) {
@@ -1759,7 +1853,7 @@ const EstoqueFFApp = () => {
       setTimeout(() => setErrors({}), 3000);
     }
   }
-}, [products, setProducts, setErrors, setSuccess, productLabelConfigs]);
+}, [removeProductRecord, setLocalProducts, setProducts, setErrors, setSuccess, productLabelConfigs]);
 
   const getProductLabelConfig = useCallback((productId) => {
     return productLabelConfigs[productId] || defaultLabelConfig;
@@ -2098,7 +2192,7 @@ const EstoqueFFApp = () => {
     return newErrors;
   };
 
-  const addProduct = () => {
+  const addProduct = async () => {
     setLoading(true);
     setErrors({});
     
@@ -2111,7 +2205,7 @@ const EstoqueFFApp = () => {
     }
     
     try {
-      const productId = 'P' + String(Date.now()).slice(-6);
+      const productId = generateClientRecordId('P_');
       const qrCode = `ESTOQUEFF_${productId}_${newProduct.code.replace(/\s+/g, '_').toUpperCase()}`;
       
       const product = {
@@ -2127,7 +2221,12 @@ const EstoqueFFApp = () => {
         minStock: parseInt(newProduct.minStock)
       };
       
-      setProducts([...products, product]);
+      if (window.firebaseDatabase) {
+        await persistProductRecord(product);
+        setLocalProducts(prevProducts => upsertProductInCollection(prevProducts, product));
+      } else {
+        setProducts(prevProducts => upsertProductInCollection(prevProducts, product));
+      }
       setNewProduct({ name: '', brand: '', category: '', code: '', stock: 0, minStock: 1 });
       setShowAddProduct(false);
       setSuccess(`✅ Produto "${product.name}" adicionado com sucesso!`);
@@ -2140,7 +2239,7 @@ const EstoqueFFApp = () => {
     setLoading(false);
   };
 
-  const updateProduct = () => {
+  const updateProduct = async () => {
     setLoading(true);
     setErrors({});
     
@@ -2153,19 +2252,23 @@ const EstoqueFFApp = () => {
     }
     
     try {
-      setProducts(products.map(p => 
-        p.id === editingProduct.id 
-          ? { 
-              ...editingProduct,
-              name: editingProduct.name.trim(),
-              brand: editingProduct.brand?.trim() || '',
-              category: editingProduct.category.trim(),
-              code: editingProduct.code.trim(),
-              stock: parseInt(editingProduct.stock),
-              minStock: parseInt(editingProduct.minStock)
-            }
-          : p
-      ));
+      const persistedProduct = {
+        ...products.find((product) => product.id === editingProduct.id),
+        ...editingProduct,
+        name: editingProduct.name.trim(),
+        brand: editingProduct.brand?.trim() || '',
+        category: editingProduct.category.trim(),
+        code: editingProduct.code.trim(),
+        stock: parseInt(editingProduct.stock),
+        minStock: parseInt(editingProduct.minStock)
+      };
+
+      if (window.firebaseDatabase) {
+        await persistProductRecord(persistedProduct);
+        setLocalProducts(prevProducts => upsertProductInCollection(prevProducts, persistedProduct));
+      } else {
+        setProducts(prevProducts => upsertProductInCollection(prevProducts, persistedProduct));
+      }
       setEditingProduct(null);
       setSuccess(`✅ Produto atualizado com sucesso!`);
       setTimeout(() => setSuccess(''), 3000);
@@ -2224,7 +2327,7 @@ const EstoqueFFApp = () => {
           : stockBefore - quantity;
 
       const baseMovement = {
-        id: Date.now().toString(),
+        id: generateClientRecordId('mov_'),
         product: targetProduct.name,
         productId: targetProduct.id,
         type: movementType,
@@ -2553,11 +2656,16 @@ const EstoqueFFApp = () => {
     if (!file) return;
     
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const backup = JSON.parse(e.target.result);
         if (backup.products && backup.movements) {
-          setProducts(backup.products);
+          if (window.firebaseDatabase) {
+            await replaceProductsCollection(backup.products);
+            setLocalProducts(normalizeProductsValue(backup.products));
+          } else {
+            setProducts(backup.products);
+          }
           setMovements(backup.movements);
           if (backup.companySettings) {
             setCompanySettings(backup.companySettings);
@@ -4634,10 +4742,14 @@ const EstoqueFFApp = () => {
 };
 
 export {
+  buildProductsMap,
+  generateClientRecordId,
   mergeMovementCollections,
   normalizeMovementsValue,
   normalizeProductsValue,
-  normalizeRemoteValue
+  normalizeRemoteValue,
+  removeProductFromCollection,
+  upsertProductInCollection
 };
 
 export default EstoqueFFApp;

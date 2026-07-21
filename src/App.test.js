@@ -2,9 +2,13 @@ import React from 'react';
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import App, {
+  buildProductsMap,
+  generateClientRecordId,
   mergeMovementCollections,
   normalizeProductsValue,
-  normalizeRemoteValue
+  normalizeRemoteValue,
+  removeProductFromCollection,
+  upsertProductInCollection
 } from './App';
 
 // Mock dos ícones Lucide para evitar erros de renderização
@@ -63,10 +67,12 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     mockSet.mockResolvedValue(true);
     mockGet.mockResolvedValue({ exists: () => false, val: () => null });
     mockRunTransaction.mockReset();
-    mockRunTransaction.mockImplementation(async (_ref, updater) => {
-      const current = [
-        { id: 'P001', name: 'Produto Teste', stock: 10 }
-      ];
+    mockRunTransaction.mockImplementation(async (ref, updater) => {
+      const current = {
+        id: ref?.key?.split('/').pop() || 'P001',
+        name: 'Produto Teste',
+        stock: 10
+      };
       const next = updater(current);
       if (typeof next === 'undefined') {
         return { committed: false, snapshot: { val: () => current } };
@@ -178,7 +184,7 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
         throw new Error('Network Error');
       })
       .mockImplementation(async (_ref, updater) => {
-        const current = [{ id: 'P001', name: 'Produto Teste', stock: 10 }];
+        const current = { id: 'P001', name: 'Produto Teste', stock: 10 };
         const next = updater(current);
         if (typeof next === 'undefined') {
           return { committed: false, snapshot: { val: () => current } };
@@ -233,14 +239,12 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     ];
     localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{ payload: localMovements, ts: now, id: '1' }]));
 
-    let serverProducts = [
-      { id: 'P001', name: 'Notebook Dell', stock: 10 }
-    ];
+    let serverProduct = { id: 'P001', name: 'Notebook Dell', stock: 10 };
 
     mockRunTransaction.mockImplementation(async (_ref, updater) => {
-      const next = updater(serverProducts);
-      serverProducts = next;
-      return { committed: true, snapshot: { val: () => serverProducts } };
+      const next = updater(serverProduct);
+      serverProduct = next;
+      return { committed: true, snapshot: { val: () => serverProduct } };
     });
 
     await act(async () => {
@@ -253,7 +257,11 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
       expect(mockRunTransaction).toHaveBeenCalled();
     });
 
-    expect(serverProducts.find(p => p.id === 'P001').stock).toBe(8);
+    expect(mockRunTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'estoqueff_products/P001' }),
+      expect.any(Function)
+    );
+    expect(serverProduct.stock).toBe(8);
 
     const setCalls = mockSet.mock.calls.map(([ref, payload]) => ({ key: ref?.key, payload }));
     expect(setCalls.some(c => c.key === 'estoqueff_movements/m1')).toBe(true);
@@ -290,18 +298,16 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     ];
     localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{ payload: localMovements, ts: now, id: '1' }]));
 
-    let serverProducts = [
-      { id: 'P001', name: 'Notebook Dell', stock: 10 }
-    ];
+    let serverProduct = { id: 'P001', name: 'Notebook Dell', stock: 10 };
 
     mockRunTransaction
       .mockImplementationOnce(async () => {
         throw new Error('Transaction failed');
       })
       .mockImplementation(async (_ref, updater) => {
-        const next = updater(serverProducts);
-        serverProducts = next;
-        return { committed: true, snapshot: { val: () => serverProducts } };
+        const next = updater(serverProduct);
+        serverProduct = next;
+        return { committed: true, snapshot: { val: () => serverProduct } };
       });
 
     await act(async () => {
@@ -324,7 +330,7 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
       expect(mockRunTransaction).toHaveBeenCalledTimes(2);
     });
 
-    expect(serverProducts.find(p => p.id === 'P001').stock).toBe(8);
+    expect(serverProduct.stock).toBe(8);
   });
 
   test('Marca movimentação como rejeitada quando o saldo do servidor é insuficiente', async () => {
@@ -346,7 +352,7 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{ payload: localMovements, ts: now, id: '1' }]));
 
     mockRunTransaction.mockImplementation(async (_ref, updater) => {
-      const current = [{ id: 'P001', name: 'Notebook Dell', stock: 5 }];
+      const current = { id: 'P001', name: 'Notebook Dell', stock: 5 };
       const next = updater(current);
       if (typeof next === 'undefined') {
         return { committed: false, snapshot: { val: () => current } };
@@ -408,5 +414,48 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     expect(normalizeRemoteValue('estoqueff_products', { P001: { name: 'Notebook Dell', stock: 10 } })).toEqual([
       { id: 'P001', name: 'Notebook Dell', stock: 10 }
     ]);
+  });
+
+  test('Converte coleção de produtos para mapa indexado por id sem perder compatibilidade', () => {
+    const products = [
+      { id: 'P001', name: 'Notebook Dell', stock: 10 },
+      { id: 'P002', name: 'Mouse', stock: 5 }
+    ];
+
+    expect(buildProductsMap(products)).toEqual({
+      P001: { id: 'P001', name: 'Notebook Dell', stock: 10 },
+      P002: { id: 'P002', name: 'Mouse', stock: 5 }
+    });
+  });
+
+  test('Atualiza e remove produtos localmente sem recriar snapshot completo manualmente', () => {
+    const initialProducts = [
+      { id: 'P001', name: 'Notebook Dell', stock: 10 },
+      { id: 'P002', name: 'Mouse', stock: 5 }
+    ];
+
+    const updatedProducts = upsertProductInCollection(initialProducts, {
+      id: 'P002',
+      name: 'Mouse Gamer',
+      stock: 7
+    });
+    const productsWithoutNotebook = removeProductFromCollection(updatedProducts, 'P001');
+
+    expect(updatedProducts).toEqual([
+      { id: 'P001', name: 'Notebook Dell', stock: 10 },
+      { id: 'P002', name: 'Mouse Gamer', stock: 7 }
+    ]);
+    expect(productsWithoutNotebook).toEqual([
+      { id: 'P002', name: 'Mouse Gamer', stock: 7 }
+    ]);
+  });
+
+  test('Gera ids únicos com prefixo para reduzir colisões entre clientes', () => {
+    const firstId = generateClientRecordId('mov_');
+    const secondId = generateClientRecordId('mov_');
+
+    expect(firstId).toMatch(/^mov_/);
+    expect(secondId).toMatch(/^mov_/);
+    expect(firstId).not.toBe(secondId);
   });
 });
