@@ -320,7 +320,7 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
       expect(mockRunTransaction).toHaveBeenCalledTimes(1);
     });
 
-    expect(localStorage.getItem('estoqueff_queue_estoqueff_movements')).toBeTruthy();
+    expect(localStorage.getItem('estoqueff_outbox_movements')).toBeTruthy();
 
     await act(async () => {
       jest.advanceTimersByTime(2500);
@@ -331,6 +331,73 @@ describe('EstoqueFF - Testes de Sincronização Offline', () => {
     });
 
     expect(serverProduct.stock).toBe(8);
+  });
+
+  test('Continua agendando retry após muitas falhas até conseguir sincronizar', async () => {
+    const now = Date.now();
+    const localMovements = [
+      { id: 'mRetryLong', product: 'Notebook Dell', productId: 'P001', quantity: 1, type: 'entrada', status: 'pending', date: '2025-08-20 10:00', timestamp: new Date(now).toISOString(), userId: 'user1', userName: 'Administrador' }
+    ];
+    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{ payload: localMovements, ts: now, id: '1' }]));
+
+    let failedAttempts = 0;
+    mockRunTransaction.mockImplementation(async (_ref, updater) => {
+      if (failedAttempts < 6) {
+        failedAttempts += 1;
+        throw new Error(`Temporary failure ${failedAttempts}`);
+      }
+
+      const current = { id: 'P001', name: 'Notebook Dell', stock: 10 };
+      const next = updater(current);
+      return { committed: true, snapshot: { val: () => next } };
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    await login();
+
+    await waitFor(() => {
+      expect(mockRunTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    for (let i = 0; i < 6; i += 1) {
+      await act(async () => {
+        jest.advanceTimersByTime(30000);
+      });
+    }
+
+    await waitFor(() => {
+      expect(mockRunTransaction).toHaveBeenCalledTimes(7);
+    });
+
+    const movementWrite = mockSet.mock.calls.find(([ref]) => ref?.key === 'estoqueff_movements/mRetryLong');
+    expect(movementWrite).toBeTruthy();
+    expect(movementWrite[1].status).toBe('synced');
+  });
+
+  test('Migra fila legada de snapshot para outbox unitária', async () => {
+    const now = Date.now();
+    const originalRunTransaction = window.firebaseRunTransaction;
+    window.firebaseRunTransaction = undefined;
+    localStorage.setItem('estoqueff_queue_estoqueff_movements', JSON.stringify([{
+      payload: [
+        { id: 'legacy1', product: 'Notebook Dell', productId: 'P001', quantity: 1, type: 'entrada', status: 'pending', date: '2025-08-20 10:00', timestamp: new Date(now).toISOString(), userId: 'user1', userName: 'Administrador' }
+      ],
+      ts: now,
+      id: 'legacy'
+    }]));
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    await login();
+
+    expect(localStorage.getItem('estoqueff_queue_estoqueff_movements')).toBeNull();
+    expect(localStorage.getItem('estoqueff_outbox_movements')).toContain('legacy1');
+    window.firebaseRunTransaction = originalRunTransaction;
   });
 
   test('Marca movimentação como rejeitada quando o saldo do servidor é insuficiente', async () => {

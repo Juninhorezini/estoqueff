@@ -297,6 +297,75 @@ const readLatestQueuedPayload = (storageKey) => {
   }
 };
 
+const getMovementsOutboxKey = () => 'estoqueff_outbox_movements';
+
+const normalizePendingMovements = (value) =>
+  normalizeMovementsValue(value).filter(
+    (movement) =>
+      movement &&
+      typeof movement === 'object' &&
+      movement.id &&
+      hasPendingMovementStatus(movement.status)
+  );
+
+const mergePendingMovements = (baseMovements = [], incomingMovements = []) => {
+  const byId = new Map();
+
+  normalizePendingMovements(baseMovements).forEach((movement) => {
+    byId.set(movement.id, movement);
+  });
+
+  normalizePendingMovements(incomingMovements).forEach((movement) => {
+    byId.set(movement.id, {
+      ...(byId.get(movement.id) || {}),
+      ...movement
+    });
+  });
+
+  return sortMovementsByTime(Array.from(byId.values()));
+};
+
+const readMovementsOutbox = () => {
+  try {
+    const raw = localStorage.getItem(getMovementsOutboxKey());
+    if (!raw) return [];
+    return normalizePendingMovements(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+};
+
+const writeMovementsOutbox = (movements) => {
+  try {
+    const normalized = normalizePendingMovements(movements);
+    if (normalized.length === 0) {
+      localStorage.removeItem(getMovementsOutboxKey());
+      return;
+    }
+    localStorage.setItem(getMovementsOutboxKey(), JSON.stringify(normalized));
+  } catch {
+  }
+};
+
+const syncLegacyMovementsQueueToOutbox = (legacyQueueKey) => {
+  const currentOutbox = readMovementsOutbox();
+  const legacyPayload = readLatestQueuedPayload(legacyQueueKey);
+
+  if (legacyPayload === null) {
+    return currentOutbox;
+  }
+
+  const mergedOutbox = mergePendingMovements(currentOutbox, legacyPayload);
+  writeMovementsOutbox(mergedOutbox);
+
+  try {
+    localStorage.removeItem(legacyQueueKey);
+  } catch {
+  }
+
+  return mergedOutbox;
+};
+
 // Função auxiliar para sanitizar objetos antes de salvar no Firebase
 const sanitizeConfig = (config) => {
   if (!config) return null;
@@ -370,10 +439,22 @@ function useFirebaseState(path, defaultValue = null) {
   useEffect(() => {
     try {
       const key = getQueueKey(path);
-      const latest = readLatestQueuedPayload(key);
-      if (latest !== null) {
+      const latest =
+        path === MOVEMENTS_PATH
+          ? syncLegacyMovementsQueueToOutbox(key)
+          : readLatestQueuedPayload(key);
+      const hasLocalSnapshot =
+        path === MOVEMENTS_PATH
+          ? Array.isArray(latest) && latest.length > 0
+          : latest !== null;
+
+      if (hasLocalSnapshot) {
         debugLog('offline_load', { hasSnapshot: true });
-        setData(normalizeRemoteValue(path, latest, stableDefaultValue));
+        const nextValue =
+          path === MOVEMENTS_PATH
+            ? mergeMovementCollections(stableDefaultValue, latest)
+            : normalizeRemoteValue(path, latest, stableDefaultValue);
+        setData(nextValue);
         setLoading(false);
       }
     } catch (e) {
@@ -383,6 +464,23 @@ function useFirebaseState(path, defaultValue = null) {
 
   const enqueueOfflineWrite = useCallback((p, payload) => {
     try {
+      if (p === MOVEMENTS_PATH) {
+        const legacyKey = getQueueKey(p);
+        const currentOutbox = syncLegacyMovementsQueueToOutbox(legacyKey);
+        const nextPendingMovements = normalizePendingMovements(payload);
+        const mergedOutbox = mergePendingMovements(currentOutbox, nextPendingMovements);
+
+        writeMovementsOutbox(mergedOutbox);
+
+        if (mergedOutbox.length > 0) {
+          setSyncStatus('pending');
+        } else {
+          setSyncStatus('idle');
+        }
+        debugLog('enqueue_outbox', { pendingCount: mergedOutbox.length });
+        return;
+      }
+
       const key = getQueueKey(p);
       const raw = localStorage.getItem(key);
       const queue = raw ? JSON.parse(raw) : [];
@@ -409,33 +507,25 @@ function useFirebaseState(path, defaultValue = null) {
     if (!window.firebaseDatabase) return;
     
     const key = getQueueKey(path);
-    const raw = localStorage.getItem(key);
-    const queue = raw ? JSON.parse(raw) : [];
-    
-    if (!queue.length) {
-      setSyncStatus('idle');
-      return;
-    }
 
     setSyncStatus('syncing');
     
     try {
       const dbRef = window.firebaseRef(window.firebaseDatabase, path);
-      
-      // Pega o item mais recente da fila (snapshot atual)
-      const lastItem = queue[queue.length - 1];
-      let payloadToWrite = lastItem.payload;
+      let payloadToWrite = null;
 
       // Lógica de Reconciliação para Movimentações
       if (path === MOVEMENTS_PATH) {
-        payloadToWrite = normalizeMovementsValue(payloadToWrite);
+        const pendingMovements = syncLegacyMovementsQueueToOutbox(key);
 
-        const pendingMovements = payloadToWrite.filter(
-          (movement) => movement && typeof movement === 'object' && hasPendingMovementStatus(movement.status)
-        );
+        if (!pendingMovements.length) {
+          setSyncStatus('idle');
+          return;
+        }
+
         const movementOutcomes = new Map();
 
-        if (pendingMovements.length > 0 && typeof window.firebaseRunTransaction === 'function') {
+        if (typeof window.firebaseRunTransaction === 'function') {
           for (const movement of pendingMovements) {
             try {
               if (!movement?.id || !movement?.productId || !Number.isFinite(Number(movement.quantity))) continue;
@@ -576,7 +666,7 @@ function useFirebaseState(path, defaultValue = null) {
           }
         }
 
-        payloadToWrite = payloadToWrite.map((movement) => {
+        const resolvedPendingMovements = pendingMovements.map((movement) => {
           if (!movement || typeof movement !== 'object' || !movement.id) return movement;
           const outcome = movementOutcomes.get(movement.id);
           if (!outcome) return movement;
@@ -602,10 +692,14 @@ function useFirebaseState(path, defaultValue = null) {
             };
           }
 
-          return movement;
+          return {
+            ...movement,
+            status: 'pending',
+            syncError: outcome.error || movement.syncError || 'Falha temporária ao sincronizar movimentação.'
+          };
         });
 
-        const movementsToPersist = payloadToWrite.filter(
+        const movementsToPersist = resolvedPendingMovements.filter(
           (movement) =>
             movement &&
             typeof movement === 'object' &&
@@ -613,11 +707,49 @@ function useFirebaseState(path, defaultValue = null) {
             (movement.status === 'synced' || movement.status === 'rejected')
         );
 
+        const remainingPendingMovements = normalizePendingMovements(resolvedPendingMovements);
+
         for (const movement of movementsToPersist) {
           const movementRef = window.firebaseRef(window.firebaseDatabase, `${MOVEMENTS_PATH}/${movement.id}`);
           await window.firebaseSet(movementRef, movement);
         }
+
+        writeMovementsOutbox(remainingPendingMovements);
+
+        const nextAuthoritativeValue = mergeMovementCollections(
+          latestServerValueRef.current ?? [],
+          movementsToPersist
+        );
+        const nextValue = mergeMovementCollections(nextAuthoritativeValue, remainingPendingMovements);
+
+        setData(nextValue);
+
+        if (remainingPendingMovements.length === 0) {
+          setSyncStatus('synced');
+          setRetryCount(0);
+        } else {
+          setSyncStatus('error');
+          const nextRetry = currentRetry + 1;
+          setRetryCount(nextRetry);
+          const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(nextRetry, 5)));
+          debugLog('flush_retry_scheduled', { nextRetry, delay });
+          setTimeout(() => flushOfflineQueue(nextRetry), delay);
+        }
+
+        setTimeout(() => setSyncStatus('idle'), 3000);
+        return;
+      }
+
+      const raw = localStorage.getItem(key);
+      const queue = raw ? JSON.parse(raw) : [];
+
+      if (!queue.length) {
+        setSyncStatus('idle');
+        return;
       } else {
+        // Pega o item mais recente da fila (snapshot atual)
+        const lastItem = queue[queue.length - 1];
+        payloadToWrite = lastItem.payload;
         await window.firebaseSet(dbRef, payloadToWrite);
       }
       
@@ -635,10 +767,7 @@ function useFirebaseState(path, defaultValue = null) {
         freshValue = null;
       }
 
-      const nextValue =
-        path === MOVEMENTS_PATH
-          ? mergeMovementCollections(latestServerValueRef.current ?? [], payloadToWrite)
-          : (freshValue !== null ? freshValue : payloadToWrite);
+      const nextValue = freshValue !== null ? freshValue : payloadToWrite;
 
       setData(nextValue);
       const hasRemainingPending = Array.isArray(payloadToWrite)
@@ -656,11 +785,9 @@ function useFirebaseState(path, defaultValue = null) {
         setSyncStatus('error');
         const nextRetry = currentRetry + 1;
         setRetryCount(nextRetry);
-        if (nextRetry <= 5) {
-          const delay = 1000 * Math.pow(2, nextRetry);
-          debugLog('flush_retry_scheduled', { nextRetry, delay });
-          setTimeout(() => flushOfflineQueue(nextRetry), delay);
-        }
+        const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(nextRetry, 5)));
+        debugLog('flush_retry_scheduled', { nextRetry, delay });
+        setTimeout(() => flushOfflineQueue(nextRetry), delay);
       }
       
       // Feedback visual temporário
@@ -673,12 +800,10 @@ function useFirebaseState(path, defaultValue = null) {
       setRetryCount(nextRetry);
       setSyncStatus('error');
       
-      // Retry com backoff se falhar
-      if (nextRetry <= 5) {
-        const delay = 1000 * Math.pow(2, nextRetry);
-        debugLog('flush_retry_scheduled', { nextRetry, delay });
-        setTimeout(() => flushOfflineQueue(nextRetry), delay);
-      }
+      // Retry contínuo com backoff limitado para não abandonar pendências offline.
+      const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(nextRetry, 5)));
+      debugLog('flush_retry_scheduled', { nextRetry, delay });
+      setTimeout(() => flushOfflineQueue(nextRetry), delay);
     }
   }, [clientId, debugLog, path, stableDefaultValue]);
 
@@ -694,13 +819,19 @@ function useFirebaseState(path, defaultValue = null) {
         latestServerValueRef.current = serverValue;
         
         const key = getQueueKey(path);
-        const queuedPayload = readLatestQueuedPayload(key);
-        const hasPending = queuedPayload !== null;
+        const queuedPayload =
+          path === MOVEMENTS_PATH
+            ? syncLegacyMovementsQueueToOutbox(key)
+            : readLatestQueuedPayload(key);
+        const hasPending =
+          path === MOVEMENTS_PATH
+            ? Array.isArray(queuedPayload) && queuedPayload.length > 0
+            : queuedPayload !== null;
         
         if (!hasPending) {
            setData(serverValue);
         } else if (path === MOVEMENTS_PATH) {
-           const localValue = normalizeRemoteValue(path, queuedPayload, dataRef.current);
+           const localValue = normalizePendingMovements(queuedPayload);
            setData(mergeMovementCollections(serverValue, localValue));
            debugLog('server_update_merged_with_pending_queue');
         } else {
