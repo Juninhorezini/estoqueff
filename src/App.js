@@ -26,10 +26,10 @@ const MOVEMENT_TERMINAL_STATUSES = new Set(['synced', 'rejected']);
 
 const generateClientRecordId = (prefix = '') => {
   const cryptoId =
-    typeof globalThis !== 'undefined' &&
-    globalThis.crypto &&
-    typeof globalThis.crypto.randomUUID === 'function'
-      ? globalThis.crypto.randomUUID()
+    typeof window !== 'undefined' &&
+    window.crypto &&
+    typeof window.crypto.randomUUID === 'function'
+      ? window.crypto.randomUUID()
       : null;
   const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const normalizedId = cryptoId || fallbackId;
